@@ -24,6 +24,5 @@ public:
   virtual void execute() override;
 
 protected:
-
   std::string _user_object_name;
 };

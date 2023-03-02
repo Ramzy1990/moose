@@ -9,7 +9,7 @@
 
 #include "ChangeSubdomainAssignment.h"
 
-registerMooseObject("StochasticToolsApp", ChangeSubdomainAssignment);
+registerMooseObject("OptimizationApp", ChangeSubdomainAssignment);
 
 InputParameters
 ChangeSubdomainAssignment::validParams()
@@ -35,8 +35,8 @@ ChangeSubdomainAssignment::initialSetup()
 {
   // get the subdomain ids and store them
   for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
-      _subdomain_assignment.insert(
-          std::pair<dof_id_type, SubdomainID>(elem->id(), elem->subdomain_id()));
+    _subdomain_assignment.insert(
+        std::pair<dof_id_type, SubdomainID>(elem->id(), elem->subdomain_id()));
 
   // serialize this data for now, could be a memory issue by handling it in parallel
   // is painful

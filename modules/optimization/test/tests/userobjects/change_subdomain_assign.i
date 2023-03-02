@@ -10,7 +10,6 @@
 [AuxVariables/u]
 []
 
-
 [Problem]
   solve = false
 []

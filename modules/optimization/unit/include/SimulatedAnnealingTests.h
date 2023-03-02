@@ -11,25 +11,25 @@
 #include <string>
 #include <math.h>
 
-//simulated annealing capabilities
+// simulated annealing capabilities
 #include "SimulatedAnnealing.h"
 
 using namespace std;
 
 // number of customers
-int num_customers=20;
+int num_customers = 20;
 
-//problem dimension
-int prob_dim=1;
+// problem dimension
+int prob_dim = 1;
 
 // customer locations
 double ** cust_locs;
 
-//path length of a given customer ordering
+// path length of a given customer ordering
 double path_len(int * a);
 
-//distance between two customers
-double dist(double *loc1, double *loc2);
+// distance between two customers
+double dist(double * loc1, double * loc2);
 
 // continuous functions to optimize over
-double comb_func(double *x);
+double comb_func(double * x);
