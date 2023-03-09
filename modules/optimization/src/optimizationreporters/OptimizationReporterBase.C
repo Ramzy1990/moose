@@ -56,15 +56,13 @@ OptimizationReporterBase::computeGradient(libMesh::PetscVector<Number> &) const
   mooseError(type(), " does not have an implemented gradient computation.");
 }
 
-Real
-OptimizationReporterBase::getUpperBound(dof_id_type) const
+Real OptimizationReporterBase::getUpperBound(dof_id_type) const
 {
   mooseError(type(), " does not have an implemented upper bound.");
   return 0;
 }
 
-Real
-OptimizationReporterBase::getLowerBound(dof_id_type) const
+Real OptimizationReporterBase::getLowerBound(dof_id_type) const
 {
   mooseError(type(), " does not have an implemented lower bound.");
   return 0;
