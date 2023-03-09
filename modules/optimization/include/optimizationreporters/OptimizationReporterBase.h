@@ -46,13 +46,17 @@ public:
   virtual bool hasBounds() const = 0;
 
   /**
-   * Upper and lower bounds for each parameter being controlled
+   * Upper and lower bounds for each parameter being controlled. Contain both real and
+   * integer values for the parameter.
    *
    * @param i Parameter index
    * @return The upper/lower bound for parameter i
    */
   virtual Real getUpperBound(dof_id_type i) const;
   virtual Real getLowerBound(dof_id_type i) const;
+
+  virtual int getUpperBoundDiscrete(dof_id_type i) const;
+  virtual int getLowerBoundDiscrete(dof_id_type i) const;
 
   /**
    * Function to compute objective.
@@ -65,11 +69,14 @@ public:
    * This is the last call of the gradient routine.
    */
   virtual void computeGradient(libMesh::PetscVector<Number> & gradient) const;
+  // virtual void computeFunctionValue(libMesh::PetscVector<Number> & gradient) const;
+  // Possibly not needed as the computeObjective is available?
 
   /**
    * Function to get the total number of parameters
    * @return total number of parameters
    */
+  // I think this is for the each mesh cell maybe? It has a type of unsigned 64 bit integer
   virtual dof_id_type getNumParams() const = 0;
 
 protected:
