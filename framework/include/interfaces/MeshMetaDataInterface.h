@@ -22,7 +22,7 @@ class MooseObject;
  * The Interface used to retrieve mesh meta data (attributes) set by the MeshGenerator system.
  * MOOSE objects should avoid retrieving and casting MeshGenerator objects since they are not
  * re-created during a recover operation. This data is read from files early during the simulation
- * setup an d can be used to make decisions about how to setup the rest of the problem.
+ * setup and can be used to make decisions about how to setup the rest of the problem.
  */
 class MeshMetaDataInterface
 {

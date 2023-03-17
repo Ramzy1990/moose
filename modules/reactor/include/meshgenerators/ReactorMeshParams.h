@@ -31,7 +31,7 @@ protected:
   /// The geometry type for the reactor
   const MooseEnum _geom;
 
-  /// The the flat-to-flat size of assemblies in the reactor.
+  /// The flat-to-flat size of assemblies in the reactor.
   const Real _assembly_pitch;
 
   ///The heights of the axial regions.
