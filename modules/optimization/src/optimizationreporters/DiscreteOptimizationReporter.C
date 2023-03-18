@@ -27,49 +27,94 @@ registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 /// Always start with the InputParameters class in your C source file in MOOSE. This
 /// function is used in most of the C source files in MOOSE.
 /// This are the validParams of the DiscreteOptimizationReporter class.
+/// If you would like to add more classes parameters to your current class, then you use
+/// something like this:
+///"InputParameters params = StochasticReporter::validParams();
+/// params += SurrogateModelInterface::validParams();
+/// params += SamplerInterface::validParams();"
+/// Notice how "validParams" function is used, the different classes names, the += operator, and the
+/// params object of type(class) "InputParameters".
+
+/// From where does the reporter class inherits its parameters? The optimize App inherits
+/// from MOOSE App. An action inherits from Action. Optimization functions inherits from
+/// Function. All of this behavior is seen in other modules where we inherit from MOOSE framework.
+
+/// Our reporter should inherit the parameters from some class. The continous
+/// OptimizationReporter class inherits from the "OptimizationReporterBase" class, which
+/// in turns inherits from the "OptimizationData" class, which in turns inherits from the
+/// "GeneralReporter" class. Hence, these last two classes could be a good candidate for
+/// our new reporter class. Inspecting the OptimizationData class, we can find many
+/// parameters that are associated with the inverse optimization. I guess this makes it
+/// not a good candidate. It is then settled to use the GeneralReporter class! See? Very
+/// simple! But a question comes: Q: What happens if we inherited validParams from some
+/// place and end up not using all the parameters inherited? Is tha safe? (e.g., we
+/// inherit the OptimizationData class and end up not using the parameters it provides).
+
+/// We would like to make sure that the discrete optimization module is inlcuded in the
+/// optimization app.
+
+/// The optimization reporter is used inside of optimize solve. Hence this is how it is
+/// included in the simulation of MOOSE! At long last this puzzle is solved!! This means
+/// whatever variables and methods w einlcude here, it will be seen by the solver. The
+/// solver also inherits from the MOOSE app and actions and whatever, so this part is
+/// handeled by other source files and headers. We just then need to develop the reporter currently.
 InputParameters
 DiscreteOptimizationReporter::validParams()
 {
-  /// If you would like to add more classes parameters to your current class, then you use
-  /// something like this:
-  ///"InputParameters params = StochasticReporter::validParams();
-  /// params += SurrogateModelInterface::validParams();
-  /// params += SamplerInterface::validParams();"
-  /// Notice how validParams is used, the different classes names, the += operator, and the
-  /// params object of type(class) InputParameters.
-
-  /// What does the reporter class inherits its parameters from? The optimize App inherits
-  /// from MOOSE App. An action inherits from Action. Optimization functions inherits from
-  /// Function. All of this behavior is seen in other modules where we inherit from MOOSE.
-
-  /// Our reporter should inherit the parameters from some class. The continous
-  /// OptimizationReporter class inherits from the "OptimizationReporterBase" class, which
-  /// in turns inherits from the "OptimizationData" class, which in turns inherits from the
-  /// "GeneralReporter" class. Hence, these last two classes could be a good candidate for
-  /// our new reporter class. Inspecting the OptimizationData class, we can find many
-  /// parameters that are associated with the inverse optimization. I guess this makes it
-  /// not a good candidate. It is then settled to use the GeneralReporter class! See? Very
-  /// simple! But a question comes: Q: What happens if we inherited validParams from some
-  /// place and end up not using all the parameters inherited? Is tha safe? (e.g., we
-  /// inherit the OptimizationData class and end up not using the parameters it provides).
-
-  /// We would like to make sure that the discrete optimization module is inlcuded in the
-  /// optimization app.
-
   InputParameters params = GeneralReporter::validParams();
+  params += ElementUserObject::validParams();
+  params += OptimizationData::validParams();
+
   params.addClassDescription("Receives computed objective function, and contains reporters for "
                              "communicating between discreteOptimizeSolve and subapps.");
+
+  /// The parameter names variable is just a holder to the names of the variables we would
+  /// like to optimize. This is seen in the bimaterial test files (main.i). I guess we will
+  /// need this one so I will keep it.
   params.addRequiredParam<std::vector<ReporterValueName>>(
       "parameter_names", "List of parameter names, one for each group of parameters.");
+
+  /// The number of variables is a holder to the number of variables adjusted under each
+  /// parameter names we would like to optimize. This is seen in the bimaterial test files
+  /// (main.i). I guess we will need this one so I will keep it.
   params.addRequiredParam<std::vector<dof_id_type>>(
       "num_values",
       "Number of parameter values associated with each parameter group in 'parameter_names'.");
-  params.addParam<std::vector<int>>("initial_condition",
-                                    "Initial condition for each parameter values, default is 0");
-  params.addParam<std::vector<int>>(
-      "lower_bounds", std::vector<int>(), "Lower bounds for each parameter value.");
-  params.addParam<std::vector<int>>(
-      "upper_bounds", std::vector<int>(), "Upper bounds for each parameter value.");
+
+  /// E.g., we are adjusting the parameter_names=diffusivity_values, for two mateirals and
+  /// hence num_values=2.
+  /// Another example I think of would be parameter_names=k-eff, num_values=1 (since it is an
+  /// integral variable).
+
+  /// Initial condition for the parameter values. E.g.,  if we have 2 diffusivity_values
+  /// (num_variables=2) then we would need initial_condition='3 4' (i.e., 2 values). This is
+  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
+  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
+  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
+  /// we will need this to be real).
+  params.addParam<std::vector<Real>>("initial_condition",
+                                     "Initial condition for each parameter values, default is 0");
+
+  /// lower bound for the parameter values. E.g.,  if we have 2 diffusivity_values
+  /// (num_variables=2) then we would need lower_bounds='1 1' (i.e., 2 values). This is
+  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
+  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
+  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
+  /// we would this to be real).
+  params.addParam<std::vector<Real>>(
+      "lower_bounds", std::vector<Real>(), "Lower bounds for each parameter value.");
+
+  /// Upper bound for the parameter values. E.g.,  if we have 2 diffusivity_values
+  /// (num_variables=2) then we would need upper_bounds='20 20' (i.e., 2 values). This is
+  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
+  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
+  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
+  /// we would this to be real).
+  params.addParam<std::vector<Real>>(
+      "upper_bounds", std::vector<Real>(), "Upper bounds for each parameter value.");
+
+  /// Now adding the variables I think we will need for the Discrete Optimization Reporter
+  /// for shape optimization.
 
   return params;
 }

@@ -9,38 +9,43 @@
 
 #pragma once
 
-/// Note: For Doxygen, variables have comments starting with "///", while the functions
-/// (methods) or classes has the "/**" comment before it.
+// Note: For Doxygen, variables have comments starting with "///", while the functions
+// (methods) or classes has the "/**" comment before it.
+// General comments uses "//"
 
-/// Okay, so OptimizationData is a reporter as well! So we have in general 4 reporters in
-/// the optimization module:
-/// OptimizationData
-/// OptimizationInfo
-/// OptimizationReporter
-/// OptimizationReporterBase
+// Okay, so OptimizationData is a reporter as well! So we have in general 4 reporters in
+// the optimization module:
+// OptimizationData
+// OptimizationInfo
+// OptimizationReporter
+// OptimizationReporterBase
 
-/// The general shape of an app in MOOSE according to the files: Actions, Base, Kernels,
-/// Executioners, Functions, Reporters, Transfers, User Objects, and Postprocessing. Are we
-/// supposed to make a discrete optimization module that is totally not dependednt on the
-/// inverse optimization module? That is an idea to start with and is plausible.
+// The general shape of an app in MOOSE, according to the files structure: Actions, Base, Kernels,
+// Executioners, Functions, Reporters, Transfers, User Objects, and Postprocessing. Are we
+// supposed to make a shape/discrete optimization module that is totally not dependednt on the
+// inverse optimization module? That is an idea to start with and is plausible.
+// If we are going to do so, then the FEProblemBase is not needed here, as well as the
+// ElementUserObject, since they wiould be included in the main shape optimization app I guess.
 
-/// I think it is getting clearer now!
+// I think it is getting clearer now!
 
-/// Inherits from the ElementUserObject and the FEProblemBase. If we would like to add another, just
-/// use ",".
-/// Inherits from the Main optimization module, through OptimizationData, some objects and most importantly the
-/// GeneralReporter.h.
+// Inherits from the ElementUserObject and the FEProblemBase. If we would like to add another, just
+// use ",".
+// Inherits from the Main optimization module, through OptimizationData, some objects and most
+// importantly the GeneralReporter.h.
 #include "ElementUserObject.h"
-#include "FEProblemBase.h"
+// #include "FEProblemBase.h"
 #include "OptimizationData.h"
 
-/// The optimization reporter has two header files. One seems to contain the methods (OptimizationReporterBase) and the
-/// other seems to contain the variables (OptimizationReporter).
-/// OptimizationReporterBase inherits from OptimizationData.
-/// OptimizationReporter inherits from the OptimizationReporterBase.
-/// Why?!
-/// Anyway, our DiscreteOptimizationReporter will just have one and will then inherits from
-/// the OptimizationData. we will also use the computeObjective function from there.
+// The optimization reporter has two header files. One seems to contain the methods
+// (OptimizationReporterBase) and the other seems to contain the variables (OptimizationReporter).
+// OptimizationReporterBase inherits from OptimizationData.
+// OptimizationReporter inherits from the OptimizationReporterBase.
+// Why?!
+// Anyway, our DiscreteOptimizationReporter will just have one and will then inherits from
+// the OptimizationData. we will also use the computeObjective function from there.
+
+// if "ElementUserObject.h" is included here, there is no need to include it in the source file.
 
 /**
  * Contains reporters for communicating between optimizeSolveDiscrete and subapps. Methods
@@ -48,7 +53,7 @@
  * and Nelder-Mead. It will eventually include Simulated Annealing and Genetic Algorithm.
  */
 class DiscreteOptimizationReporter : public ElementUserObject,
-                                     public FEProblemBase,
+                                     //  public FEProblemBase,
                                      //  public GeneralReporter, Included in OptimizationData
                                      public OptimizationData
 {
@@ -64,7 +69,7 @@ public:
   /// @{ Block all methods that are not used in explicitly called UOs
   void initialize() override{};
   void execute() override;
-  void threadJoin(const UserObject & /*uo*/) override{};
+  void threadJoin(const UserObject & /*uo*/) override{}; // since we include ElementUserObject.
   void finalize() override;
   void initialSetup() override;
   /// @}
@@ -120,7 +125,7 @@ protected:
   /// Total number of cells. The 64-bit "dof_id_type" is much larger than the 16-bit "subdomain_id_type".
   const dof_id_type _total_cells;
 
-  /// Might become handy down the road, left as is for search purposes:
+  // Might become handy down the road, left as is for search purposes:
   // Map between RGMB element block names, block ids, and region ids
   // std::map<std::string, std::pair<subdomain_id_type, dof_id_type>> _name_id_map;
 
