@@ -7,6 +7,9 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+//**********************
+// Include Header Files
+//**********************
 #include "DiscreteOptimizationReporter.h"
 
 /// Has been used in the optimization app source files.
@@ -17,6 +20,9 @@
 /// it there, but here.
 #include "libmesh/int_range.h"
 
+//*********************
+// Regiester the MOOSE
+//*********************
 /// I guess here we are adding the Discrete optimization reporter to the optimization app.
 /// This function is used in most of the C source files in MOOSE.
 /// Adds a MooseObject to the registry with the given app name/label.  classname is the (unquoted)
@@ -24,6 +30,9 @@
 /// class is under the Optimization App.
 registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 
+//*************************
+// Adding Input Parameters
+//*************************
 /// Always start with the InputParameters class in your C source file in MOOSE. This
 /// function is used in most of the C source files in MOOSE.
 /// This are the validParams of the DiscreteOptimizationReporter class.
@@ -58,83 +67,86 @@ registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 /// whatever variables and methods w einlcude here, it will be seen by the solver. The
 /// solver also inherits from the MOOSE app and actions and whatever, so this part is
 /// handeled by other source files and headers. We just then need to develop the reporter currently.
+
 InputParameters
 DiscreteOptimizationReporter::validParams()
 {
   InputParameters params = GeneralReporter::validParams();
   params += ElementUserObject::validParams();
-  params += OptimizationData::validParams();
+  // params += OptimizationData::validParams(); // I do not think we need this? It has parameters
+  // for measurment values and such.
 
   params.addClassDescription("Receives computed objective function, and contains reporters for "
                              "communicating between discreteOptimizeSolve and subapps.");
 
-  /// The parameter names variable is just a holder to the names of the variables we would
-  /// like to optimize. This is seen in the bimaterial test files (main.i). I guess we will
-  /// need this one so I will keep it.
+  /// Those will be used using the "getParam" object.
+
   params.addRequiredParam<std::vector<ReporterValueName>>(
       "parameter_names", "List of parameter names, one for each group of parameters.");
 
-  /// The number of variables is a holder to the number of variables adjusted under each
-  /// parameter names we would like to optimize. This is seen in the bimaterial test files
-  /// (main.i). I guess we will need this one so I will keep it.
   params.addRequiredParam<std::vector<dof_id_type>>(
       "num_values",
       "Number of parameter values associated with each parameter group in 'parameter_names'.");
 
-  /// E.g., we are adjusting the parameter_names=diffusivity_values, for two mateirals and
-  /// hence num_values=2.
-  /// Another example I think of would be parameter_names=k-eff, num_values=1 (since it is an
-  /// integral variable).
+  params.addParam<std::string>("assign_type",
+                               "String to decide the assign type for the cells pattern. Manual "
+                               "where we assign manually the cells pattern. Automatic where "
+                               "we assign using the mesh.");
 
-  /// Initial condition for the parameter values. E.g.,  if we have 2 diffusivity_values
-  /// (num_variables=2) then we would need initial_condition='3 4' (i.e., 2 values). This is
-  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
-  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
-  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
-  /// we will need this to be real).
-  params.addParam<std::vector<Real>>("initial_condition",
-                                     "Initial condition for each parameter values, default is 0");
+  /// Allowed values for my cell_subdomain_ID (e.g., materials possible to use {f,m,v}).
+  params.addParam<std::set<std::string>>(
+      "allowed_values",
+      "Allowed values for my region_ID (e.g., materials possible to use {f,m,v}).");
 
-  /// lower bound for the parameter values. E.g.,  if we have 2 diffusivity_values
-  /// (num_variables=2) then we would need lower_bounds='1 1' (i.e., 2 values). This is
-  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
-  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
-  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
-  /// we would this to be real).
-  params.addParam<std::vector<Real>>(
-      "lower_bounds", std::vector<Real>(), "Lower bounds for each parameter value.");
+  /// Initial condition for the parameter values. E.g., the subdomain id used for all the
+  /// cells of the domain.
+  params.addParam<std::string>(
+      "initial_material",
+      "The initial material we are going to assign to all the cells in the domain.");
 
-  /// Upper bound for the parameter values. E.g.,  if we have 2 diffusivity_values
-  /// (num_variables=2) then we would need upper_bounds='20 20' (i.e., 2 values). This is
-  /// seen in the bimaterial test files (main.i). I guess we will need this one so I will
-  /// keep it. Furthermore, it seems to me the values here are actually real and not integer
-  /// as we first postulated then (e.g., if we are optimizing the shape to get a good k-eff,
-  /// we would this to be real).
-  params.addParam<std::vector<Real>>(
-      "upper_bounds", std::vector<Real>(), "Upper bounds for each parameter value.");
+  /// Assign the subdomain ID type that is going to be optimized.
+  // Let us assign it from the initial cell_subdomain_id.
 
-  /// Now adding the variables I think we will need for the Discrete Optimization Reporter
-  /// for shape optimization.
+  /// Assign the subdomain ID type that we would like to reach (for test purposes and learning).
+  params.addParam<std::vector<std::vector<std::string>>>("target_cell_subdomain_id",
+                                                         "The subdomain ID type that is required.");
+
+  /// Assign the cell pattern id that is going to be optimized.
+  params.addParam<std::vector<std::vector<dof_id_type>>>(
+      "cell_pattern", "The cell pattern (cell ids) that is going to be optimized.");
 
   return params;
 }
 
+//**************************
+// Getting Input Parameters
+//**************************
 // Here we have a list and this is why the separation is with ",". What we are doing here is
-// that we are initializing the member variables of the "OptimizationReporterDiscrete"
-// class. Those variables where declared in the header file.
-// Subdomain IDs are the materials: Element 1 gets subdomain ID 1 or 2 or so on.
-OptimizationReporterDiscrete::OptimizationReporterDiscrete(const InputParameters & parameters)
-  : OptimizationReporterBase(parameters),
+// we are initializing the member variables of the "DiscreteOptimizationReporter"
+// class. Those variables where declared in the header file. Some of them are read from
+// the ".i" file. Subdomain IDs are the materials: Element 1 gets subdomain ID "f" or "m" or so on.
+DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters & parameters)
+  : GeneralReporter(parameters),
+    // Getting our data from the "".i" file
     _parameter_names(getParam<std::vector<ReporterValueName>>("parameter_names")),
     _nparam(_parameter_names.size()),
     _nvalues(getParam<std::vector<dof_id_type>>("num_values")),
     _ndof(std::accumulate(_nvalues.begin(), _nvalues.end(), 0)),
-    _lower_bounds(getParam<std::vector<int>>("lower_bounds")),
-    _upper_bounds(getParam<std::vector<int>>("upper_bounds")),
-// _adjoint_data(declareValueByName<std::vector<Real>>("adjoint", REPORTER_MODE_REPLICATED))
 
+    _assign_type(getParam<std::string>("assign_type")),
+    _allowed_parameter_values(getParam<std::string>("allowed_values")),
+    _initial_material_used(getParam<std::string>("initial_material")),
+    _cell_subdomain_id(getParam<std::vector<std::vector<std::string>>>("target_cell_subdomain_id")),
+    _cell_pattern(getParam<std::vector<std::vector<dof_id_type>>>("cell_pattern"))
+
+//**********************
+// Checking Values Read
+//**********************
 // Here we do some checks to make sure the values assigned or read make sense according to
 // some logic.
+
+// add one for the allowed parameter values checking that the assigned subdoamin id is
+// included in it.
 {
   if (_parameter_names.size() != _nvalues.size())
     paramError("num_parameters",
@@ -169,8 +181,14 @@ OptimizationReporterDiscrete::OptimizationReporterDiscrete(const InputParameters
                            initial_condition.begin() + v + _nvalues[i]);
     v += _nvalues[i];
   }
+
+  // Will be assigned from the "_initial_material_used" variable.
+  // _initial_cell_subdomain_id = _initial_cell_subdomain_id
 }
 
+//********************************
+// Working on the Parameters Read
+//********************************
 // The following are member functions of the discrete reporter class. They have their
 // declarations in the header file.
 void

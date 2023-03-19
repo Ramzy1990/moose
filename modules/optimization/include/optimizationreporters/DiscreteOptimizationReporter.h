@@ -34,8 +34,9 @@
 // Inherits from the Main optimization module, through OptimizationData, some objects and most
 // importantly the GeneralReporter.h.
 #include "ElementUserObject.h"
+#include "GeneralReporter.h"
 // #include "FEProblemBase.h"
-#include "OptimizationData.h"
+// #include "OptimizationData.h"
 
 // The optimization reporter has two header files. One seems to contain the methods
 // (OptimizationReporterBase) and the other seems to contain the variables (OptimizationReporter).
@@ -54,8 +55,8 @@
  */
 class DiscreteOptimizationReporter : public ElementUserObject,
                                      //  public FEProblemBase,
-                                     //  public GeneralReporter, Included in OptimizationData
-                                     public OptimizationData
+                                     public GeneralReporter // Included in OptimizationData
+//  public OptimizationData // I do not think we need this really?
 {
 public:
   // Always here as seen from other classes developed in MOOSE.
@@ -81,13 +82,64 @@ protected:
   // source file. Note that the name is matching, and some of them are assigned with the
   // "getParam" getter (a function/method), which might be related to the input file.
 
+  /// Some of the variables here are taken from the OptimizationReporter class. I did not
+  /// inherit this class since I really do not need anything from there except those
+  /// variables. This is becuase I am not concerned about any measurment values or such as
+  /// in the OptimizationData class that the OptimizationReporter inherits.
+
+  /// The parameter names variable is a holder to the names of the variables we would
+  /// like to use to control the optimization process. This is seen in the bimaterial test files (main.i). I guess we will
+  /// need this one so I will keep it. E.g., parameter_names=materials.
+  const std::vector<ReporterValueName> & _parameter_names;
+
+  /// The number of variables is a holder to the number of variables adjusted under each
+  /// parameter names we would like to use to control the optimization process. This is seen in the bimaterial test files
+  /// (main.i). I guess we will need this one so I will keep it. E.g., num_values=2. (i.e.,
+  /// two materials, fuel and moderator).
+  /// Inherited from the OptimizationData or OptimizationReporter
+  const std::vector<dof_id_type> & _nvalues;
+
+  /// E.g., we are adjusting the parameter_names=materials, for two mateirals like fuel and moderator and
+  /// hence num_values=2.
+
+  /// Number of parameter vectors. Might get handy if we would like to use.
+  /// Inherited from the OptimizationData or OptimizationReporter
+  const unsigned int _nparam;
+
+  /// Total number of parameters. Might get handy if we would like to use.
+  /// Inherited from the OptimizationData or OptimizationReporter
+  const dof_id_type _ndof;
+
+  /// integer ID assignment type.
+  /// For testing this discrete class.
+  /// Manual where we assign manually the cells pattern.
+  /// Automatic where I really do not know how, but I have a hint!!
+  const std::string _assign_type;
+
+  /// Allowed values for my region_ID (e.g., materials possible to use {a,b,c}).
+  /// The "set" here is instead of type "vector".
+  /// A set in C++ is a container that store unique elements following a specific order (or
+  /// it can be unordered as well).
+  const std::set<std::string> _allowed_parameter_values;
+
+  /// Boolian to see if the used subdomain ID is within the allowed values.
+  const bool _is_allowed;
+
+  /// Initial mateiral used
+  const std::string _initial_material_used;
+
+  /// Subdomain ID Type. The Materials in the 2D mesh. E.g., {a, b, c, d, etc...}
+  /// This is one of the vectors we optimize for. It should be a vector of vectors.
+  /// We have a simialr one that is not the initial value.
+  std::vector<std::vector<std::string>> _initial_cell_subdomain_id;
+
   /// Subdomain ID Type. The Materials in the 2D mesh. E.g., {a, b, c, d, etc...}
   /// This is one of the vectors we optimize for. It should be a vector of vectors.
   /// We have a simialr one for the elements ID.
-  std::vector<std::vector<std::string>> _region_id;
+  std::vector<std::vector<std::string>> _cell_subdomain_id;
 
   /// Name of Subdomain ID, just in case we would like to identify the subdomain ID letters with material names.
-  const std::vector<std::string> _region_id_name;
+  const std::vector<std::string> _cell_subdomain_id_name;
 
   /// hold integer ID for each input pattern cell. Eventually, it will be upgraded to "Elem" type for FEM.
   /// "dof_id_type" is the data type, unsigned 64-bit integer.
@@ -101,21 +153,6 @@ protected:
 
   // Cells whose subdomain IDs have changed
   std::vector<std::vector<dof_id_type>> _changed_cell_pattern;
-
-  /// integer ID assignment type.
-  /// For testing this discrete class.
-  /// Manual where we assign manually the cells pattern.
-  /// Automatic where I really do not know how, but I have a hint!!
-  const std::string _assign_type;
-
-  /// Allowed values for my region_ID (e.g., materials possible to use {a,b,c}).
-  /// The "set" here is instead of type "vector".
-  /// A set in C++ is a container that store unique elements following a specific order (or
-  /// it can be unordered as well).
-  std::set<std::string> _allowed_parameter_values;
-
-  /// Boolian to see if the used region ID is within the allowed values.
-  const bool _is_allowed;
 
   /// From Element Subdomain Modifier.h:
   /// Any subdomain change is stored in this map. However, our subdomains IDs are not numbers

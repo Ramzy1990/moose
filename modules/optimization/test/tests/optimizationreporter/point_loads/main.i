@@ -17,9 +17,9 @@
 
 [Executioner]
   type = Optimize
-  tao_solver=taonls
-  petsc_options_iname='-tao_gttol -tao_max_it -tao_nls_pc_type -tao_nls_ksp_type'
-  petsc_options_value='1e-5 10 none cg'
+  tao_solver = taonls
+  petsc_options_iname = '-tao_gttol -tao_max_it -tao_nls_pc_type -tao_nls_ksp_type'
+  petsc_options_value = '1e-5 10 none cg'
   verbose = true
 []
 
