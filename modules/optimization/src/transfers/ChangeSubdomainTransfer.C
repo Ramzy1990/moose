@@ -57,9 +57,9 @@ ChangeSubdomainTransfer::execute()
       }
       break;
     case FROM_MULTIAPP:
-      getReporter
-          // get
-          _obj_function = &_problem.getUserObject<OptimizationReporterBase>("OptimizationReporter");
+      // getReporter
+      // get
+      // _obj_function = &_problem.getUserObject<OptimizationReporterBase>("OptimizationReporter");
 
       // here getSubdomainAssignment();
       break;
