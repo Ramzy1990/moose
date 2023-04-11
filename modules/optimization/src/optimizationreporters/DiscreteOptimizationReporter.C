@@ -11,27 +11,21 @@
 // Include Header Files
 //**********************
 #include "DiscreteOptimizationReporter.h"
-
-/// Has been used in the optimization app source files.
-/// Seems to allow the "index_range" method found in the following file.
-#include "libmesh/int_range.h"
+// #include "FEProblem.h"
+// #include "MooseMesh.h"
 
 //*********************
 // Regiester the MOOSE
 //*********************
-
 registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 
 //*************************
 // Adding Input Parameters
 //*************************
-
 InputParameters
 DiscreteOptimizationReporter::validParams()
 {
-  // InputParameters params = GeneralReporter::validParams();
   InputParameters params = OptimizationReporter::validParams();
-  // params += OptimizationReporter::validParams();
 
   params.addClassDescription("Receives computed objective function, and contains reporters for "
                              "communicating between discreteOptimizeSolve and subapps.");
@@ -43,7 +37,7 @@ DiscreteOptimizationReporter::validParams()
       "num_values",
       "Number of parameter values associated with each parameter group in 'parameter_names'.");
 
-  params.addParam<SubdomainName>(
+  params.addParam<subdomain_id_type>(
       "initial_material",
       "The initial material we are going to assign to all the cells in the domain.");
 
@@ -57,17 +51,9 @@ DiscreteOptimizationReporter::validParams()
       "Number of elements or the size of the domain vector inside the domain");
 
   /// Allowed values for my cell_subdomain_ID (e.g., materials possible to use {f,m,v}).
-  params.addParam<std::vector<SubdomainName>>(
+  params.addParam<std::vector<subdomain_id_type>>(
       "allowed_mateirals",
-      "Allowed values for my region_ID (e.g., materials possible to use {f,m,v}).");
-
-  /// Assign the subdomain ID type that we would like to reach (for test purposes and learning).
-  // params.addParam<std::vector<SubdomainName>>("target_cell_subdomain_id",
-  //                                             "The subdomain ID type that is required.");
-
-  /// Assign the cell pattern id that is going to be optimized.
-  // params.addParam<std::vector<std::vector<dof_id_type>>>(
-  //     "cell_pattern", "The cell pattern (cell ids) that is going to be optimized.");
+      "Allowed values for the subdomain_ID (e.g., materials possible to use {0,1,2}).");
 
   return params;
 }
@@ -76,25 +62,24 @@ DiscreteOptimizationReporter::validParams()
 // Class Constructor
 //*******************
 DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters & parameters)
-  // : GeneralReporter(parameters),
   : OptimizationReporter(parameters),
-    // Getting our data from the "".i" file
+
     _parameter_names(getParam<std::vector<ReporterValueName>>("parameter_names")),
+
     _nvalues(getParam<std::vector<dof_id_type>>("num_values")),
+
     _nparam(_parameter_names.size()),
+
     _ndof(std::accumulate(_nvalues.begin(), _nvalues.end(), 0))
-// _initial_material_used(getParam<SubdomainName>("initial_material")),
-// _assign_type(getParam<std::string>("assign_type")),
-// _total_cells(getParam<dof_id_type>("number_of_elements")),
-// _allowed_parameter_values(getParam<std::vector<SubdomainName>>("allowed_mateirals"))
-// _cell_subdomain_id(getParam<std::vector<SubdomainName>>("target_cell_subdomain_id")),
 
 {
 
   _initial_material_used =
-      isParamValid("initial_material") ? getParam<SubdomainName>("initial_material") : "f";
+      isParamValid("initial_material") ? getParam<subdomain_id_type>("initial_material") : 0;
 
   _assign_type = isParamValid("assign_type") ? getParam<std::string>("assign_type") : "manual";
+
+  _mesh = _fe_problem.mesh();
 
   _total_cells =
       isParamValid("number_of_elements") ? getParam<dof_id_type>("number_of_elements") : 9;
@@ -104,9 +89,9 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
   //                                 : {'f', 'm', 'v'};
 
   if (isParamValid("allowed_mateirals"))
-    _allowed_parameter_values = getParam<std::vector<SubdomainName>>("allowed_mateirals");
+    _allowed_parameter_values = getParam<std::vector<subdomain_id_type>>("allowed_mateirals");
   else
-    _allowed_parameter_values = {"f", "m", "v"};
+    _allowed_parameter_values = {0, 1};
 
   // _cell_subdomain_id = isParamValid("target_cell_subdomain_id")
   //                          ? getParam<std::vector<SubdomainName>>("target_cell_subdomain_id")
@@ -119,27 +104,54 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
   //********************
   // Checking Data Read
   //********************
-  if (_parameter_names.size() != _nvalues.size())
-    paramError("num_parameters",
-               "There should be a number in 'num_parameters' for each name in 'parameter_names'.");
+  // Checking the number of parameters to be obtimized in each category.
+  // if (_parameter_names.size() != _nvalues.size())
+  //   paramError("num_parameters",
+  //              "There should be a number in 'num_parameters' for each name in
+  //              'parameter_names'.");
 
-  // Reserving and resizing the vectors
-  _initial_cell_subdomain_id.resize(_total_cells);
-  _cell_subdomain_id.resize(_total_cells);
+  // Reserving and resizing the vectors, such that we can use them with loops iterators.
+  // _initial_cell_subdomain_id.resize(_total_cells);
+  _initial_elements_to_optimize.resize(_total_cells);
+  _initial_subdomains_to_optimize.resize(_total_cells);
+  // _cell_subdomain_id.resize(_total_cells);
 
   //***********************
   // Calling The Functions
   //***********************
 
+  // Checking if the materials used in the mesh/test are allowed or not.
   isMaterialAllowed();
-  setInitialCondition(_initial_cell_subdomain_id);
-  updateSubdomainID(_allowed_parameter_values, _initial_cell_subdomain_id, _cell_subdomain_id);
+
+  // initialization of the domain to be optimized. This will call a function to get the
+  // current optimization domain and assign this domain to respective variables. Those could
+  // be considered as the previous domain when it is not an initialization process.
+  setInitialCondition();
+
+  // Updating the optimization domain according to some logic.
+  // This logic could be random (for tests), or it could be based on an optimizer (e.g.,
+  // simulated annealing).
+  if (_assign_type == "manual")
+  {
+    testUpdateSubdomainID(
+        _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+  }
+  else
+  {
+    // updateSubdomainID(_allowed_parameter_values, _initial_cell_subdomain_id, _cell_subdomain_id);
+  };
 
   //*******************
   // Print the Results
   //*******************
-  for (const auto & s : _cell_subdomain_id) // allowed starting from C++11
-    std::cout << s << '\n';
+  // for (const auto & s : _cell_subdomain_id) // allowed starting from C++11
+  //   std::cout << s << '\n';
+
+  // Print the updated map
+  for (const auto & pair : _pairs_to_optimize)
+  {
+    std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+  }
 }
 
 //***********************
@@ -156,51 +168,135 @@ DiscreteOptimizationReporter::isMaterialAllowed()
   // in the container. Instead, you get a reference to each element in the container, which is
   // faster and more efficient.
   bool is_allowed = false;
-  for (SubdomainName & element : _allowed_parameter_values)
+
+  // For manual insertion, for testing purposes, use general loop element.
+  // we are checking for the inital material used to initialize the domain.
+  if (_assign_type == "manual")
   {
-    if (element == _initial_material_used)
+    for (subdomain_id_type & element : _allowed_parameter_values)
     {
-      is_allowed = true;
-      break;
+      if (element == _initial_material_used)
+      {
+        is_allowed = true;
+        break;
+      }
+    }
+    if (!is_allowed)
+    {
+      // Element is not in the vector
+      mooseError("The initial material used for the domain is not allowed in this optimization! "
+                 "Please check your input file");
     }
   }
-  if (!is_allowed)
+  else // For automatic insertion using the generated mesh.
   {
-    // Element is not in the vector
-    mooseError("The initial material used for the domain is not allowed in this optimization! "
-               "Please check your input file");
+    for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
+    {
+
+      if (std::find(_allowed_parameter_values.begin(),
+                    _allowed_parameter_values.end(),
+                    elem->subdomain_id()) == _allowed_parameter_values.end())
+
+        // Element subdomain_id is not in the vector
+        mooseError("The initial material used for the domain is not allowed in this optimization! "
+                   "Please check your input file");
+    }
   }
 }
 
-// Set initial subdomain ids from the initial material used.
 void
-DiscreteOptimizationReporter::setInitialCondition(
-    std::vector<SubdomainName> & initial_cell_subdomain_id)
+DiscreteOptimizationReporter::getOptimizationDomain()
 {
 
-  // Loop to add elements to _initial_cell_subdomain_id given number of elements
-  for (dof_id_type i = 0; i < _total_cells; i++)
+  // Loop over elements in the mesh
+  for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
   {
-    initial_cell_subdomain_id[i] = _initial_material_used;
+    _elements_to_optimize.push_back(elem->id());
+    _subdomains_to_optimize.push_back(elem->subdomain_id());
+    _pairs_to_optimize.insert(
+        std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
+  }
+
+  // elements are going to not change, but subdomains will be reassigned.
+  // ChangeSubdomainAssignment::setSubdomainAssignment(
+  //     const std::map<dof_id_type, SubdomainID> & assignment) const
+  // for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
+  // {
+  //   auto p = assignment.find(elem->id());
+  //   if (p != assignment.end())
+  //     elem->subdomain_id() = p->second;
+  // }
+  // _mesh.update();
+}
+
+// void
+// DiscreteOptimizationReporter::setInitialCondition(
+//     std::vector<dof_id_type> & _initial_elements_to_optimize,
+//     std::vector<subdomain_id_type> & _initial_subdomains_to_optimize,
+//     std::pair<dof_id_type, subdomain_id_type> & _pairs_to_optimize)
+
+// Set initial subdomain ids from the initial material used, or from the domain's mesh.
+void
+DiscreteOptimizationReporter::setInitialCondition()
+{
+
+  // For manual insertion, for testing purposes, use general loop element.
+  // Initialization is also done based on the data read and not the mesh.
+  if (_assign_type == "manual")
+  {
+    // Loop to add elements to _initial_cell_subdomain_id given number of elements
+    for (dof_id_type i = 0; i < _total_cells; i++)
+    {
+      // Seed the random number generator
+      std::srand(std::time(0));
+      _initial_elements_to_optimize.push_back(
+          rand() % 1000); // for testing purposes, it does not matter what is the element id.
+      _initial_subdomains_to_optimize.push_back(_initial_material_used);
+      _initial_pairs_to_optimize.insert(std::pair<dof_id_type, subdomain_id_type>(
+          _initial_elements_to_optimize[i], _initial_subdomains_to_optimize[i]));
+      // _initial_cell_subdomain_id[i] = _initial_material_used;
+    }
+  }
+  else
+  {
+    getOptimizationDomain(); // get the optimization domain mesh.
+
+    // The initialization is done such that we have two vectors, one for the initial
+    // (eventually the previous domain), and one for the current domain.
+    _initial_elements_to_optimize = _elements_to_optimize;
+    _initial_subdomains_to_optimize = _subdomains_to_optimize;
+    _initial_pairs_to_optimize = _pairs_to_optimize;
   }
 }
 
 // Set cell subdomainIDs to a new one taking into account the previous subdomainIDs in
 // the domain.
 void
-DiscreteOptimizationReporter::updateSubdomainID(
-    const std::vector<SubdomainName> allowed_parameter_values,
-    const std::vector<SubdomainName> previous_cell_subdomain_id,
-    std::vector<SubdomainName> & cell_subdomain_id)
+DiscreteOptimizationReporter::testUpdateSubdomainID(
+    const std::vector<subdomain_id_type> allowed_parameter_values,
+    const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+    std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
 {
-  if (cell_subdomain_id.size() != previous_cell_subdomain_id.size())
+  if (pairs_to_optimize.size() != previous_pairs_to_optimize.size())
     mooseError("The sizes of the subdomainIDs do not match! Please make sure the previous "
                "subdomainIDs size is the same as the new one");
 
   // Setting the current Subdomain ID to the previous one.
-  cell_subdomain_id = previous_cell_subdomain_id;
-
-  // Seed the random number generator
+  // note that the elements ID are the same.
+  // This is true as long as "second" are of the same data type.
+  if (typeid(pairs_to_optimize) == typeid(previous_pairs_to_optimize))
+  {
+    // Copy only the values from previous pairs to current pairs
+    for (const auto & pair : previous_pairs_to_optimize)
+    {
+      if (pairs_to_optimize.find(pair.first) != pairs_to_optimize.end())
+      {
+        // Then the key exists in the current pair
+        pairs_to_optimize[pair.first] = pair.second;
+      }
+    }
+  }
+  // Seed the random number generator for the randomization process in this test function.
   std::srand(std::time(0));
 
   //************************************************************************************************************************//
@@ -208,11 +304,11 @@ DiscreteOptimizationReporter::updateSubdomainID(
   // 1- Randomizing the current subdomain ID to a new one
 
   // Randomize the contents of cell_subdomain_id using "f" and "m" from _allowed_parameter_values
-  // for (size_t i = 0; i < cell_subdomain_id.size(); i++)
+  // for (auto i = 0; i < pairs_to_optimize.size(); i++)
   // {
   //   // Generate a random number between 0 and 1 only (hence "f" or "m").
   //   int random_index = std::rand() % 2;
-  //   cell_subdomain_id[i] =
+  //   pairs_to_optimize[i] =
   //       _allowed_parameter_values[random_index]; // Assign either "f" or "m" randomly
   // }
 
@@ -221,23 +317,23 @@ DiscreteOptimizationReporter::updateSubdomainID(
   // 2- Randomizing the current subdomain ID based on some criterion
 
   // Define the threshold for the area of a circle
-  // Real area_threshold = 7853.0;
+  Real area_threshold = 7853.0;
+  std::vector<subdomain_id_type> some_variable = allowed_parameter_values;
+  // // // Randomize the contents of cell_subdomain_id based on the area of a circle
+  for (auto it = pairs_to_optimize.begin(); it != pairs_to_optimize.end(); ++it)
+  {
+    Real random_radius = std::rand() % 100; // Generate a random number between 0 and 99
+    Real area = 3.141592 * random_radius * random_radius;
 
-  // // // // Randomize the contents of cell_subdomain_id based on the area of a circle
-  // for (unsigned int i = 0; i < cell_subdomain_id.size(); i++)
-  // {
-  //   Real random_radius = std::rand() % 100; // Generate a random number between 0 and 99
-  //   Real area = 3.141592 * random_radius * random_radius;
-
-  //   if (area > area_threshold)
-  //   {
-  //     cell_subdomain_id[i] = "f";
-  //   }
-  //   else
-  //   {
-  //     cell_subdomain_id[i] = "m";
-  //   }
-  // }
+    if (area > area_threshold)
+    {
+      it->second = 0;
+    }
+    else
+    {
+      it->second = 1;
+    }
+  }
 
   //************************************************************************************************************************//
 
@@ -248,63 +344,63 @@ DiscreteOptimizationReporter::updateSubdomainID(
 
   // Simulated annealing parameters
   // There could be other parameters as well
-  unsigned int iterations = 77;
-  Real cooling_rate = 0.77;
+  // unsigned int iterations = 77;
+  // Real cooling_rate = 0.77;
 
   // initializing the temperature before the loop
-  Real current_temperature = 77.0;
+  // Real current_temperature = 77.0;
 
-  for (unsigned int i = 0; i < iterations; i++)
-  {
-    // Generate a random neighbor by changing a random element in cell_subdomain_id
-    std::vector<SubdomainName> neighbor = cell_subdomain_id;
-    unsigned int random_index = std::rand() % neighbor.size();
+  // for (unsigned int i = 0; i < iterations; i++)
+  //   {
+  //     // Generate a random neighbor by changing a random element in cell_subdomain_id
+  //     std::vector<subdomain_id_type> neighbor = cell_subdomain_id;
+  //     unsigned int random_index = std::rand() % neighbor.size();
 
-    // "f" and "m" are at index 0 and 1 in _allowed_parameter_values, hence taking the
-    // reminder division by 2, 0 or 1.
-    unsigned int random_value_index = std::rand() % 2;
+  //     // "f" and "m" are at index 0 and 1 in _allowed_parameter_values, hence taking the
+  //     // reminder division by 2, 0 or 1.
+  //     unsigned int random_value_index = std::rand() % 2;
 
-    neighbor[random_index] = allowed_parameter_values[random_value_index];
+  //     neighbor[random_index] = allowed_parameter_values[random_value_index];
 
-    // After assigning the neighbor element, we test this new domain (where just one element has
-    // changed).
+  //     // After assigning the neighbor element, we test this new domain (where just one element has
+  //     // changed).
 
-    Real current_cost = costFunction(cell_subdomain_id);
-    Real neighbor_cost = costFunction(neighbor);
+  //     Real current_cost = costFunction(cell_subdomain_id);
+  //     Real neighbor_cost = costFunction(neighbor);
 
-    // Calculate the cost difference
-    Real cost_difference = neighbor_cost - current_cost;
+  //     // Calculate the cost difference
+  //     Real cost_difference = neighbor_cost - current_cost;
 
-    // If the neighbor has a lower cost, accept it
-    if (cost_difference < 0)
-    {
-      cell_subdomain_id = neighbor;
-    }
-    else
-    {
-      // Otherwise, accept the neighbor with a probability depending on the temperature
-      Real acceptance_probability = std::exp(-cost_difference / current_temperature);
-      if ((std::rand() / static_cast<double>(RAND_MAX)) < acceptance_probability)
-      {
-        cell_subdomain_id = neighbor;
-      }
-    }
+  //     // If the neighbor has a lower cost, accept it
+  //     if (cost_difference < 0)
+  //     {
+  //       cell_subdomain_id = neighbor;
+  //     }
+  //     else
+  //     {
+  //       // Otherwise, accept the neighbor with a probability depending on the temperature
+  //       Real acceptance_probability = std::exp(-cost_difference / current_temperature);
+  //       if ((std::rand() / static_cast<double>(RAND_MAX)) < acceptance_probability)
+  //       {
+  //         cell_subdomain_id = neighbor;
+  //       }
+  //     }
 
-    // Cool down the temperature
-    current_temperature *= cooling_rate;
-  }
+  //     // Cool down the temperature
+  //     current_temperature *= cooling_rate;
+  //   }
 }
 
 // Compute the cost function given some domain.
 Real
-DiscreteOptimizationReporter::costFunction(const std::vector<SubdomainName> & Domain)
+DiscreteOptimizationReporter::costFunction(const std::vector<subdomain_id_type> & Domain)
 {
   // Define our cost function here based on the Domain
   // For example, we can count the number of consecutive "f"s or "m"s!
   unsigned int total_cost = 0;
 
   // Starting from 1 since the first element in domain starts at 0 = i - 1.
-  for (unsigned int i = 1; i < Domain.size(); i++)
+  for (subdomain_id_type i = 1; i < Domain.size(); i++)
   {
     if (Domain[i] == Domain[i - 1])
     {

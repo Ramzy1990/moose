@@ -9,21 +9,25 @@
 
 #pragma once
 
-// #include "ElementUserObject.h"
-// #include "GeneralReporter.h"
+// Moose Includes
 #include "OptimizationReporter.h"
-// #include "FEProblemBase.h"
+// #include "FEProblem.h"
+// #include "MeshGenerator.h"
+// #include "MooseMeshUtils.h"
 // #include "OptimizationData.h"
+
+// Forward Declarations
+// class FEProblemBase;
+// class MooseMesh;
 
 /**
  * Contains reporters for communicating between optimizeSolveDiscrete and subapps. Methods
  * in OptimizeSolve is gradient-free (derivastive-free). Currently it includes TAO POUNDERS
  * and Nelder-Mead. It will eventually include Simulated Annealing and Genetic Algorithm.
  */
-class DiscreteOptimizationReporter : // public ElementUserObject,
-                                     //  public FEProblemBase,
-                                    //  public GeneralReporter, // Included in OptimizationData
-                                     public OptimizationReporter
+class DiscreteOptimizationReporter : public OptimizationReporter
+//  public GeneralReporter, // Included in OptimizationData
+//  public ElementUserObject
 
 {
 public:
@@ -51,30 +55,65 @@ public:
   void isMaterialAllowed(); // no need for pasing variables as we are checking the class ones.
 
   /**
+   * Function to get the optimization domain of the problem using the elemnts of the mesh
+   * and their subdomain_ids.
+   */
+  // void getOptimizationDomain(std::vector<dof_id_type> & elements_to_optimize,
+  //                            std::vector<SubdomainID> & subdomains_to_optimize,
+  //                            std::pair<SubdomainID, dof_id_type> & pairs_to_optimize);
+  void getOptimizationDomain();
+
+  /**
    * Function to initialize the subdomain id vectors from input file
    */
   // void setInitialCondition(SubdomainName initial_material_used,
   //                          std::vector<SubdomainName> & initial_cell_subdomain_id,
   //                          dof_id_type total_cells);
-  void setInitialCondition(std::vector<SubdomainName> & initial_cell_subdomain_id);
+  // void setInitialCondition(std::vector<dof_id_type> & _initial_elements_to_optimize,
+  //                          std::vector<subdomain_id_type> & _initial_subdomains_to_optimize,
+  //                          std::pair<dof_id_type, subdomain_id_type> & _pairs_to_optimize);
+  void setInitialCondition();
 
   /**
-   * Function to set the targeted subdomain id vectors taking into account previous
-   * cell_subdomain_id
+   * Function to update the optimization domain based on some logic, used for testing purposes.
    */
-  void updateSubdomainID(const std::vector<SubdomainName> allowed_parameter_values,
-                         const std::vector<SubdomainName> previous_cell_subdomain_id,
-                         std::vector<SubdomainName> & cell_subdomain_id);
+  void
+  testUpdateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
+                        const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+                        std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+
+  /**
+   * Function to update the optimization domain based on some logic.
+   */
+  // void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
+  //                        const std::vector<subdomain_id_type> previous_cell_subdomain_id,
+  //                        std::vector<subdomain_id_type> & cell_subdomain_id);
 
   /**
    * Function to compute the cost function
    */
-  Real costFunction(const std::vector<SubdomainName> & Domain);
+  Real costFunction(const std::vector<subdomain_id_type> & Domain);
+
+  /**
+   * Taken from the reactor module.
+   * assign IDs for each component in pattern in sequential order
+   * @param meshes input meshe of the cartesian or hexagonal patterned mesh generator
+   * @param pattern 2D vector of the mesh pattern
+   * @return list of reporting IDs for individual mesh elements
+   **/
+  // std::vector<dof_id_type>
+  // getCellwiseIntegerIDs(const std::vector<std::unique_ptr<ReplicatedMesh>> & meshes);
 
 protected:
   //************************
   // Variables Declarations
   //************************
+
+  /// Reference to FEProblem
+  // FEProblemBase & _optimization_problem;
+
+  ///  Could it be this how we get the mesh?
+  MooseMesh & _mesh;
 
   /// The parameter names variable is a holder to the names of the variables we would
   /// like to use to control the optimization process. This is seen in the bimaterial test files (main.i). I guess we will
@@ -97,7 +136,7 @@ protected:
   dof_id_type _ndof;
 
   /// Initial mateiral used
-  SubdomainName _initial_material_used;
+  subdomain_id_type _initial_material_used;
 
   /// ID assignment methodology.
   std::string _assign_type;
@@ -106,16 +145,42 @@ protected:
   dof_id_type _total_cells;
 
   /// Allowed values for my region_ID (e.g., materials possible to use {a,b,c}).
-  std::vector<SubdomainName> _allowed_parameter_values;
+  std::vector<subdomain_id_type> _allowed_parameter_values;
 
   /// Subdomain ID Type. E.g., {a, b, c, d, etc...}
-  std::vector<SubdomainName> _cell_subdomain_id;
+  // std::vector<subdomain_id_type> _cell_subdomain_id;
 
   /// hold integer ID for each input pattern cell.
   // std::vector<dof_id_type> _cell_pattern;
 
   /// Initial or previous Subdomain ID Type. E.g., {a, b, c, d, etc...}
-  std::vector<SubdomainName> _initial_cell_subdomain_id;
+  // std::vector<subdomain_id_type> _initial_cell_subdomain_id;
+
+  /// Initial or previous elements. E.g., {0, 1, 1000, 500, etc...}
+  std::vector<dof_id_type> _initial_elements_to_optimize;
+
+  /// Initial or previous Subdomain ID. E.g., {0, 1, 2, 3, etc...}
+  std::vector<subdomain_id_type> _initial_subdomains_to_optimize;
+
+  /// Initial or previous pairs. E.g., {{0,1}, {0,2}, etc...}
+  std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
+
+  /// input mesh for optimization
+  /// Will be taken from the exodus mesh maybe?
+  // std::unique_ptr<MeshBase> _mesh_to_optimize; // From SubdomainExtraElementIDGenerator header
+
+  /// elements of our mesh we would like to optimize
+  std::vector<dof_id_type> _elements_to_optimize; // From ElementSubdomainIDGenerator source. = elem
+
+  /// subdomains of our mesh we would like to optimize
+  std::vector<subdomain_id_type> _subdomains_to_optimize; // = elem.subdomain_id()
+
+  /// mapping between elements and subdomains. /// the current elem->subdomain assignment
+  std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
+
+  /// pairing between subdomains_ids and their names
+  /// use getSubdomainNames in a function with ->first and ->second
+  // std::map<SubdomainID, SubdomainName> _subdomain_id_to_name;
 
   /// From Element Subdomain Modifier.h:
   /// Any subdomain change is stored in this map. However, our subdomains IDs are not numbers

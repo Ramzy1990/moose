@@ -16,10 +16,10 @@
   # Number of parameter names we are adjusting for. since we have materials
   # only, so it will be 1. Or it can be the number of materials we are adjusting for?
   num_values = 1
-  initial_material = 'f'
+  initial_material = '0'
   assign_type = 'manual'
   number_of_elements = 9
-  allowed_mateirals = 'f m v'
+  allowed_mateirals = '0 1 2'
 []
 
 [Problem]

@@ -52,7 +52,8 @@ ChangeSubdomainTransfer::execute()
         const ChangeSubdomainAssignment * csa_uo =
             dynamic_cast<const ChangeSubdomainAssignment *>(uo);
         if (!csa_uo)
-          paramError("user_object", "Must be a ChangeSubdomainAssignment");
+          paramError("user_object",
+                     "Must be present and also, most importantly a ChangeSubdomainAssignment");
         csa_uo->setSubdomainAssignment({{0, 10}, {2, 12}});
       }
       break;
