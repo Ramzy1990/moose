@@ -81,28 +81,10 @@ public:
   testUpdateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
                         const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
-
-  /**
-   * Function to update the optimization domain based on some logic.
-   */
-  // void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
-  //                        const std::vector<subdomain_id_type> previous_cell_subdomain_id,
-  //                        std::vector<subdomain_id_type> & cell_subdomain_id);
-
   /**
    * Function to compute the cost function
    */
-  Real costFunction(const std::vector<subdomain_id_type> & Domain);
-
-  /**
-   * Taken from the reactor module.
-   * assign IDs for each component in pattern in sequential order
-   * @param meshes input meshe of the cartesian or hexagonal patterned mesh generator
-   * @param pattern 2D vector of the mesh pattern
-   * @return list of reporting IDs for individual mesh elements
-   **/
-  // std::vector<dof_id_type>
-  // getCellwiseIntegerIDs(const std::vector<std::unique_ptr<ReplicatedMesh>> & meshes);
+  unsigned int costFunction(std::map<dof_id_type, subdomain_id_type> & domain_map);
 
 protected:
   //************************
@@ -111,9 +93,6 @@ protected:
 
   /// Reference to FEProblem
   // FEProblemBase & _optimization_problem;
-
-  ///  Could it be this how we get the mesh?
-  MooseMesh & _mesh;
 
   /// The parameter names variable is a holder to the names of the variables we would
   /// like to use to control the optimization process. This is seen in the bimaterial test files (main.i). I guess we will
@@ -135,11 +114,19 @@ protected:
   /// Inherited from the OptimizationData or OptimizationReporter
   dof_id_type _ndof;
 
+  ///  Getting the mesh. General reporter has _fe_problem.
+  // MooseMesh & moose_mesh = problem.mesh();
+  // MeshBase & mesh = moose_mesh.getMesh();
+  MooseMesh & _mesh;
+
   /// Initial mateiral used
   subdomain_id_type _initial_material_used;
 
   /// ID assignment methodology.
   std::string _assign_type;
+
+  /// Solver methodology.
+  std::string _solve_type;
 
   /// Total number of cells. The 64-bit "dof_id_type" is much larger than the 16-bit "subdomain_id_type".
   dof_id_type _total_cells;

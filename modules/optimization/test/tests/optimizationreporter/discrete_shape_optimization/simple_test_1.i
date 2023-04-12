@@ -4,8 +4,9 @@
 [Mesh]
   [gen]
     type = CartesianMeshGenerator
-    dim = 1
-    dx = '1 1 1'
+    dim = 2
+    dx = '1 1 1 1 1'
+    dy = '1 1 1 1 1'
     # subdomain_id = '1 2 3'
   []
 []
@@ -18,6 +19,7 @@
   num_values = 1
   initial_material = '0'
   assign_type = 'manual'
+  solver_type = 'random_3'
   number_of_elements = 9
   allowed_mateirals = '0 1 2'
 []
