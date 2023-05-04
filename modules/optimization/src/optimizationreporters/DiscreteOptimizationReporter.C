@@ -110,61 +110,69 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
 
   // Reserving and resizing the vectors, such that we can use them with loops iterators.
   // _initial_cell_subdomain_id.resize(_total_cells);
-  _initial_elements_to_optimize.resize(_total_cells);
-  _initial_subdomains_to_optimize.resize(_total_cells);
+  // _initial_elements_to_optimize.resize(_total_cells);
+  // _initial_subdomains_to_optimize.resize(_total_cells);
   // _cell_subdomain_id.resize(_total_cells);
 
   //***********************
   // Calling The Functions
   //***********************
 
-  // Checking if the materials used in the mesh/test are allowed or not.
-  isMaterialAllowed();
-
-  // initialization of the domain to be optimized. This will call a function to get the
-  // current optimization domain and assign this domain to respective variables. Those could
-  // be considered as the previous domain when it is not an initialization process.
-  setInitialCondition();
-
-  // Updating the optimization domain according to some logic.
-  // This logic could be random (for tests), or it could be based on an optimizer (e.g.,
-  // simulated annealing).
-  if (_assign_type == "manual")
+  if (!_fe_problem.hasMultiApps())
   {
-    testUpdateSubdomainID(
-        _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
-  }
-  else
-  {
-    // updateSubdomainID(_allowed_parameter_values, _initial_cell_subdomain_id, _cell_subdomain_id);
-  };
+    std::cout << std::endl;
+    std::cout << "The discrete optimization reported is running on the main app since it could not "
+                 "find any sub apps!";
+    std::cout << std::endl;
 
-  //*******************
-  // Print the Results
-  //*******************
-  // for (const auto & s : _cell_subdomain_id) // allowed starting from C++11
-  //   std::cout << s << '\n';
+    // Checking if the materials used in the mesh/test are allowed or not.
+    isMaterialAllowed(_mesh);
 
-  std::cout << std::endl;
-  std::cout << "The old map is given as..." << std::endl;
-  for (const auto & pair : _initial_pairs_to_optimize)
-  {
-    std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-  }
+    // initialization of the domain to be optimized. This will call a function to get the
+    // current optimization domain and assign this domain to respective variables. Those could
+    // be considered as the previous domain when it is not an initialization process.
+    setInitialCondition(_mesh);
 
-  std::cout << std::endl;
-  std::cout << std::endl;
-  std::cout << std::endl;
+    // Updating the optimization domain according to some logic.
+    // This logic could be random (for tests), or it could be based on an optimizer (e.g.,
+    // simulated annealing).
+    if (_assign_type == "manual")
+    {
+      testUpdateSubdomainID(
+          _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+    }
+    else
+    {
+      updateSubdomainID(_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+    };
 
-  // Print the updated map
-  std::cout << "The new updated map is..." << std::endl;
-  for (const auto & pair : _pairs_to_optimize)
-  {
-    std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-  }
+    //*******************
+    // Print the Results
+    //*******************
+    // for (const auto & s : _cell_subdomain_id) // allowed starting from C++11
+    //   std::cout << s << '\n';
 
-  std::cout << std::endl;
-  std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << "The old map is given as..." << std::endl;
+    for (const auto & pair : _initial_pairs_to_optimize)
+    {
+      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
+
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+
+    // Print the updated map
+    std::cout << "The new updated map is..." << std::endl;
+    for (const auto & pair : _pairs_to_optimize)
+    {
+      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    }
+
+    std::cout << std::endl;
+    std::cout << std::endl;
+  } // End if (!_fe_problem.hasMultiApps())
 }
 
 //***********************
@@ -173,7 +181,7 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
 
 // Checking if the materials used are allowed
 void
-DiscreteOptimizationReporter::isMaterialAllowed()
+DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
 {
 
   // Check if initial_material_used is in allowed_parameter_values
@@ -212,7 +220,7 @@ DiscreteOptimizationReporter::isMaterialAllowed()
   }
   else // For automatic insertion using the generated mesh.
   {
-    for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
+    for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
     {
 
       if (std::find(_allowed_parameter_values.begin(),
@@ -229,8 +237,9 @@ DiscreteOptimizationReporter::isMaterialAllowed()
   }
 }
 
+// Function to get the optimization domain of the problem using the elements of the mesh
 void
-DiscreteOptimizationReporter::getOptimizationDomain()
+DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mesh)
 {
 
   std::cout << "Assigning the elements and subdomains ids to their respective map from the mesh..."
@@ -240,7 +249,8 @@ DiscreteOptimizationReporter::getOptimizationDomain()
             << std::endl;
   std::cout << std::endl;
   // Loop over elements in the mesh
-  for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
+  for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
+  // for (auto & elem : _mesh.getMesh().elem_ptr())
   {
     _elements_to_optimize.push_back(elem->id());
     _subdomains_to_optimize.push_back(elem->subdomain_id());
@@ -250,21 +260,11 @@ DiscreteOptimizationReporter::getOptimizationDomain()
   std::cout << std::endl;
   std::cout << "Assignment done successfully!" << std::endl;
   std::cout << std::endl;
-  // elements are going to not change, but subdomains will be reassigned.
-  // ChangeSubdomainAssignment::setSubdomainAssignment(
-  //     const std::map<dof_id_type, SubdomainID> & assignment) const
-  // for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
-  // {
-  //   auto p = assignment.find(elem->id());
-  //   if (p != assignment.end())
-  //     elem->subdomain_id() = p->second;
-  // }
-  // _mesh.update();
 }
 
-// Set initial subdomain ids from the initial material used, or from the domain's mesh.
+// Set initial subdomain ids from the initial material used, or from the domain's mesh
 void
-DiscreteOptimizationReporter::setInitialCondition()
+DiscreteOptimizationReporter::setInitialCondition(const MooseMesh & domain_mesh)
 {
 
   std::cout << std::endl;
@@ -307,7 +307,7 @@ DiscreteOptimizationReporter::setInitialCondition()
     std::cout << std::endl;
     std::cout << "Initializing the domain using the supplied mesh..." << std::endl;
     std::cout << std::endl;
-    getOptimizationDomain(); // get the current optimization domain mesh.
+    getOptimizationDomain(domain_mesh); // get the current optimization domain mesh.
 
     // The initialization is done such that we have two vectors, one for the initial
     // (eventually the previous domain), and one for the current domain.
@@ -412,7 +412,7 @@ DiscreteOptimizationReporter::testUpdateSubdomainID(
 
     // Simulated annealing parameters
     // There could be other parameters as well
-    unsigned int iterations = 77;
+    unsigned int iterations = 777;
     Real cooling_rate = 0.77;
 
     // initializing the temperature before the loop
@@ -437,8 +437,8 @@ DiscreteOptimizationReporter::testUpdateSubdomainID(
       random_iterator->second = allowed_parameter_values[random_value_index];
 
       // After assigning the element, we test the domain (where just one element has changed).
-      unsigned int current_cost = costFunction(pairs_to_optimize);
-      unsigned int neighbor_cost = costFunction(neighbor);
+      unsigned int current_cost = costFunction(_mesh, pairs_to_optimize);
+      unsigned int neighbor_cost = costFunction(_mesh, neighbor);
 
       // Calculate the cost difference
       int cost_difference = neighbor_cost - current_cost;
@@ -464,32 +464,162 @@ DiscreteOptimizationReporter::testUpdateSubdomainID(
   }
 }
 
+// Set cell subdomainIDs to a new one taking into account the previous subdomainIDs
+void
+DiscreteOptimizationReporter::updateSubdomainID(
+    const std::vector<subdomain_id_type> allowed_parameter_values,
+    const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+    std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
+{
+  std::cout << std::endl;
+  std::cout << "Updating the domain subdomain ids according to the supplied mesh..." << std::endl;
+  std::cout << std::endl;
+
+  if (pairs_to_optimize.size() != previous_pairs_to_optimize.size())
+    mooseError("The sizes of the subdomainIDs do not match! Please make sure the previous "
+               "subdomainIDs size is the same as the new one");
+
+  // Setting the current Subdomain ID to the previous one.
+  // note that the elements ID are the same.
+  // This is true as long as "second" are of the same data type.
+  if (typeid(pairs_to_optimize) == typeid(previous_pairs_to_optimize))
+  {
+
+    std::cout << "previous and current maps are of the same type! Proceeding to updating the "
+                 "current domain map..."
+              << std::endl;
+    std::cout << std::endl;
+
+    // Copy only the values from previous pairs to current pairs
+    for (const auto & pair : previous_pairs_to_optimize)
+    {
+      if (pairs_to_optimize.find(pair.first) != pairs_to_optimize.end())
+      {
+        // Then the key exists in the current pair
+        pairs_to_optimize[pair.first] = pair.second;
+      }
+    }
+  }
+
+  // Seed the random number generator for the randomization process in this test function.
+  std::srand(std::time(0));
+
+  //************************************************************************************************************************//
+  // Simulated annealing parameters
+  // There could be other parameters as well
+  unsigned int iterations = 777;
+  Real cooling_rate = 0.77;
+
+  // initializing the temperature before the loop
+  Real current_temperature = 77.0;
+
+  for (unsigned int i = 0; i < iterations; i++)
+  {
+
+    // Generate a random neighbor by changing a random element in pairs_to_optimize
+    std::map<dof_id_type, subdomain_id_type> neighbor = pairs_to_optimize;
+    unsigned int random_index = std::rand() % neighbor.size();
+
+    // "f" and "m" are at index 0 and 1 in _allowed_parameter_values, hence taking the
+    // reminder division by 2, 0 or 1.
+    unsigned int random_value_index = std::rand() % 2;
+
+    // Advance the iterator to the random index
+    auto random_iterator = neighbor.begin();
+    std::advance(random_iterator, random_index);
+
+    // Update the value at the random index
+    random_iterator->second = allowed_parameter_values[random_value_index];
+
+    // After assigning the element, we test the domain (where just one element has changed).
+    unsigned int current_cost = costFunction(_mesh, pairs_to_optimize);
+    unsigned int neighbor_cost = costFunction(_mesh, neighbor);
+
+    // Calculate the cost difference
+    int cost_difference = neighbor_cost - current_cost;
+
+    // If the neighbor has a lower cost, accept it
+    if (cost_difference < 0)
+    {
+      pairs_to_optimize = neighbor;
+    }
+    else
+    {
+      // Otherwise, accept the neighbor with a probability depending on the temperature
+      Real acceptance_probability = std::exp(-cost_difference / current_temperature);
+      if ((std::rand() / static_cast<double>(RAND_MAX)) < acceptance_probability)
+      {
+        pairs_to_optimize = neighbor;
+      }
+    }
+
+    // Cool down the temperature
+    current_temperature *= cooling_rate;
+  }
+}
+
 // Compute the cost function given some domain.
 // Function to calculate the cost of a given Domain
 unsigned int
-DiscreteOptimizationReporter::costFunction(std::map<dof_id_type, subdomain_id_type> & domain_map)
+DiscreteOptimizationReporter::costFunction(
+    const MooseMesh & domain_mesh, const std::map<dof_id_type, subdomain_id_type> & domain_map)
 {
   unsigned int total_cost = 0;
 
-  // Iterate through the map, using the iterator to access the key-value pairs
-  auto it = domain_map.begin();
-  auto prev = it;
+  // To not count many times the neighbors to the same element
+  std::set<std::pair<dof_id_type, dof_id_type>> visited_pairs;
 
-  // Move the iterator to the second element, if there is one
-  if (it != domain_map.end())
-    ++it;
-
-  // Iterate through the map starting from the second element
-  for (; it != domain_map.end(); ++it)
+  for (const auto & elem : domain_mesh.getMesh().active_element_ptr_range())
   {
-    // Compare the value (second) of the current pair with the value of the previous pair
-    if (it->second == prev->second)
+    // Get the subdomain_id_type of the current element from the domain_map
+    subdomain_id_type elem_subdomain_id = domain_map.at(elem->id());
+
+    for (unsigned int side = 0; side < elem->n_sides(); ++side)
     {
-      total_cost++;
+      const Elem * neighbor = elem->neighbor_ptr(side);
+
+      if (neighbor != nullptr) // If not empty space beside the current element
+      {
+        // Get the subdomain_id_type of the neighbor element from the domain_map
+        subdomain_id_type neighbor_subdomain_id = domain_map.at(neighbor->id());
+
+        // Create a pair representing the current and neighboring elements, sorted by their IDs
+        std::pair<dof_id_type, dof_id_type> elem_pair = std::minmax(elem->id(), neighbor->id());
+
+        // Only increment the cost if the pair has not been visited and the subdomain IDs are not
+        // equal!
+        if (visited_pairs.find(elem_pair) == visited_pairs.end() &&
+            elem_subdomain_id == neighbor_subdomain_id)
+        {
+          total_cost++;
+          visited_pairs.insert(elem_pair);
+        }
+      }
     }
-    // Update the prev iterator to point to the current iterator
-    prev = it;
   }
 
+  // Return the total cost
   return total_cost;
+
+  // // Iterate through the map, using the iterator to access the key-value pairs
+  // auto it = domain_map.begin();
+  // auto prev = it;
+
+  // // Move the iterator to the second element, if there is one
+  // if (it != domain_map.end())
+  //   ++it;
+
+  // // Iterate through the map starting from the second element
+  // for (; it != domain_map.end(); ++it)
+  // {
+  //   // Compare the value (second) of the current pair with the value of the previous pair
+  //   if (it->second == prev->second)
+  //   {
+  //     total_cost++;
+  //   }
+  //   // Update the prev iterator to point to the current iterator
+  //   prev = it;
+  // }
+
+  // return total_cost;
 }

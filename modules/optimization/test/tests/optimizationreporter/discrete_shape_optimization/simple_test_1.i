@@ -4,9 +4,10 @@
 [Mesh]
   [gen]
     type = CartesianMeshGenerator
-    dim = 2
-    dx = '1 1 1 1 1'
-    dy = '1 1 1 1 1'
+    dim = 3
+    dx = '1 1 1 1 1 1 1 1 1 1'
+    dy = '1 1 1 1 1 1 1 1 1 1'
+    dz = '1 1 1 1 1 1 1 1 1 1'
     # subdomain_id = '1 2 3'
   []
 []
@@ -18,9 +19,9 @@
   # only, so it will be 1. Or it can be the number of materials we are adjusting for?
   num_values = 1
   initial_material = '0'
-  assign_type = 'manual'
+  assign_type = 'auto'
   solver_type = 'random_3'
-  number_of_elements = 9
+  number_of_elements = 12
   allowed_mateirals = '0 1 2'
 []
 

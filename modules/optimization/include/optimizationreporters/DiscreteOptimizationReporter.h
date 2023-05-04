@@ -11,12 +11,8 @@
 
 // Moose Includes
 #include "OptimizationReporter.h"
-// #include "FEProblem.h"
-// #include "MeshGenerator.h"
-// #include "MooseMeshUtils.h"
-// #include "OptimizationData.h"
 
-// Forward Declarations
+// Forward Declarations If Any
 // class FEProblemBase;
 // class MooseMesh;
 
@@ -31,17 +27,17 @@ class DiscreteOptimizationReporter : public OptimizationReporter
 
 {
 public:
-  static InputParameters validParams();
-
-  DiscreteOptimizationReporter(const InputParameters & parameters);
-
   //************************
   // Variables Declarations
   //************************
+  // Nothing to see here
 
   //************************
   // Functions Declarations
   //************************
+  static InputParameters validParams();
+
+  DiscreteOptimizationReporter(const InputParameters & parameters);
 
   // void initialize() override {}
   // void execute() override {}
@@ -52,27 +48,19 @@ public:
   /**
    * Function to check if the materials used are the ones included and allowed
    */
-  void isMaterialAllowed(); // no need for pasing variables as we are checking the class ones.
+  void isMaterialAllowed(const MooseMesh & domain_mesh); // no need for pasing variables as we are
+                                                         // checking the class ones.
 
   /**
-   * Function to get the optimization domain of the problem using the elemnts of the mesh
+   * Function to get the optimization domain of the problem using the elements of the mesh
    * and their subdomain_ids.
    */
-  // void getOptimizationDomain(std::vector<dof_id_type> & elements_to_optimize,
-  //                            std::vector<SubdomainID> & subdomains_to_optimize,
-  //                            std::pair<SubdomainID, dof_id_type> & pairs_to_optimize);
-  void getOptimizationDomain();
+  void getOptimizationDomain(const MooseMesh & domain_mesh);
 
   /**
-   * Function to initialize the subdomain id vectors from input file
+   * Function to initialize the subdomain id vectors
    */
-  // void setInitialCondition(SubdomainName initial_material_used,
-  //                          std::vector<SubdomainName> & initial_cell_subdomain_id,
-  //                          dof_id_type total_cells);
-  // void setInitialCondition(std::vector<dof_id_type> & _initial_elements_to_optimize,
-  //                          std::vector<subdomain_id_type> & _initial_subdomains_to_optimize,
-  //                          std::pair<dof_id_type, subdomain_id_type> & _pairs_to_optimize);
-  void setInitialCondition();
+  void setInitialCondition(const MooseMesh & domain_mesh);
 
   /**
    * Function to update the optimization domain based on some logic, used for testing purposes.
@@ -81,18 +69,28 @@ public:
   testUpdateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
                         const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+
+  /**
+   * Function to update the optimization domain based on some logic, used for testing purposes.
+   */
+  void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
+                         const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+
   /**
    * Function to compute the cost function
    */
-  unsigned int costFunction(std::map<dof_id_type, subdomain_id_type> & domain_map);
+  unsigned int costFunction(const MooseMesh & domain_mesh,
+                            const std::map<dof_id_type, subdomain_id_type> & domain_map);
+
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
 
 protected:
   //************************
   // Variables Declarations
   //************************
-
-  /// Reference to FEProblem
-  // FEProblemBase & _optimization_problem;
 
   /// The parameter names variable is a holder to the names of the variables we would
   /// like to use to control the optimization process. This is seen in the bimaterial test files (main.i). I guess we will
@@ -134,15 +132,6 @@ protected:
   /// Allowed values for my region_ID (e.g., materials possible to use {a,b,c}).
   std::vector<subdomain_id_type> _allowed_parameter_values;
 
-  /// Subdomain ID Type. E.g., {a, b, c, d, etc...}
-  // std::vector<subdomain_id_type> _cell_subdomain_id;
-
-  /// hold integer ID for each input pattern cell.
-  // std::vector<dof_id_type> _cell_pattern;
-
-  /// Initial or previous Subdomain ID Type. E.g., {a, b, c, d, etc...}
-  // std::vector<subdomain_id_type> _initial_cell_subdomain_id;
-
   /// Initial or previous elements. E.g., {0, 1, 1000, 500, etc...}
   std::vector<dof_id_type> _initial_elements_to_optimize;
 
@@ -151,10 +140,6 @@ protected:
 
   /// Initial or previous pairs. E.g., {{0,1}, {0,2}, etc...}
   std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
-
-  /// input mesh for optimization
-  /// Will be taken from the exodus mesh maybe?
-  // std::unique_ptr<MeshBase> _mesh_to_optimize; // From SubdomainExtraElementIDGenerator header
 
   /// elements of our mesh we would like to optimize
   std::vector<dof_id_type> _elements_to_optimize; // From ElementSubdomainIDGenerator source. = elem
@@ -181,9 +166,20 @@ protected:
   //************************
   // Functions Declarations
   //************************
+  // Nothing to see here
+
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
 
 private:
   //************************
+  // Variables Declarations
+  //************************
+  // Nothing to see here
+
+  //************************
   // Functions Declarations
   //************************
+  // Nothing to see here
 };
