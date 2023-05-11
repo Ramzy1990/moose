@@ -37,6 +37,12 @@ public:
 
   virtual void execute() override;
 
+  /**
+   * Function to assign the mesh
+   */
+  void assignMesh(const std::map<dof_id_type, subdomain_id_type> & _pairs_to_optimize,
+                  MooseMesh & mesh);
+
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//
@@ -55,7 +61,7 @@ protected:
   MooseMesh & _to_mesh;
 
   /// @brief mesh from the _from_problem // Dummy one mesh
-  MooseMesh & _from_mesh;
+  // MooseMesh & _from_mesh;
 
   /// @brief the class variable that contains the user object name. This is DiscreteOptimizationReporter
   // std::string _user_object_name;
@@ -67,6 +73,14 @@ protected:
   dof_id_type _it_transfer_to;
   dof_id_type _it_transfer_from;
   dof_id_type _it_transfer;
+
+  /// @brief allowed subdomains ids in our mesh.
+  std::vector<subdomain_id_type> _allowed_parameter_values;
+
+  /// @brief variables describing our mesh.
+  /// Mapping between elements and subdomains.
+  std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
+  std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
 
   //************************
   // Functions Declarations

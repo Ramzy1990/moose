@@ -4,11 +4,9 @@
 [Mesh]
   [gen]
     type = CartesianMeshGenerator
-    dim = 3
-    dx = '1 1 1 1 1 1 1 1 1 1'
-    dy = '1 1 1 1 1 1 1 1 1 1'
-    dz = '1 1 1 1 1 1 1 1 1 1'
-    # subdomain_id = '1 2 3'
+    dim = 2
+    dx = '1 1'
+    dy = '1 1'
   []
 []
 
@@ -25,18 +23,33 @@
   allowed_mateirals = '0 1 2'
 []
 
-# [Execute]
-# solve = false
-# []
-
-[Problem]
-  solve = false
-[]
-
 [Executioner]
   type = Steady
+  # solve_type = PJFNK
+  # nl_abs_tol = 1e-6
+  # nl_rel_tol = 1e-8
+  # petsc_options_iname = '-pc_type'
+  # petsc_options_value = 'lu'
+[]
+
+# [Reporters]
+#   [reporter]
+#     type = DiscreteOptimizationReporter
+#     outputs = none
+#   []
+# []
+
+[MultiApps]
+  [forward]
+    type = FullSolveMultiApp
+    input_files = simple_heat_cool.i
+    execute_on = FORWARD
+  []
 []
 
 [Outputs]
-  exodus = false
+  print_linear_residuals = false
+  console = true
+  exodus = true
+  csv = true
 []

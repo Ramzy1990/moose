@@ -1,10 +1,10 @@
 {
   "folders": [
-	{
-		"name": "projects",
-		"path": "../../../.."
-	}
-],
+    {
+      "name": "projects",
+      "path": "../../../.."
+    }
+  ],
   "settings": {
     "[cpp]": {
       "editor.defaultFormatter": "ms-vscode.cpptools"
@@ -113,7 +113,9 @@
       "OptimizationData.C": "cpp",
       "OptimizationFunctionInnerProductHelper.C": "cpp",
       "AddCoupledEqSpeciesAction.C": "cpp",
-      "FixedPointSolve.C": "cpp"
+      "FixedPointSolve.C": "cpp",
+      "LibtorchNeuralNetControlTransfer.C": "cpp",
+      "SamplerFullSolveMultiApp.C": "cpp"
     }
   }
 }

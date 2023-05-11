@@ -47,6 +47,8 @@ void
 ChangeSubdomainAssignment::setSubdomainAssignment(
     const std::map<dof_id_type, SubdomainID> & assignment) const
 {
+  // elements owned by the processor (processor tag on it)
+  // .active_local_element_ptr_range()
   for (auto & elem : _mesh.getMesh().active_local_element_ptr_range())
   {
     auto p = assignment.find(elem->id());

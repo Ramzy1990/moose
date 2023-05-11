@@ -76,7 +76,8 @@ SamplerFullSolveMultiApp::SamplerFullSolveMultiApp(const InputParameters & param
                "Conditionally run sampler multiapp only works in batch modes.");
 }
 
-void SamplerFullSolveMultiApp::preTransfer(Real /*dt*/, Real /*target_time*/)
+void
+SamplerFullSolveMultiApp::preTransfer(Real /*dt*/, Real /*target_time*/)
 {
   // Reinitialize MultiApp size
   const auto num_rows = _sampler.getNumberOfRows();

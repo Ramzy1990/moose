@@ -48,8 +48,14 @@ public:
   /**
    * Function to check if the materials used are the ones included and allowed
    */
-  void isMaterialAllowed(const MooseMesh & domain_mesh); // no need for pasing variables as we are
-                                                         // checking the class ones.
+  void isMaterialAllowed(const MooseMesh & domain_mesh);
+
+  void execute() override;
+
+  // /**
+  //  * Function to check if new materials were added to the mesh
+  //  */
+  // bool isNewMaterialsInMesh(const MooseMesh & domain_mesh);
 
   /**
    * Function to get the optimization domain of the problem using the elements of the mesh
@@ -80,8 +86,37 @@ public:
   /**
    * Function to compute the cost function
    */
+  unsigned int costFunctionTest(const MooseMesh & domain_mesh,
+                                const std::map<dof_id_type, subdomain_id_type> & domain_map);
+
+  /**
+   * Function to compute the cost function in SubApps
+   */
   unsigned int costFunction(const MooseMesh & domain_mesh,
                             const std::map<dof_id_type, subdomain_id_type> & domain_map);
+
+  /**
+   * Function to printout the domain mesh and information to a file
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void printCurrentDomain(const dof_id_type & iteration);
+
+  /**
+   * Function to bring in the post process results of the mesh to the reporter for it to pass it to
+   * the optimizer.
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void setDomainPostProcessInformation(const dof_id_type & iteration);
+
+  /**
+   * Functions to get the mesh pairs to optimize and the allowed material to optimize for
+   */
+  std::tuple<std::vector<subdomain_id_type> &,
+             std::map<dof_id_type, subdomain_id_type> &,
+             std::map<dof_id_type, subdomain_id_type> &>
+  getMeshParameters();
 
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//

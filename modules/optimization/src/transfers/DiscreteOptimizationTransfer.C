@@ -63,10 +63,10 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 
     // Getting the mesh from the "_to_problems" pointers.
     // .at() method throws an std::out_of_range exception if out of bounds.
-    _to_mesh(_to_problems.at(0)->mesh()),
+    _to_mesh(_to_problems.at(0)->mesh())
 
-    // Getting the mesh from the "_from_problems" pointers.
-    _from_mesh(_from_problems.at(0)->mesh())
+// Getting the mesh from the "_from_problems" pointers. It is usually a placeholder mesh.
+// _from_mesh(_from_problems.at(0)->mesh())
 
 // _reporter(getUserObject<DiscreteOptimizationReporter>("DiscreteOptimizationReporter"))
 
@@ -91,6 +91,8 @@ DiscreteOptimizationTransfer::execute()
 
   getAppInfo();
 
+  // Important question, do we start executing the transfer from the start everytime we solve the
+  // physics problem??
   _skip = true;
   _it_transfer = 0;
   _it_transfer_to = 0;
@@ -102,7 +104,7 @@ DiscreteOptimizationTransfer::execute()
   std::cout << "This marks the first invoking of this transfer class ..." << std::endl;
   std::cout << "Your user object name is: " << _reporter.name() << std::endl;
   std::cout << "Now we should log into the MultiApp system starting with the TO_MULTIAPP logical "
-               "branch ..."
+               "branch..."
             << std::endl
             << std::endl;
 
@@ -110,7 +112,7 @@ DiscreteOptimizationTransfer::execute()
   switch (_current_direction)
   {
     case TO_MULTIAPP:
-
+    {
       // iterators
       _it_transfer += 1;
       _it_transfer_to += 1;
@@ -121,43 +123,84 @@ DiscreteOptimizationTransfer::execute()
       std::cout << "Total Iterations:" << _it_transfer << std::endl;
       std::cout << "TO_MULTIAPP Iterations:" << _it_transfer_to << std::endl;
 
-      // Return for initial invoking only
+      // Return to the multiapp system for initial invoking only
       if (_it_transfer_to == 1 || _skip == true)
       {
-        std::cout << "This marks as the first invoking of the TO_MULTIAPP branch ..." << std::endl;
+
+        // Steps 1, 2, and 3!
+        // Step 1: is going to the TO multiapp system.
+        // Step 2: is skipping doing anything here.
+        // Step 3: is solving the multipapp system physics problem.
+        // Go to the FROM branch for Step 4.
+
+        std::cout << "*** This marks as the first invoking of the TO_MULTIAPP branch ***"
+                  << std::endl;
+        std::cout
+            << "Nothing major will happen in the very first invoking of the TO_MULTIAPP branch..."
+            << std::endl;
+        std::cout << "Returning to the MULTIAPP system to continue the optimization process..."
+                  << std::endl;
         return;
       }
 
-      // Check if the _to_problem is a single problem
+      // Check if the _to_problem is a single problem. Print error if not, for now.
+      // TODO: Allow for multiphysics problems optimization! I think one can say several to_problem
+      // meshes.
+
       if (_to_problems.size() > 1)
       {
         mooseError("The size of the _to_problem is more than one! "
                    "Please check the current discrete transfer capabilities.");
       }
 
-      // for (unsigned int i_to = 0; i_to < _to_problems.size(); ++i_to)
-      // {
-      // const auto * uo = &_to_problems[i_to]->getUserObjectBase(_user_object_name);
-      //   const ChangeSubdomainAssignment * csa_uo =
-      //       dynamic_cast<const ChangeSubdomainAssignment *>(uo);
-      //   if (!csa_uo)
-      //     paramError("user_object",
-      //                "Must be present and also, most importantly a
-      //                ChangeSubdomainAssignment");
-      //   csa_uo->setSubdomainAssignment({{0, 10}, {2, 12}});
-      // }
-      // break;
+      // Step 10: In the TO_problem, we get the updated mesh domain, assign the mesh,
+      // making it ready for the solve step.
 
-      // add modification of the mesh.
+      std::cout << "*** Receiving the perturbed domain's mesh elements and subdomains ids ***"
+                << std::endl
+                << std::endl;
+
+      // For now, we just change the mesh domain randomly before passing it to the MULTIAPP system.
+      // FIXME: This is for testing only. The updateSubdomainID updates the mesh vectors and maps
+      // based on some random work.
+
+      // First we access the passed values through the _reporter object using a tuble getter
+      // function.
+      auto [_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize] =
+          _reporter.getMeshParameters();
+
+      std::cout << "*** Updating the domain's mesh elements and subdomains ids ***" << std::endl
+                << "*** CAUTION! This is for testing purposes only! Otherwise, we assign the mesh "
+                   "directly ***"
+                << std::endl;
+
+      // Next we update the subdomain ID in the reporter based on the supplied mesh (Testing only!):
+      _reporter.updateSubdomainID(
+          _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+
+      // Next we assign the mesh:
+
+      assignMesh(_pairs_to_optimize, _to_mesh);
+
+      // The reporter should have the optimizer's domain constraints (e.g., moderator specific
+      // locations) set by a user and pass it to the optimizer (an executioner) (TODO). This is
+      // different from the cost function constraints (TODO)!
+      // TODO: Add specifics for the boundary elements if needed.
+
+      if (_it_transfer == 10)
+        exit(EXIT_SUCCESS);
+
       break;
+    }
     case FROM_MULTIAPP:
-
+    {
       // iterators
-      _it_transfer += 1;
+      // _it_transfer += 1;
       _it_transfer_from += 1;
 
       // Print the messages
-      std::cout << "*** You are currently in the TO_MULTIAPP branch! ***" << std::endl << std::endl;
+      std::cout << "*** You are currently in the FROM_MULTIAPP branch! ***" << std::endl
+                << std::endl;
       std::cout << "The transfer iterations are as follow:" << std::endl;
       std::cout << "Total Iterations:" << _it_transfer << std::endl;
       std::cout << "Total FROM_MULTIAPP Iterations:" << _it_transfer_from << std::endl;
@@ -165,19 +208,158 @@ DiscreteOptimizationTransfer::execute()
       // Adjusting the _skip boolean for after initial calling of the TO_MULTIAPP branch.
       _skip = false;
 
-      // Now we need to read the mesh from the MultiApp system. The reporter only sees the main app
-      // mesh, but the mesh in the subapps are
+      // We need to read the mesh from the MultiApp system. The reporter only sees the main app
+      // mesh, but the mesh in the subapps are the one actually used by the problem solver.
 
-      // -Initial assignment of the mesh and skip idea.- Compute the cost function.-
+      // TODO: Check if new materials are added.
+      // TODO: Allow other materials to be present in the mesh even if not optimized for from start,
+      // by adding them to the allowed material function.
 
-      // getReporter
-      // get
-      // _obj_function =
-      // &_problem.getUserObject<OptimizationReporterBase>("OptimizationReporter");
+      // TODO: Add a function to read any constraint added by the user imposed on the domain
+      // reconstruction (but domain construction does not happen in the "from" branch). Could
+      // be a set of options that the user can choose from. This should be in the reporter and
+      // passed over to the optimizer.
 
-      // here getSubdomainAssignment();
+      // TODO: Save unperturbed domain results to a file for comparisons.
+      // TODO: Add a parameter to enable testing the multiapp system optimization outside of the
+      // release version.
+
+      std::cout << std::endl;
+      std::cout << "*** Post processing of the mesh in the FROM_MULTIAPP branch ***" << std::endl;
+      std::cout << std::endl;
+
+      if (_it_transfer_from == 1)
+      {
+
+        // Step 4: We get the mesh for the first time, check it, and get the domain map.
+
+        std::cout << "*** Initiating the first invocation of the FROM_MULTIAPP branch ***"
+                  << std::endl;
+        std::cout << std::endl;
+
+        // Obtain the mesh and verify its integrity before performing post-processing
+        std::cout << "Obtaining and verifying the mesh before post-processing..." << std::endl;
+        std::cout << std::endl;
+
+        std::cout
+            << "*** Verifying if the materials utilized in the problem match those allowed for "
+               "optimization ***"
+            << std::endl
+            << std::endl;
+
+        _reporter.isMaterialAllowed(_to_mesh);
+
+        std::cout << "*** Acquiring the first-mesh domain elements and subdomain IDs ***"
+                  << std::endl;
+
+        _reporter.setInitialCondition(_to_mesh);
+
+        std::cout << "Successful acquirment of the domain! The Discrete Optimization reporter now "
+                     "has the unoptimized mesh information!..."
+                  << std::endl;
+        std::cout << std::endl;
+
+        // Step 5: We post process the initial mesh and write out the results to
+        // a file for comparison down the road!
+
+        std::cout << "*** Now postporcessing and storing the mesh data and the SubApp results in a "
+                     "file ***"
+                  << std::endl;
+        std::cout << std::endl;
+
+        // TODO: Add here the printing out of the mesh information and the results while
+        // postprocessing the data through postprocessors, such that the reporter will have all the
+        // information needed to compute the cost function, whenever needed!
+
+        // Maybe we can printout the results follwoing the post process step such that we print
+        // them out in one step
+
+        _reporter.printCurrentDomain(_it_transfer_from);
+
+        // Step 6: Pass on this initial mesh postprocessing results to the reporter.
+        // The reporter then will have these reuslts ready to compute the initial cost function.
+
+        // Q: How to post_process?
+        // Add here sending the post processed information to the reporter.
+
+        _reporter.setDomainPostProcessInformation(_it_transfer_from);
+
+        // Step 7: The reporter should pass the mesh data to the optimizer. The reporter should be
+        // called inside the optimizer to get its data.
+
+        // Step 8: In the optimizer, we solve and optimize the passed mesh domain. This happens
+        // inside the wrapper part of the optimizer.
+
+        // We do NOT compute the cost function just yet like they did with the old optimization
+        // domain!!
+
+        // Step 9: Instead, we then update the mesh parameters in the reporter.
+
+        // Step 10: We then go to the TO_problem, to get the updated mesh domain, assign the mesh,
+        // making it ready for the solve step.
+
+        // This passing is done through the reporter, the only thing that connects the transfer and
+        // the executioner classes.
+
+      } // if (_it_transfer_from == 1)
+
+      else
+
+      {
+
+        // Obtain the elements and subdomains of the current mesh targeted for optimization.
+        // This step establishes the domain for the subsequent solution stages.
+
+        std::cout << "*** Obtaining the domain mesh elements and subdomains ids ***" << std::endl;
+        std::cout << "*** CAUTION! For testing purposes only! Otherwise, we should proceed to "
+                     "postprocess the results for cost function computation ***"
+                  << std::endl;
+        _reporter.setInitialCondition(_to_mesh);
+
+        std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
+                     "Optimization Reporter for the cost function computation ***"
+                  << std::endl;
+
+        // Step 11: After the physics problem is solved, we post process the results, pass it to the
+        // reporter to compute the new cost function.
+
+        // Note that we do not need to pass the mesh as it is the same one that the reporter already
+        // have and have been acquired by the TO multiapp system! UNLESS the mesh has changed in the
+        // physics solving section due to some adaptive mesh refinement or whatever.
+
+        // Lather, Rinse, Repeat until some constraint is achieved  as provided by the user for the
+        // cost function!
+
+        // TODO: Postprocessing the data through postprocessors.
+        // Postprocessors should call setters to set the data in the reporter class, I think.
+        // Or we can just pass the referenced variables through one function to the reporter to
+        // assign its variables.
+
+        // Get information from the physics problem and to use for our future objective function.
+        // Post processing on the mesh.
+        // User defined names and post processors.
+
+        // cost function is computed in the reporter side.
+
+        // This is to be added as a single cost function calculation procedure that depends on the
+        // mesh
+        // _reporter.costFunction(_to_mesh);
+      }
       break;
+    }
   }
 }
 
-// - Add here the cost function.
+void
+DiscreteOptimizationTransfer::assignMesh(
+    const std::map<dof_id_type, subdomain_id_type> & _pairs_to_optimize, MooseMesh & mesh)
+{
+  // elements owned by the processor (processor tag on it): active_local_element_ptr_range()
+  for (auto & elem : mesh.getMesh().active_local_element_ptr_range())
+  {
+    auto p = _pairs_to_optimize.find(elem->id());
+    if (p != _pairs_to_optimize.end())
+      elem->subdomain_id() = p->second;
+  }
+  mesh.update();
+}
