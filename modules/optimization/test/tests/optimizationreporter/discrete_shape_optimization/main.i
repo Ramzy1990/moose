@@ -37,7 +37,19 @@
 #     type = DiscreteOptimizationReporter
 #     outputs = none
 #   []
+#   # [params] # Name you can refer to if you are using it in different objects
+#   #   type = ConstantReporter
+#   #   real_vector_names = 'heat_source'
+#   #   real_vector_values = '0' # Dummy
+#   # []
 # []
+
+[Problem]
+  solve = false
+  # type = DiscreteOptimizationReporter
+  # outputs = none
+  # []
+[]
 
 [MultiApps]
   [forward]
@@ -50,6 +62,6 @@
 [Outputs]
   print_linear_residuals = false
   console = true
-  exodus = true
+  # exodus = true
   csv = true
 []

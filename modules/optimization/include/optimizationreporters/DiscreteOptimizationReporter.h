@@ -10,8 +10,8 @@
 #pragma once
 
 // Moose Includes
-#include "OptimizationReporter.h"
-
+// #include "OptimizationReporter.h"
+#include "GeneralReporter.h"
 // Forward Declarations If Any
 // class FEProblemBase;
 // class MooseMesh;
@@ -21,7 +21,7 @@
  * in OptimizeSolve is gradient-free (derivastive-free). Currently it includes TAO POUNDERS
  * and Nelder-Mead. It will eventually include Simulated Annealing and Genetic Algorithm.
  */
-class DiscreteOptimizationReporter : public OptimizationReporter
+class DiscreteOptimizationReporter : public GeneralReporter
 //  public GeneralReporter, // Included in OptimizationData
 //  public ElementUserObject
 
@@ -50,8 +50,11 @@ public:
    */
   void isMaterialAllowed(const MooseMesh & domain_mesh);
 
-  void execute() override;
-
+  virtual void initialize() override{};
+  void execute();
+  virtual void finalize() override{};
+  // These objects are not threaded
+  // void threadJoin(const UserObject &) final {}
   // /**
   //  * Function to check if new materials were added to the mesh
   //  */
@@ -109,6 +112,21 @@ public:
    * Transfer class.
    */
   void setDomainPostProcessInformation(const dof_id_type & iteration);
+
+  /**
+   * Function to update the mesh domain in the reporter based on the optimizer results. It is called
+   * inside the optimizer.
+   * @todo add the capability to have different Elements IDs instead of assuming them constant. Name
+   * change to updateMeshIds.
+   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
+   * to optimize.
+   * This pairs_to_optimize will be eventually sent to the TO_MULTIAPP branch of the discrete
+   * transfer class to assigna nd update the mesh.
+   *
+   */
+  void updateMeshDomain(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+  // void updateMeshIds(const dof_id_type & iteration); // when we have both element and domain ids
+  // changing.
 
   /**
    * Functions to get the mesh pairs to optimize and the allowed material to optimize for

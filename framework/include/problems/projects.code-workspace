@@ -115,7 +115,28 @@
       "AddCoupledEqSpeciesAction.C": "cpp",
       "FixedPointSolve.C": "cpp",
       "LibtorchNeuralNetControlTransfer.C": "cpp",
-      "SamplerFullSolveMultiApp.C": "cpp"
+      "SamplerFullSolveMultiApp.C": "cpp",
+      "SideSetsFromPointsGenerator.C": "cpp",
+      "MooseVariableFE.C": "cpp",
+      "ReporterMode.C": "cpp",
+      "TestOptimizationReporter.C": "cpp",
+      "optimizationreporter.h": "c",
+      "MultiAppUserObjectTransfer.C": "cpp",
+      "generalreporter.h": "c",
+      "GeneralReporter.C": "cpp",
+      "GeneralUserObject.C": "cpp",
+      "IntegralPreservingFunctionIC.C": "cpp",
+      "ComputeUserObjectsThread.C": "cpp",
+      "ChangeOverFixedPointPostprocessor.C": "cpp",
+      "ChangeOverTimePostprocessor.C": "cpp",
+      "ExtraIDIntegralReporter.C": "cpp",
+      "MultiAppCloneReporterTransfer.C": "cpp",
+      "BrineFluidProperties.C": "cpp",
+      "OptimizationReporterTest.C": "cpp",
+      "PorousFlowBrine.C": "cpp",
+      "SamplerPostprocessorTransfer.C": "cpp",
+      "SamplerReporterTransfer.C": "cpp",
+      "StochasticToolsTransfer.C": "cpp"
     }
   }
 }

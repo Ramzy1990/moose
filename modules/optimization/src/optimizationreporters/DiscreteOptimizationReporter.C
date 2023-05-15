@@ -25,7 +25,7 @@ registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 InputParameters
 DiscreteOptimizationReporter::validParams()
 {
-  InputParameters params = OptimizationReporter::validParams();
+  InputParameters params = GeneralReporter::validParams();
 
   params.addClassDescription("Receives computed objective function, and contains reporters for "
                              "communicating between discreteOptimizeSolve and subapps.");
@@ -67,7 +67,7 @@ DiscreteOptimizationReporter::validParams()
 // Class Constructor
 //*******************
 DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters & parameters)
-  : OptimizationReporter(parameters),
+  : GeneralReporter(parameters),
 
     _parameter_names(getParam<std::vector<ReporterValueName>>("parameter_names")),
 
@@ -267,6 +267,7 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
     std::cout << "Verification done successfully!... " << std::endl;
   }
 }
+
 void
 DiscreteOptimizationReporter::execute()
 {
@@ -805,7 +806,7 @@ DiscreteOptimizationReporter::printCurrentDomain(const dof_id_type & iteration)
     file.open("Current_Domain.txt");
 
     // Print the updated map
-    file << "The Current map is..." << std::endl;
+    file << "The Current map for iteration " << iteration << " is:" << std::endl;
     for (const auto & pair : _pairs_to_optimize)
     {
       file << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
@@ -826,6 +827,14 @@ DiscreteOptimizationReporter::setDomainPostProcessInformation(const dof_id_type 
   else if (iteration > 1)
   {
   }
+
+  return;
+}
+
+void
+DiscreteOptimizationReporter::updateMeshDomain(
+    const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
+{
 
   return;
 }

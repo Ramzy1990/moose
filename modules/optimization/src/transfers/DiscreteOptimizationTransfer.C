@@ -56,8 +56,8 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
     //               ? &getUserObject<DiscreteOptimizationReporter>("user_object")
     //               : nullptr)
 
-    _reporter(_fe_problem.getUserObject<DiscreteOptimizationReporter>(
-        getParam<UserObjectName>("user_object"))),
+    // _reporter(_fe_problem.getUserObject<DiscreteOptimizationReporter>(
+    //     getParam<UserObjectName>("user_object"))),
 
     // _reporter(getUserObject<DiscreteOptimizationReporter>("user_object")),
 
@@ -71,6 +71,11 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 // _reporter(getUserObject<DiscreteOptimizationReporter>("DiscreteOptimizationReporter"))
 
 {
+  // Get the DiscreteOptimizationReporter object to populate
+  auto & uo = _fe_problem.getUserObject<UserObject>(getParam<std::string>("user_object"));
+  _reporter = dynamic_cast<DiscreteOptimizationReporter *>(&uo);
+  if (!_reporter)
+    paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
 
   // if (isParamValid("to_multi_app") && isParamValid("from_multi_app") &&
   //     getToMultiApp() != getFromMultiApp())
@@ -102,7 +107,7 @@ DiscreteOptimizationTransfer::execute()
   std::cout << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
             << std::endl;
   std::cout << "This marks the first invoking of this transfer class ..." << std::endl;
-  std::cout << "Your user object name is: " << _reporter.name() << std::endl;
+  std::cout << "Your user object name is: " << _reporter->name() << std::endl;
   std::cout << "Now we should log into the MultiApp system starting with the TO_MULTIAPP logical "
                "branch..."
             << std::endl
@@ -164,28 +169,35 @@ DiscreteOptimizationTransfer::execute()
       // FIXME: This is for testing only. The updateSubdomainID updates the mesh vectors and maps
       // based on some random work.
 
-      // First we access the passed values through the _reporter object using a tuble getter
+      // First we access the passed values through the _reporter object using a TUBLE getter
       // function.
-      auto [_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize] =
-          _reporter.getMeshParameters();
+      // This is not needed for the testing phase!
+      // ---> auto [_transfer_allowed_parameter_values,
+      //       _transfer_initial_pairs_to_optimize,
+      //       _transfer_pairs_to_optimize] = _reporter.getMeshParameters();
 
       std::cout << "*** Updating the domain's mesh elements and subdomains ids ***" << std::endl
                 << "*** CAUTION! This is for testing purposes only! Otherwise, we assign the mesh "
                    "directly ***"
                 << std::endl;
 
-      // Next we update the subdomain ID in the reporter based on the supplied mesh (Testing only!):
-      _reporter.updateSubdomainID(
-          _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+      // Next we update the subdomain ID in the reporter based on the supplied mesh (FOR Testing
+      // only!):
+      _reporter->updateSubdomainID(_transfer_allowed_parameter_values,
+                                   _transfer_initial_pairs_to_optimize,
+                                   _transfer_pairs_to_optimize);
+
+      // Q: Confirm if the variables will be udpated accordingly or not based on reference the way
+      // they are currently.
 
       // Next we assign the mesh:
 
-      assignMesh(_pairs_to_optimize, _to_mesh);
+      assignMesh(_transfer_pairs_to_optimize, _to_mesh);
 
       // The reporter should have the optimizer's domain constraints (e.g., moderator specific
       // locations) set by a user and pass it to the optimizer (an executioner) (TODO). This is
       // different from the cost function constraints (TODO)!
-      // TODO: Add specifics for the boundary elements if needed.
+      // TODO: Add specifics for the elements on the boundary if needed.
 
       if (_it_transfer == 10)
         exit(EXIT_SUCCESS);
@@ -247,12 +259,12 @@ DiscreteOptimizationTransfer::execute()
             << std::endl
             << std::endl;
 
-        _reporter.isMaterialAllowed(_to_mesh);
+        _reporter->isMaterialAllowed(_to_mesh);
 
         std::cout << "*** Acquiring the first-mesh domain elements and subdomain IDs ***"
                   << std::endl;
 
-        _reporter.setInitialCondition(_to_mesh);
+        _reporter->setInitialCondition(_to_mesh);
 
         std::cout << "Successful acquirment of the domain! The Discrete Optimization reporter now "
                      "has the unoptimized mesh information!..."
@@ -271,21 +283,22 @@ DiscreteOptimizationTransfer::execute()
         // postprocessing the data through postprocessors, such that the reporter will have all the
         // information needed to compute the cost function, whenever needed!
 
+        //  --->        // Q: How to post_process?
+
         // Maybe we can printout the results follwoing the post process step such that we print
         // them out in one step
 
-        _reporter.printCurrentDomain(_it_transfer_from);
+        _reporter->printCurrentDomain(_it_transfer_from);
 
         // Step 6: Pass on this initial mesh postprocessing results to the reporter.
         // The reporter then will have these reuslts ready to compute the initial cost function.
 
-        // Q: How to post_process?
         // Add here sending the post processed information to the reporter.
-
-        _reporter.setDomainPostProcessInformation(_it_transfer_from);
+        // Currently, nothing happens here in the testing phase!
+        //  --->        _reporter.setDomainPostProcessInformation(_it_transfer_from);
 
         // Step 7: The reporter should pass the mesh data to the optimizer. The reporter should be
-        // called inside the optimizer to get its data.
+        // called inside the optimizer (I guess through an object) to get its data.
 
         // Step 8: In the optimizer, we solve and optimize the passed mesh domain. This happens
         // inside the wrapper part of the optimizer.
@@ -293,10 +306,10 @@ DiscreteOptimizationTransfer::execute()
         // We do NOT compute the cost function just yet like they did with the old optimization
         // domain!!
 
-        // Step 9: Instead, we then update the mesh parameters in the reporter.
+        // Step 9: Instead, we then update the mesh parameters, i.e., map, in the reporter.
 
-        // Step 10: We then go to the TO_problem, to get the updated mesh domain, assign the mesh,
-        // making it ready for the solve step.
+        // Step 10: We then go to the TO_problem, to get the updated mesh domain (map), assign the
+        // mesh, making it ready for the solve step.
 
         // This passing is done through the reporter, the only thing that connects the transfer and
         // the executioner classes.
@@ -314,7 +327,10 @@ DiscreteOptimizationTransfer::execute()
         std::cout << "*** CAUTION! For testing purposes only! Otherwise, we should proceed to "
                      "postprocess the results for cost function computation ***"
                   << std::endl;
-        _reporter.setInitialCondition(_to_mesh);
+
+        // sending the mesh and everything is being taken care of on the reporter side during the
+        // test phase only!
+        _reporter->setInitialCondition(_to_mesh);
 
         std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
                      "Optimization Reporter for the cost function computation ***"

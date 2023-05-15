@@ -55,7 +55,8 @@ protected:
   /// @brief Object of the reporter class we are using. I think this will allow us to access the different variables and functions in
   /// the reporter by the "." operator.
   // const DiscreteOptimizationReporter * const _reporter;
-  DiscreteOptimizationReporter & _reporter;
+  // DiscreteOptimizationReporter & _reporter;
+  DiscreteOptimizationReporter * _reporter;
 
   /// @brief mesh from the _to_problems
   MooseMesh & _to_mesh;
@@ -75,12 +76,12 @@ protected:
   dof_id_type _it_transfer;
 
   /// @brief allowed subdomains ids in our mesh.
-  std::vector<subdomain_id_type> _allowed_parameter_values;
+  std::vector<subdomain_id_type> _transfer_allowed_parameter_values;
 
   /// @brief variables describing our mesh.
   /// Mapping between elements and subdomains.
-  std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
-  std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
+  std::map<dof_id_type, subdomain_id_type> _transfer_initial_pairs_to_optimize;
+  std::map<dof_id_type, subdomain_id_type> _transfer_pairs_to_optimize;
 
   //************************
   // Functions Declarations
