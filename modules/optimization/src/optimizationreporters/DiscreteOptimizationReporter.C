@@ -566,9 +566,10 @@ DiscreteOptimizationReporter::testUpdateSubdomainID(
 void
 DiscreteOptimizationReporter::updateSubdomainID(
     const std::vector<subdomain_id_type> allowed_parameter_values,
-    const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+    std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
     std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
 {
+
   std::cout << std::endl;
   std::cout << "Updating the domain subdomain ids according to the supplied mesh..." << std::endl;
   std::cout << std::endl;
@@ -661,7 +662,94 @@ DiscreteOptimizationReporter::updateSubdomainID(
   if (_fe_problem.hasMultiApps())
   {
 
-    // We can eventually separate the methods into ones for testing and ones for release.
+    std::cout << std::endl;
+    std::cout << "***Discrete Optimization Class: SubApp Mode***" << std::endl;
+
+    std::cout << std::endl;
+    std::cout << "*** Discrete Otpimization Reporter: SubApp supplied mesh Update..." << std::endl;
+    std::cout << std::endl;
+
+    // Setting the current Subdomain ID to the previous one.
+    // note that the elements ID are the same.
+    // This is true as long as "second" are of the same data type.
+    if (typeid(pairs_to_optimize) == typeid(previous_pairs_to_optimize))
+    {
+
+      std::cout << "previous and current maps are of the same type! Proceeding to updating the "
+                   "current domain map..."
+                << std::endl;
+      std::cout << std::endl;
+
+      previous_pairs_to_optimize = _initial_pairs_to_optimize;
+
+      // Copy only the values from previous pairs to current pairs
+      for (const auto & pair : previous_pairs_to_optimize)
+      {
+        if (pairs_to_optimize.find(pair.first) != pairs_to_optimize.end())
+        {
+          // Then the key exists in the current pair
+          pairs_to_optimize[pair.first] = pair.second;
+        }
+      }
+    }
+
+    // Seed the random number generator for the randomization process in this test function.
+    std::srand(std::time(0));
+
+    //************************************************************************************************************************//
+    // Simulated annealing parameters
+    // There could be other parameters as well
+    unsigned int iterations = 777;
+    Real cooling_rate = 0.77;
+
+    // initializing the temperature before the loop
+    Real current_temperature = 77.0;
+
+    for (unsigned int i = 0; i < iterations; i++)
+    {
+
+      // Generate a random neighbor by changing a random element in pairs_to_optimize
+      std::map<dof_id_type, subdomain_id_type> neighbor = pairs_to_optimize;
+      unsigned int random_index = std::rand() % neighbor.size();
+
+      // "f" and "m" are at index 0 and 1 in _allowed_parameter_values, hence taking the
+      // reminder division by 2, 0 or 1.
+      unsigned int random_value_index = std::rand() % 2 + 1;
+
+      // Advance the iterator to the random index
+      auto random_iterator = neighbor.begin();
+      std::advance(random_iterator, random_index);
+
+      // Update the value at the random index
+      random_iterator->second = allowed_parameter_values[random_value_index];
+
+      // After assigning the element, we test the domain (where just one element has changed).
+      unsigned int current_cost = costFunction(_mesh, pairs_to_optimize);
+      unsigned int neighbor_cost = costFunction(_mesh, neighbor);
+
+      // Calculate the cost difference
+      int cost_difference = neighbor_cost - current_cost;
+
+      // If the neighbor has a lower cost, accept it
+      if (cost_difference < 0)
+      {
+        pairs_to_optimize = neighbor;
+      }
+      else
+      {
+        // Otherwise, accept the neighbor with a probability depending on the temperature
+        Real acceptance_probability = std::exp(-cost_difference / current_temperature);
+        if ((std::rand() / static_cast<double>(RAND_MAX)) < acceptance_probability)
+        {
+          pairs_to_optimize = neighbor;
+        }
+      }
+
+      // Cool down the temperature
+      current_temperature *= cooling_rate;
+    }
+
+    // TODO: We can eventually separate the methods into ones for testing and ones for release.
   }
 }
 
@@ -787,6 +875,13 @@ DiscreteOptimizationReporter::printCurrentDomain(const dof_id_type & iteration)
 
     // Open the file
     file_Initial.open("Initial_Domain.txt");
+
+    // Check if file has been opened correctly
+    if (!file_Initial)
+    {
+      std::cerr << "Failed to open file.\n";
+      return;
+    }
 
     // Print the updated map
     file_Initial << "The Initial map is..." << std::endl;

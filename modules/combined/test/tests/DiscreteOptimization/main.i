@@ -11,32 +11,35 @@
 []
 
 [Reporters]
-  [GeneralReporter]
+  [test123]
     type = DiscreteOptimizationReporter
     parameter_names = Materials
     # Number of parameter names we are adjusting for. since we have materials
     # only, so it will be 1. Or it can be the number of materials we are adjusting for?
     num_values = 1
-    initial_material = '0'
+    initial_material = '1'
     assign_type = 'auto'
     solver_type = 'random_3'
     number_of_elements = 12
     allowed_mateirals = '0 1 2'
     outputs = "none"
+    # execute_on = "MULTIAPP_FIXED_POINT_BEGIN"
   []
-  [discrete_reporter]
-    type = DiscreteOptimizationReporter
-    outputs = "none"
-  []
+  #   [test123]
+  #     type = DiscreteOptimizationReporter
+  #     outputs = "none"
+  #   []
 []
 
 [Executioner]
-  type = Steady
-  solve_type = PJFNK
-  nl_abs_tol = 1e-6
-  nl_rel_tol = 1e-8
-  petsc_options_iname = '-pc_type'
-  petsc_options_value = 'lu'
+  type = Transient
+  num_steps = 2
+  # dt = 0.1
+  # solve_type = PJFNK
+  # nl_abs_tol = 1e-6
+  # nl_rel_tol = 1e-8
+  # petsc_options_iname = '-pc_type'
+  # petsc_options_value = 'lu'
 []
 
 # [Problem]
@@ -62,7 +65,7 @@
 [Outputs]
   print_linear_residuals = false
   console = true
-  exodus = true
+  # exodus = true
   csv = true
 []
 
@@ -76,7 +79,12 @@
   [toforward]
     type = DiscreteOptimizationTransfer
     to_multi_app = forward
-    user_object = "discrete_reporter"
+    user_object = 'test123'
+  []
+  [fromforward]
+    type = DiscreteOptimizationTransfer
+    from_multi_app = forward
+    user_object = 'test123'
   []
 []
 

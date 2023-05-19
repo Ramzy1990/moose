@@ -45,25 +45,29 @@ DiscreteOptimizationTransfer::validParams()
 
   return params;
 }
-
+// Just one small update, I made the following adjustment in the discrete transfer class to retain
+// the discrete reporter object as a reference: _reporter(dynamic_cast<DiscreteOptimizationReporter
+// &>(
+//         _fe_problem.getUserObject<UserObject>(getParam<std::string>("user_object")))),
+// Basically initializing the reference to user_object. Now the discrete transfer constructor is
+// empty, and the discrete reporter object is a reference and not a pointer
 //*******************
 // Class Constructor
 //*******************
 DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters & parameters)
-  : MultiAppTransfer(parameters),
-    // _user_object_name(getParam<UserObjectName>("user_object")),
-    // _reporter(isParamValid("user_object")
-    //               ? &getUserObject<DiscreteOptimizationReporter>("user_object")
-    //               : nullptr)
+  : MultiAppTransfer(parameters)
+// _user_object_name(getParam<UserObjectName>("user_object")),
+// _reporter(isParamValid("user_object")
+//               ? &getUserObject<DiscreteOptimizationReporter>("user_object")
+//               : nullptr)
 
-    // _reporter(_fe_problem.getUserObject<DiscreteOptimizationReporter>(
-    //     getParam<UserObjectName>("user_object"))),
+// _reporter(_fe_problem.getUserObject<DiscreteOptimizationReporter>(
+//     getParam<UserObjectName>("user_object"))),
 
-    // _reporter(getUserObject<DiscreteOptimizationReporter>("user_object")),
+// _reporter(getUserObject<DiscreteOptimizationReporter>("user_object")),
 
-    // Getting the mesh from the "_to_problems" pointers.
-    // .at() method throws an std::out_of_range exception if out of bounds.
-    _to_mesh(_to_problems.at(0)->mesh())
+// Getting the mesh from the "_to_problems" pointers.
+// .at() method throws an std::out_of_range exception if out of bounds.
 
 // Getting the mesh from the "_from_problems" pointers. It is usually a placeholder mesh.
 // _from_mesh(_from_problems.at(0)->mesh())
@@ -72,10 +76,10 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 
 {
   // Get the DiscreteOptimizationReporter object to populate
-  auto & uo = _fe_problem.getUserObject<UserObject>(getParam<std::string>("user_object"));
-  _reporter = dynamic_cast<DiscreteOptimizationReporter *>(&uo);
-  if (!_reporter)
-    paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
+  // auto & uo = _fe_problem.getUserObject<UserObject>(getParam<UserObjectName>("user_object"));
+  // _reporter = dynamic_cast<DiscreteOptimizationReporter *>(&uo);
+  // if (!_reporter)
+  //   paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
 
   // if (isParamValid("to_multi_app") && isParamValid("from_multi_app") &&
   //     getToMultiApp() != getFromMultiApp())
@@ -88,6 +92,24 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 //***********************
 // Functions Definitions
 //***********************
+
+void
+DiscreteOptimizationTransfer::initialSetup()
+{
+  MultiAppTransfer::initialSetup();
+  // and then do your own stuff
+  // Get the DiscreteOptimizationReporter object to populate
+  auto & uo = _fe_problem.getUserObject<UserObject>(getParam<UserObjectName>("user_object"));
+  _reporter = dynamic_cast<DiscreteOptimizationReporter *>(&uo);
+  if (!_reporter)
+    paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
+
+  _skip = true;
+  _it_transfer = 0;
+  _it_transfer_to = 0;
+  _it_transfer_from = 0;
+}
+
 void
 DiscreteOptimizationTransfer::execute()
 {
@@ -96,12 +118,11 @@ DiscreteOptimizationTransfer::execute()
 
   getAppInfo();
 
-  // Important question, do we start executing the transfer from the start everytime we solve the
-  // physics problem??
-  _skip = true;
-  _it_transfer = 0;
-  _it_transfer_to = 0;
-  _it_transfer_from = 0;
+  MooseMesh & to_mesh = _to_problems[0]->mesh();
+  MooseMesh & from_mesh = _from_problems[0]->mesh();
+
+  // Important question, do we start executing the transfer from the start everytime we
+  // solve the physics problem??
 
   // Print the messages
   std::cout << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
@@ -129,7 +150,7 @@ DiscreteOptimizationTransfer::execute()
       std::cout << "TO_MULTIAPP Iterations:" << _it_transfer_to << std::endl;
 
       // Return to the multiapp system for initial invoking only
-      if (_it_transfer_to == 1 || _skip == true)
+      if (_it_transfer_to == 1)
       {
 
         // Steps 1, 2, and 3!
@@ -172,9 +193,9 @@ DiscreteOptimizationTransfer::execute()
       // First we access the passed values through the _reporter object using a TUBLE getter
       // function.
       // This is not needed for the testing phase!
-      // ---> auto [_transfer_allowed_parameter_values,
-      //       _transfer_initial_pairs_to_optimize,
-      //       _transfer_pairs_to_optimize] = _reporter.getMeshParameters();
+      auto [_transfer_allowed_parameter_values,
+            _transfer_initial_pairs_to_optimize,
+            _transfer_pairs_to_optimize] = _reporter->getMeshParameters();
 
       std::cout << "*** Updating the domain's mesh elements and subdomains ids ***" << std::endl
                 << "*** CAUTION! This is for testing purposes only! Otherwise, we assign the mesh "
@@ -192,7 +213,13 @@ DiscreteOptimizationTransfer::execute()
 
       // Next we assign the mesh:
 
-      assignMesh(_transfer_pairs_to_optimize, _to_mesh);
+      assignMesh(_transfer_pairs_to_optimize, to_mesh);
+
+      for (auto & elem : to_mesh.getMesh().active_local_element_ptr_range())
+      {
+        std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
+                  << std::endl;
+      }
 
       // The reporter should have the optimizer's domain constraints (e.g., moderator specific
       // locations) set by a user and pass it to the optimizer (an executioner) (TODO). This is
@@ -206,8 +233,18 @@ DiscreteOptimizationTransfer::execute()
     }
     case FROM_MULTIAPP:
     {
+
+      std::cout << " " << std::endl << std::endl;
+      std::cout << "*** Current FROM Mesh: ***" << std::endl << std::endl;
+
+      for (auto & elem : from_mesh.getMesh().active_local_element_ptr_range())
+      {
+        std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
+                  << std::endl;
+      }
+
       // iterators
-      // _it_transfer += 1;
+      _it_transfer += 1;
       _it_transfer_from += 1;
 
       // Print the messages
@@ -218,7 +255,7 @@ DiscreteOptimizationTransfer::execute()
       std::cout << "Total FROM_MULTIAPP Iterations:" << _it_transfer_from << std::endl;
 
       // Adjusting the _skip boolean for after initial calling of the TO_MULTIAPP branch.
-      _skip = false;
+      // _skip = false;
 
       // We need to read the mesh from the MultiApp system. The reporter only sees the main app
       // mesh, but the mesh in the subapps are the one actually used by the problem solver.
@@ -259,12 +296,12 @@ DiscreteOptimizationTransfer::execute()
             << std::endl
             << std::endl;
 
-        _reporter->isMaterialAllowed(_to_mesh);
+        _reporter->isMaterialAllowed(from_mesh);
 
         std::cout << "*** Acquiring the first-mesh domain elements and subdomain IDs ***"
                   << std::endl;
 
-        _reporter->setInitialCondition(_to_mesh);
+        _reporter->setInitialCondition(from_mesh);
 
         std::cout << "Successful acquirment of the domain! The Discrete Optimization reporter now "
                      "has the unoptimized mesh information!..."
@@ -289,6 +326,18 @@ DiscreteOptimizationTransfer::execute()
         // them out in one step
 
         _reporter->printCurrentDomain(_it_transfer_from);
+
+        // std::cout << "*** Data is written and stored to a file successfully! ***" << std::endl;
+        // std::cout << std::endl;
+
+        // std::cout << " " << std::endl << std::endl;
+        // std::cout << "*** Current FROM Mesh: ***" << std::endl << std::endl;
+
+        // for (auto & elem : from_mesh.getMesh().active_local_element_ptr_range())
+        // {
+        //   std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
+        //             << std::endl;
+        // }
 
         // Step 6: Pass on this initial mesh postprocessing results to the reporter.
         // The reporter then will have these reuslts ready to compute the initial cost function.
@@ -328,9 +377,18 @@ DiscreteOptimizationTransfer::execute()
                      "postprocess the results for cost function computation ***"
                   << std::endl;
 
+        // std::cout << " " << std::endl << std::endl;
+        // std::cout << "*** Current FROM Mesh: ***" << std::endl << std::endl;
+
+        // for (auto & elem : from_mesh.getMesh().active_local_element_ptr_range())
+        // {
+        //   std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
+        //             << std::endl;
+        // }
+
         // sending the mesh and everything is being taken care of on the reporter side during the
         // test phase only!
-        _reporter->setInitialCondition(_to_mesh);
+        _reporter->setInitialCondition(from_mesh);
 
         std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
                      "Optimization Reporter for the cost function computation ***"
@@ -378,4 +436,6 @@ DiscreteOptimizationTransfer::assignMesh(
       elem->subdomain_id() = p->second;
   }
   mesh.update();
+
+  std::cout << "*** Mesh Updated Successfully! ***" << std::endl << std::endl;
 }

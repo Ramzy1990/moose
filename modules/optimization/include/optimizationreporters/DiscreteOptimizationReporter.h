@@ -83,7 +83,7 @@ public:
    * Function to update the optimization domain based on some logic, used for testing purposes.
    */
   void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
-                         const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
+                         std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
                          std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
 
   /**

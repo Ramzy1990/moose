@@ -36,6 +36,7 @@ public:
   DiscreteOptimizationTransfer(const InputParameters & parameters);
 
   virtual void execute() override;
+  virtual void initialSetup() override;
 
   /**
    * Function to assign the mesh
@@ -59,7 +60,7 @@ protected:
   DiscreteOptimizationReporter * _reporter;
 
   /// @brief mesh from the _to_problems
-  MooseMesh & _to_mesh;
+  // MooseMesh & _to_mesh;
 
   /// @brief mesh from the _from_problem // Dummy one mesh
   // MooseMesh & _from_mesh;

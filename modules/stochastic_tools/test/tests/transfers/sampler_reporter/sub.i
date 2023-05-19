@@ -1,10 +1,9 @@
 # This is changed by main.i for testing purposes
 real_val = 0.0
-vector_val0 = ${fparse real_val * 10}
-vector_val1= ${fparse vector_val0 * 10}
-vector_val2= ${fparse vector_val0 * 100}
-vector_val3= ${fparse vector_val0 * 1000}
-
+vector_val0 = '${fparse real_val * 10}'
+vector_val1 = '${fparse vector_val0 * 10}'
+vector_val2 = '${fparse vector_val0 * 100}'
+vector_val3 = '${fparse vector_val0 * 1000}'
 
 [Mesh]
   type = GeneratedMesh
@@ -53,7 +52,6 @@ vector_val3= ${fparse vector_val0 * 1000}
   petsc_options_value = 'hypre boomeramg'
   error_on_dtmin = false
 []
-
 
 [Postprocessors]
   [pp]

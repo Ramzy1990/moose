@@ -136,7 +136,16 @@
       "PorousFlowBrine.C": "cpp",
       "SamplerPostprocessorTransfer.C": "cpp",
       "SamplerReporterTransfer.C": "cpp",
-      "StochasticToolsTransfer.C": "cpp"
+      "StochasticToolsTransfer.C": "cpp",
+      "AdvancedOutput.C": "cpp",
+      "TableOutput.C": "cpp",
+      "XMLOutput.C": "cpp",
+      "ReporterData.C": "cpp",
+      "ReporterInterface.C": "cpp",
+      "ReporterTransferInterface.C": "cpp",
+      "ReporterSpecialTypeTest.C": "cpp",
+      "MultiAppGeneralFieldTransfer.C": "cpp",
+      "MooseError.C": "cpp"
     }
   }
 }
