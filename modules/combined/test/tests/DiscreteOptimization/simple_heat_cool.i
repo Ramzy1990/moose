@@ -8,13 +8,19 @@ source = 10
   [cmg]
     type = CartesianMeshGenerator
     dim = 2
-    dx = '1 1 1 1'
-    dy = '1 1 1 1'
+    dx = '1 1 1 1 1 1 1 1 1 1'
+    dy = '1 1 1 1 1 1 1 1 1 1'
     subdomain_id = '
-                    1 1 1 1
-                    1 2 1 1
-                    1 1 1 1
-                    1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 2 1 1 1 1 1 1 2 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1 1 1 1 1 1 1
+                    1 2 1 1 1 1 1 1 2 1
+                    1 1 1 1 1 1 1 1 1 1
                    '
   []
 []
@@ -26,7 +32,7 @@ source = 10
 []
 
 [Kernels]
-  [heat]
+  [conduction]
     type = HeatConduction
     variable = temperature
     diffusion_coefficient = thermal_conductivity
@@ -104,7 +110,6 @@ source = 10
 
 [Executioner]
   type = Steady
-  nl_abs_tol = 1e-8
 []
 
 [Outputs]
@@ -112,18 +117,3 @@ source = 10
   exodus = true
   csv = true
 []
-
-# [UserObjects]
-#   [change_subdomains]
-#     type = ChangeSubdomainAssignment
-#     execute_on = INITIAL
-#   []
-# []
-
-# [UserObjects]
-#   [discrete_object]
-#     type = DiscreteOptimizationReporter
-#     # execute_on = INITIAL
-#   []
-# []
-

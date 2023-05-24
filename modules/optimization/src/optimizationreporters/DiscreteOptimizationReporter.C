@@ -143,7 +143,8 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
     }
     else
     {
-      updateSubdomainID(_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+      updateSubdomainID(
+          _allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize, _mesh);
     };
 
     //*******************
@@ -154,10 +155,7 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
 
     std::cout << std::endl;
     std::cout << "The old map is given as..." << std::endl;
-    for (const auto & pair : _initial_pairs_to_optimize)
-    {
-      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-    }
+    printMap(_initial_pairs_to_optimize);
 
     std::cout << std::endl;
     std::cout << std::endl;
@@ -165,10 +163,7 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
 
     // Print the updated map
     std::cout << "The new updated map is..." << std::endl;
-    for (const auto & pair : _pairs_to_optimize)
-    {
-      std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-    }
+    printMap(_pairs_to_optimize);
 
     std::cout << std::endl;
     std::cout << std::endl;
@@ -263,7 +258,6 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
                    "Please check your input file");
       }
     }
-    std::cout << std::endl;
     std::cout << "Verification done successfully!... " << std::endl;
   }
 }
@@ -276,6 +270,13 @@ DiscreteOptimizationReporter::execute()
   std::cout << std::endl;
   std::cout << "Now transfering TO the MultiAPP... " << std::endl;
   std::cout << "Well, basically, the TO Multiapp will *get* the updated mesh domain!... "
+            << std::endl
+            << std::endl
+            << std::endl
+            << std::endl
+            << std::endl
+            << std::endl
+            << std::endl
             << std::endl;
 }
 
@@ -305,10 +306,8 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
 
   std::cout << "Assigning the elements and subdomains ids to their respective map from the mesh..."
             << std::endl;
-  std::cout << std::endl;
   std::cout << "***Elements ids are your key, while subdomain ids are the respective values***"
             << std::endl;
-  std::cout << std::endl;
 
   // Loop over elements in the mesh
   if (!_fe_problem.hasMultiApps())
@@ -329,17 +328,20 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
   // Loop over elements in the subapp mesh and get the domain
   if (_fe_problem.hasMultiApps())
   {
+    _pairs_to_optimize
+        .clear(); // Clear the map before populating it again. This is becuase if the keys are the
+                  // same, then the values will stay as they are! The code then will use the same
+                  // pairs as we previously used even when the mesh is different!
+
     for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
     // for (auto & elem : _mesh.getMesh().elem_ptr())
     {
-      _elements_to_optimize.push_back(elem->id());
-      _subdomains_to_optimize.push_back(elem->subdomain_id());
+      // _elements_to_optimize.push_back(elem->id());
+      // _subdomains_to_optimize.push_back(elem->subdomain_id());
       _pairs_to_optimize.insert(
           std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
     }
-    std::cout << std::endl;
-    std::cout << "Assignment done successfully!" << std::endl;
-    std::cout << std::endl;
+    std::cout << "Assignment done successfully! ..." << std::endl;
   }
 }
 
@@ -399,18 +401,21 @@ DiscreteOptimizationReporter::setInitialCondition(const MooseMesh & domain_mesh)
 
   if (_fe_problem.hasMultiApps())
   {
-    std::cout << std::endl;
-    std::cout << "*** Discrete Otpimization Reporter: SubApp supplied mesh initialization..."
+    std::cout << std::endl
+              << "*** Discrete Otpimization Reporter: SubApp supplied mesh initialization ***"
               << std::endl;
-    std::cout << std::endl;
     getOptimizationDomain(domain_mesh); // get the current optimization domain mesh.
 
     // The initialization is done such that we have two vectors, one for the initial
     // (eventually the previous domain), and one for the current domain.
     // Hence maybe we can call the initilaization as the previousization! :)
-    _initial_elements_to_optimize = _elements_to_optimize;
-    _initial_subdomains_to_optimize = _subdomains_to_optimize;
+    // _initial_elements_to_optimize = _elements_to_optimize;
+    // _initial_subdomains_to_optimize = _subdomains_to_optimize;
     _initial_pairs_to_optimize = _pairs_to_optimize;
+
+    std::cout << std::endl
+              << "After initialization, the domain pairs to optimize are:" << std::endl;
+    printMap(_pairs_to_optimize);
   }
 }
 
@@ -566,13 +571,13 @@ DiscreteOptimizationReporter::testUpdateSubdomainID(
 void
 DiscreteOptimizationReporter::updateSubdomainID(
     const std::vector<subdomain_id_type> allowed_parameter_values,
-    std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
-    std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
+    std::map<dof_id_type, subdomain_id_type> & previous_pairs_to_optimize,
+    std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
+    const MooseMesh & domain_mesh)
 {
 
-  std::cout << std::endl;
-  std::cout << "Updating the domain subdomain ids according to the supplied mesh..." << std::endl;
-  std::cout << std::endl;
+  std::cout << std::endl
+            << "Updating the domain subdomain ids according to the supplied mesh..." << std::endl;
 
   if (pairs_to_optimize.size() != previous_pairs_to_optimize.size())
     mooseError("The sizes of the subdomainIDs do not match! Please make sure the previous "
@@ -633,8 +638,8 @@ DiscreteOptimizationReporter::updateSubdomainID(
       random_iterator->second = allowed_parameter_values[random_value_index];
 
       // After assigning the element, we test the domain (where just one element has changed).
-      unsigned int current_cost = costFunction(_mesh, pairs_to_optimize);
-      unsigned int neighbor_cost = costFunction(_mesh, neighbor);
+      unsigned int current_cost = costFunction(domain_mesh, pairs_to_optimize);
+      unsigned int neighbor_cost = costFunction(domain_mesh, neighbor);
 
       // Calculate the cost difference
       int cost_difference = neighbor_cost - current_cost;
@@ -662,12 +667,9 @@ DiscreteOptimizationReporter::updateSubdomainID(
   if (_fe_problem.hasMultiApps())
   {
 
-    std::cout << std::endl;
-    std::cout << "***Discrete Optimization Class: SubApp Mode***" << std::endl;
-
-    std::cout << std::endl;
-    std::cout << "*** Discrete Otpimization Reporter: SubApp supplied mesh Update..." << std::endl;
-    std::cout << std::endl;
+    std::cout << std::endl
+              << "*** Discrete Otpimization Reporter: SubApp Mode Supplied Mesh Update ***"
+              << std::endl;
 
     // Setting the current Subdomain ID to the previous one.
     // note that the elements ID are the same.
@@ -678,9 +680,8 @@ DiscreteOptimizationReporter::updateSubdomainID(
       std::cout << "previous and current maps are of the same type! Proceeding to updating the "
                    "current domain map..."
                 << std::endl;
-      std::cout << std::endl;
 
-      previous_pairs_to_optimize = _initial_pairs_to_optimize;
+      // previous_pairs_to_optimize = _initial_pairs_to_optimize;
 
       // Copy only the values from previous pairs to current pairs
       for (const auto & pair : previous_pairs_to_optimize)
@@ -693,6 +694,12 @@ DiscreteOptimizationReporter::updateSubdomainID(
       }
     }
 
+    // std::cout << "Current Pairs to Optimize:" << std::endl;
+    // printMap(pairs_to_optimize);
+
+    std::cout << std::endl << "Previous Pairs to Optimize:" << std::endl;
+    printMap(previous_pairs_to_optimize);
+
     // Seed the random number generator for the randomization process in this test function.
     std::srand(std::time(0));
 
@@ -700,7 +707,7 @@ DiscreteOptimizationReporter::updateSubdomainID(
     // Simulated annealing parameters
     // There could be other parameters as well
     unsigned int iterations = 777;
-    Real cooling_rate = 0.77;
+    // Real cooling_rate = 0.99;
 
     // initializing the temperature before the loop
     Real current_temperature = 77.0;
@@ -712,20 +719,26 @@ DiscreteOptimizationReporter::updateSubdomainID(
       std::map<dof_id_type, subdomain_id_type> neighbor = pairs_to_optimize;
       unsigned int random_index = std::rand() % neighbor.size();
 
-      // "f" and "m" are at index 0 and 1 in _allowed_parameter_values, hence taking the
-      // reminder division by 2, 0 or 1.
-      unsigned int random_value_index = std::rand() % 2 + 1;
-
       // Advance the iterator to the random index
       auto random_iterator = neighbor.begin();
       std::advance(random_iterator, random_index);
 
-      // Update the value at the random index
-      random_iterator->second = allowed_parameter_values[random_value_index];
+      // Pick a new random material id that is different from the current one
+      subdomain_id_type new_material_id;
+      do
+      {
+        unsigned int random_value_index = std::rand() % _allowed_parameter_values.size();
+        new_material_id = _allowed_parameter_values[random_value_index];
+      } while (new_material_id == random_iterator->second);
 
-      // After assigning the element, we test the domain (where just one element has changed).
-      unsigned int current_cost = costFunction(_mesh, pairs_to_optimize);
-      unsigned int neighbor_cost = costFunction(_mesh, neighbor);
+      // Update the value at the random index
+      random_iterator->second = new_material_id;
+
+      unsigned int current_cost = costFunction(domain_mesh, pairs_to_optimize);
+      unsigned int neighbor_cost = costFunction(domain_mesh, neighbor);
+
+      // std::cout << "Current cost: " << current_cost << ", Neighbor cost: " << neighbor_cost
+      // << std::endl;
 
       // Calculate the cost difference
       int cost_difference = neighbor_cost - current_cost;
@@ -733,6 +746,7 @@ DiscreteOptimizationReporter::updateSubdomainID(
       // If the neighbor has a lower cost, accept it
       if (cost_difference < 0)
       {
+        // std::cout << "Neighbor accepted (better cost)\n";
         pairs_to_optimize = neighbor;
       }
       else
@@ -741,18 +755,35 @@ DiscreteOptimizationReporter::updateSubdomainID(
         Real acceptance_probability = std::exp(-cost_difference / current_temperature);
         if ((std::rand() / static_cast<double>(RAND_MAX)) < acceptance_probability)
         {
+          // std::cout << "Neighbor accepted (random chance)\n";
           pairs_to_optimize = neighbor;
         }
+        else
+        {
+          // std::cout << "Neighbor rejected\n";
+        }
       }
+      // std::cout << "End of iteration. Current temperature: " << current_temperature << "\n\n";
+      // TODO: We can eventually separate the methods into ones for testing and ones for release.
 
       // Cool down the temperature
-      current_temperature *= cooling_rate;
+      // current_temperature *= cooling_rate;
     }
 
-    // TODO: We can eventually separate the methods into ones for testing and ones for release.
+    std::cout << std::endl
+              << "Now after random assignment of the domain, here are the new pairs ..."
+              << std::endl
+              << std::endl;
+
+    // std::cout << "Previous Pairs:" << std::endl;
+    // printMap(previous_pairs_to_optimize);
+
+    std::cout << std::endl << "New Optimized Pairs:" << std::endl;
+    printMap(pairs_to_optimize);
+
+    std::cout << std::endl << "Returning to the TO_MULTIAPP System ..." << std::endl << std::endl;
   }
 }
-
 // Compute the cost function given some domain.
 // Function to calculate the cost of a given Domain
 unsigned int
@@ -785,7 +816,7 @@ DiscreteOptimizationReporter::costFunctionTest(
         // Only increment the cost if the pair has not been visited and the subdomain
         // IDs are not equal!
         if (visited_pairs.find(elem_pair) == visited_pairs.end() &&
-            elem_subdomain_id == neighbor_subdomain_id)
+            elem_subdomain_id != neighbor_subdomain_id)
         {
           total_cost++;
           visited_pairs.insert(elem_pair);
@@ -940,4 +971,33 @@ std::tuple<std::vector<subdomain_id_type> &,
 DiscreteOptimizationReporter::getMeshParameters()
 {
   return std::tie(_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+}
+
+void
+DiscreteOptimizationReporter::printMap(
+    const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
+{
+  std::ostringstream keysStream;
+  std::ostringstream valuesStream;
+
+  // Find the length of the longest element ID
+  int max_length = 0;
+  for (const auto & pair : pairs_to_optimize)
+  {
+    int length = std::to_string(pair.first).length();
+    if (length > max_length)
+    {
+      max_length = length;
+    }
+  }
+
+  // Now print the element IDs and subdomain IDs with appropriate spacing
+  for (const auto & pair : pairs_to_optimize)
+  {
+    keysStream << std::setw(max_length) << pair.first << " ";
+    valuesStream << std::setw(max_length) << pair.second << " ";
+  }
+
+  std::cout << "Element IDs:  " << keysStream.str() << std::endl;
+  std::cout << "Subdomain IDs:" << valuesStream.str() << std::endl << std::endl;
 }

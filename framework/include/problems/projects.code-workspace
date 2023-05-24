@@ -145,7 +145,22 @@
       "ReporterTransferInterface.C": "cpp",
       "ReporterSpecialTypeTest.C": "cpp",
       "MultiAppGeneralFieldTransfer.C": "cpp",
-      "MooseError.C": "cpp"
+      "MooseError.C": "cpp",
+      "SurrogateModelScalarAux.C": "cpp",
+      "MultiAppSamplerControl.C": "cpp",
+      "LibtorchDRLLogProbabilityPostprocessor.C": "cpp",
+      "PODFullSolveMultiApp.C": "cpp",
+      "SamplerTransientMultiApp.C": "cpp",
+      "Statistics.C": "cpp",
+      "PODSamplerSolutionTransfer.C": "cpp",
+      "PODResidualTransfer.C": "cpp",
+      "SamplerParameterTransfer.C": "cpp",
+      "MultiAppFXTransfer.C": "cpp",
+      "NodalFrictionalConstraint.C": "cpp",
+      "NodalStickConstraint.C": "cpp",
+      "ElementSubdomainModifier.C": "cpp",
+      "ActivateElementsUserObjectBase.C": "cpp",
+      "EqualValueBoundaryConstraint.C": "cpp"
     }
   }
 }

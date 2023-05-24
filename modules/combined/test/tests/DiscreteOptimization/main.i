@@ -11,7 +11,7 @@
 []
 
 [Reporters]
-  [test123]
+  [discrete_reporter]
     type = DiscreteOptimizationReporter
     parameter_names = Materials
     # Number of parameter names we are adjusting for. since we have materials
@@ -21,9 +21,9 @@
     assign_type = 'auto'
     solver_type = 'random_3'
     number_of_elements = 12
-    allowed_mateirals = '0 1 2'
+    allowed_mateirals = '1 2'
     outputs = "none"
-    # execute_on = "MULTIAPP_FIXED_POINT_BEGIN"
+    # execute_on = "ALWAYS"
   []
   #   [test123]
   #     type = DiscreteOptimizationReporter
@@ -33,7 +33,7 @@
 
 [Executioner]
   type = Transient
-  num_steps = 2
+  num_steps = 8
   # dt = 0.1
   # solve_type = PJFNK
   # nl_abs_tol = 1e-6
@@ -57,8 +57,8 @@
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    input_files = simple_heat_cool.i
-    execute_on = "FORWARD"
+    input_files = 'simple_heat_cool.i'
+    # execute_on = 'INITIAL TIMESTEP_BEGIN'
   []
 []
 
@@ -79,12 +79,12 @@
   [toforward]
     type = DiscreteOptimizationTransfer
     to_multi_app = forward
-    user_object = 'test123'
+    user_object = 'discrete_reporter'
   []
   [fromforward]
     type = DiscreteOptimizationTransfer
     from_multi_app = forward
-    user_object = 'test123'
+    user_object = 'discrete_reporter'
   []
 []
 

@@ -69,7 +69,7 @@ protected:
   // std::string _user_object_name;
 
   /// @brief a variable to allow execution at initial once for the "from multiApp" logical branch.
-  bool _skip;
+  // bool _skip;
 
   /// @brief iterators to count the number of times the transfer has been called. "it" for iteration.
   dof_id_type _it_transfer_to;
