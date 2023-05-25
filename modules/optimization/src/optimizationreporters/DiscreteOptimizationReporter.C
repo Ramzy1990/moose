@@ -19,6 +19,22 @@
 //*********************
 registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 
+std::vector<VectorPostprocessorName>
+DiscreteOptimizationReporter::getVectorNamesHelper(const std::string & prefix,
+                                                   const std::vector<PostprocessorName> & pp_names)
+{
+  std::vector<VectorPostprocessorName> vec_names;
+  vec_names.reserve(pp_names.size());
+  for (const auto & pp_name : pp_names)
+  {
+    if (!prefix.empty())
+      vec_names.push_back(prefix + ":" + pp_name);
+    else
+      vec_names.push_back(pp_name);
+  }
+  return vec_names;
+}
+
 //*************************
 // Adding Input Parameters
 //*************************
@@ -283,19 +299,15 @@ DiscreteOptimizationReporter::execute()
 // bool
 // DiscreteOptimizationReporter::isNewMaterialsInMesh(const MooseMesh & domain_mesh)
 // {
-
 //   // FIX ME: Add a check for the mesh changing
-
 //   for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
 //   {
 //     unsigned int material_id = elem->subdomain_id();
-
 //     // if (known_materials.find(material_id) == known_materials.end())
 //     // {
 //     // return true; // New material found
 //     // }
 //   }
-
 //   return false; // No new materials found
 // }
 

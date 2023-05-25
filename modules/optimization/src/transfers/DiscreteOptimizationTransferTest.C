@@ -10,7 +10,7 @@
 //**********************
 // Include Header Files
 //**********************
-#include "DiscreteOptimizationTransfer.h"
+#include "DiscreteOptimizationTransferTest.h"
 #include "MooseApp.h"
 #include "FEProblemBase.h"
 #include "DiscreteOptimizationReporter.h" // declared in the header file
@@ -19,13 +19,13 @@
 //*********************
 // Regiester the MOOSE
 //*********************
-registerMooseObject("OptimizationApp", DiscreteOptimizationTransfer);
+registerMooseObject("OptimizationApp", DiscreteOptimizationTransferTest);
 
 //*************************
 // Adding Input Parameters
 //*************************
 InputParameters
-DiscreteOptimizationTransfer::validParams()
+DiscreteOptimizationTransferTest::validParams()
 {
   InputParameters params = MultiAppTransfer::validParams();
 
@@ -49,7 +49,8 @@ DiscreteOptimizationTransfer::validParams()
 //*******************
 // Class Constructor
 //*******************
-DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters & parameters)
+DiscreteOptimizationTransferTest::DiscreteOptimizationTransferTest(
+    const InputParameters & parameters)
   : MultiAppTransfer(parameters)
 
 {
@@ -60,7 +61,7 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 //***********************
 
 void
-DiscreteOptimizationTransfer::initialSetup()
+DiscreteOptimizationTransferTest::initialSetup()
 {
   MultiAppTransfer::initialSetup();
 
@@ -80,10 +81,10 @@ DiscreteOptimizationTransfer::initialSetup()
 }
 
 void
-DiscreteOptimizationTransfer::execute()
+DiscreteOptimizationTransferTest::execute()
 {
   TIME_SECTION(
-      "DiscreteOptimizationTransfer::execute()", 5, "Performing transfer with a user object");
+      "DiscreteOptimizationTransferTest::execute()", 5, "Performing transfer with a user object");
 
   // getting the mesh
   // probably will need the _to_problems mesh only in release
@@ -399,7 +400,7 @@ DiscreteOptimizationTransfer::execute()
 }
 
 void
-DiscreteOptimizationTransfer::assignMesh(
+DiscreteOptimizationTransferTest::assignMesh(
     const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize, MooseMesh & mesh)
 {
   // elements owned by the processor (processor tag on it): active_local_element_ptr_range()

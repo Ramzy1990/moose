@@ -4,23 +4,38 @@ thermal_conductivity_1 = 1
 thermal_conductivity_2 = 10
 source = 10
 
+# [Mesh]
+#   [cmg]
+#     type = CartesianMeshGenerator
+#     dim = 2
+#     dx = '1 1 1 1 1 1 1 1 1 1'
+#     dy = '1 1 1 1 1 1 1 1 1 1'
+#     subdomain_id = '
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 1 2 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 1 2 1
+#                     1 1 1 1 1 1 1 1 1 1
+#                    '
+#   []
+# []
+
 [Mesh]
   [cmg]
     type = CartesianMeshGenerator
     dim = 2
-    dx = '1 1 1 1 1 1 1 1 1 1'
-    dy = '1 1 1 1 1 1 1 1 1 1'
+    dx = '1 1 1 1'
+    dy = '1 1 1 1'
     subdomain_id = '
-                    1 1 1 1 1 1 1 1 1 1
-                    1 2 1 1 1 1 1 1 2 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 1 1 1 1 1 1 1 1 1
-                    1 2 1 1 1 1 1 1 2 1
-                    1 1 1 1 1 1 1 1 1 1
+                    1 1 1 1
+                    1 2 1 1
+                    1 1 2 1
+                    1 1 1 1
                    '
   []
 []
@@ -49,7 +64,7 @@ source = 10
     type = CoupledForce
     variable = temperature
     v = sink_var
-    block = 2
+    block = '2'
   []
 []
 
@@ -57,13 +72,13 @@ source = 10
   [sink_var]
     family = MONOMIAL
     order = CONSTANT
-    block = 2
+    # block = 2
   []
 
   [source_var]
     family = MONOMIAL
     order = CONSTANT
-    block = 1
+    # block = 1
     initial_condition = ${source}
   []
 []
@@ -75,6 +90,7 @@ source = 10
     coupled_variables = 'temperature'
     expression = '-${sink_htc} * (temperature - ${sink_temperature})'
     block = 2
+    # execute_on = FORWARD
   []
 []
 
@@ -110,10 +126,11 @@ source = 10
 
 [Executioner]
   type = Steady
+  nl_abs_tol = 1e-8
 []
 
 [Outputs]
   print_linear_residuals = false
-  exodus = true
+  # exodus = true
   csv = true
 []

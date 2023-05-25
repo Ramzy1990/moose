@@ -15,12 +15,18 @@
 // Forward Declarations If Any
 class DiscreteOptimizationReporter;
 
+// Oh well, let us see in the meeting today then.
+// Speaking of postprocessing, is the user able to assign a postprocessor object from the objects
+// available in postprocessors in a basic mathematical function? Let us say something of the
+// following form: 2y + 3/x where y and x are some postprocessor available function that the user
+// use to get variables from his subapp problem. Like
+
 /**
  * A class that transfers the mesh from and to the MultiApp system. It is executed on
  * Initial once, and then beginning at each time step.
  * This class uses the DiscreteOptimizationReported as the user object.
  */
-class DiscreteOptimizationTransfer : public MultiAppTransfer
+class DiscreteOptimizationTransferTest : public MultiAppTransfer
 {
 public:
   //************************
@@ -33,7 +39,7 @@ public:
   //************************
   static InputParameters validParams();
 
-  DiscreteOptimizationTransfer(const InputParameters & parameters);
+  DiscreteOptimizationTransferTest(const InputParameters & parameters);
 
   virtual void execute() override;
   virtual void initialSetup() override;

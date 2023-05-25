@@ -1,6 +1,10 @@
 [Optimization]
 []
 
+[Problem]
+  solve = false
+[]
+
 [Mesh]
   [gen]
     type = CartesianMeshGenerator
@@ -33,13 +37,13 @@
 
 [Executioner]
   type = Transient
-  num_steps = 8
+  num_steps = 10
   # dt = 0.1
   # solve_type = PJFNK
   # nl_abs_tol = 1e-6
-  # nl_rel_tol = 1e-8
-  # petsc_options_iname = '-pc_type'
-  # petsc_options_value = 'lu'
+  nl_rel_tol = 1e-8
+  petsc_options_iname = '-pc_type'
+  petsc_options_value = 'lu'
 []
 
 # [Problem]
@@ -57,7 +61,13 @@
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    input_files = 'simple_heat_cool.i'
+    input_files = simple_heat_cool.i
+    # input_files = 'simple_heat_cool.i'
+    # execute_on = 'INITIAL TIMESTEP_BEGIN'
+    # execute_on = 'FORWARD'
+    #reset_apps = '0 0'
+    #reset_time = '1 2'
+    #execute_on = TIMESTEP_END
     # execute_on = 'INITIAL TIMESTEP_BEGIN'
   []
 []
@@ -76,13 +86,14 @@
 # []
 
 [Transfers]
+  #active = ''
   [toforward]
-    type = DiscreteOptimizationTransfer
+    type = DiscreteOptimizationTransferTest
     to_multi_app = forward
     user_object = 'discrete_reporter'
   []
   [fromforward]
-    type = DiscreteOptimizationTransfer
+    type = DiscreteOptimizationTransferTest
     from_multi_app = forward
     user_object = 'discrete_reporter'
   []

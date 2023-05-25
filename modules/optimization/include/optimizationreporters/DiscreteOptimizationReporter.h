@@ -10,7 +10,6 @@
 #pragma once
 
 // Moose Includes
-// #include "OptimizationReporter.h"
 #include "GeneralReporter.h"
 // Forward Declarations If Any
 // class FEProblemBase;
@@ -22,22 +21,25 @@
  * and Nelder-Mead. It will eventually include Simulated Annealing and Genetic Algorithm.
  */
 class DiscreteOptimizationReporter : public GeneralReporter
-//  public GeneralReporter, // Included in OptimizationData
 //  public ElementUserObject
 
 {
 public:
-  //************************
-  // Variables Declarations
-  //************************
-  // Nothing to see here
-
   //************************
   // Functions Declarations
   //************************
   static InputParameters validParams();
 
   DiscreteOptimizationReporter(const InputParameters & parameters);
+
+  /**
+   * Function to help in getting the domain's post processed results names.
+   * @param[in] prefix: Use the supplied string as the prefix for vector postprocessor name
+   * @param[in] pp_names: The post prcessors names as supplied from the subapps.
+   * to print.
+   */
+  std::vector<VectorPostprocessorName>
+  getVectorNamesHelper(const std::string & prefix, const std::vector<PostprocessorName> & pp_names);
 
   // void initialize() override {}
   // void execute() override {}
@@ -49,6 +51,73 @@ public:
    * Function to check if the materials used are the ones included and allowed
    */
   void isMaterialAllowed(const MooseMesh & domain_mesh);
+
+  /**
+   * Function to initialize the subdomain id vectors
+   */
+  void setInitialCondition(const MooseMesh & domain_mesh);
+
+  /**
+   * Function to update the optimization domain based on some logic, used for testing purposes.
+   */
+  void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
+                         std::map<dof_id_type, subdomain_id_type> & previous_pairs_to_optimize,
+                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
+                         const MooseMesh & domain_mesh);
+
+  /**
+   * Function to bring in the post process results of the mesh to the reporter for it to pass it to
+   * the optimizer.
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void setDomainPostProcessInformation(const dof_id_type & iteration);
+
+  /**
+   * Function to printout the domain mesh and information to a file
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void printCurrentDomain(const dof_id_type & iteration);
+
+  /**
+   * Function to update the mesh domain in the reporter based on the optimizer results. It is called
+   * inside the optimizer.
+   * @todo add the capability to have different Elements IDs instead of assuming them constant. Name
+   * change to updateMeshIds.
+   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
+   * to optimize.
+   * This pairs_to_optimize will be eventually sent to the TO_MULTIAPP branch of the discrete
+   * transfer class to assigna nd update the mesh.
+   *
+   */
+  void updateMeshDomain(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+
+  /**
+   * Functions to get the mesh pairs to optimize and the allowed material to optimize for
+   */
+  std::tuple<std::vector<subdomain_id_type> &,
+             std::map<dof_id_type, subdomain_id_type> &,
+             std::map<dof_id_type, subdomain_id_type> &>
+  getMeshParameters();
+
+  //
+  //
+  //
+  //
+  //************************
+  // Variables Declarations
+  //************************
+  // Nothing to see here
+
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+
+protected:
+  //************************
+  // Functions Declarations
+  //************************
 
   virtual void initialize() override{};
   void execute();
@@ -67,25 +136,12 @@ public:
   void getOptimizationDomain(const MooseMesh & domain_mesh);
 
   /**
-   * Function to initialize the subdomain id vectors
-   */
-  void setInitialCondition(const MooseMesh & domain_mesh);
-
-  /**
    * Function to update the optimization domain based on some logic, used for testing purposes.
    */
   void
   testUpdateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
                         const std::map<dof_id_type, subdomain_id_type> previous_pairs_to_optimize,
                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
-
-  /**
-   * Function to update the optimization domain based on some logic, used for testing purposes.
-   */
-  void updateSubdomainID(const std::vector<subdomain_id_type> allowed_parameter_values,
-                         std::map<dof_id_type, subdomain_id_type> & previous_pairs_to_optimize,
-                         std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
-                         const MooseMesh & domain_mesh);
 
   /**
    * Function to compute the cost function
@@ -99,51 +155,21 @@ public:
   unsigned int costFunction(const MooseMesh & domain_mesh,
                             const std::map<dof_id_type, subdomain_id_type> & domain_map);
 
-  /**
-   * Function to printout the domain mesh and information to a file
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
-   */
-  void printCurrentDomain(const dof_id_type & iteration);
-
-  /**
-   * Function to bring in the post process results of the mesh to the reporter for it to pass it to
-   * the optimizer.
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
-   */
-  void setDomainPostProcessInformation(const dof_id_type & iteration);
-
-  /**
-   * Function to update the mesh domain in the reporter based on the optimizer results. It is called
-   * inside the optimizer.
-   * @todo add the capability to have different Elements IDs instead of assuming them constant. Name
-   * change to updateMeshIds.
-   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
-   * to optimize.
-   * This pairs_to_optimize will be eventually sent to the TO_MULTIAPP branch of the discrete
-   * transfer class to assigna nd update the mesh.
-   *
-   */
-  void updateMeshDomain(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
   // void updateMeshIds(const dof_id_type & iteration); // when we have both element and domain ids
   // changing.
 
   /**
-   * Functions to get the mesh pairs to optimize and the allowed material to optimize for
+   * Function to print the domain's mesh.
+   * @todo add the capability to have different Elements IDs instead of assuming them constant.
+   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
+   * to print.
    */
-  std::tuple<std::vector<subdomain_id_type> &,
-             std::map<dof_id_type, subdomain_id_type> &,
-             std::map<dof_id_type, subdomain_id_type> &>
-  getMeshParameters();
-
   void printMap(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
 
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
-
-protected:
+  //
+  //
+  //
+  //
   //************************
   // Variables Declarations
   //************************
@@ -219,23 +245,22 @@ protected:
   // Map between RGMB element block names, block ids, and region ids
   // std::map<std::string, std::pair<subdomain_id_type, dof_id_type>> _name_id_map;
 
-  //************************
-  // Functions Declarations
-  //************************
-  // Nothing to see here
-
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//
 
 private:
   //************************
-  // Variables Declarations
+  // Functions Declarations
   //************************
   // Nothing to see here
 
+  //
+  //
+  //
+  //
   //************************
-  // Functions Declarations
+  // Variables Declarations
   //************************
   // Nothing to see here
 };
