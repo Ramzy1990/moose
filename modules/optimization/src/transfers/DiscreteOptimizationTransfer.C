@@ -14,12 +14,30 @@
 #include "MooseApp.h"
 #include "FEProblemBase.h"
 #include "DiscreteOptimizationReporter.h" // declared in the header file
-// #include "ChangeSubdomainAssignment.h"
 
 //*********************
 // Regiester the MOOSE
 //*********************
-registerMooseObject("OptimizationApp", DiscreteOptimizationTransfer);
+// registerMooseObject("OptimizationApp", DiscreteOptimizationTransfer);
+registerMooseObject("MooseApp", DiscreteOptimizationTransfer);
+
+//*************************
+// Helper Functions if Any
+//*************************
+// std::vector<VectorPostprocessorName>
+// getVectorNamesHelper(const std::string & prefix, const std::vector<PostprocessorName> & pp_names)
+// {
+//   std::vector<VectorPostprocessorName> vec_names;
+//   vec_names.reserve(pp_names.size());
+//   for (const auto & pp_name : pp_names)
+//   {
+//     if (!prefix.empty())
+//       vec_names.push_back(prefix + ":" + pp_name);
+//     else
+//       vec_names.push_back(pp_name);
+//   }
+//   return vec_names;
+// }
 
 //*************************
 // Adding Input Parameters
@@ -39,6 +57,43 @@ DiscreteOptimizationTransfer::validParams()
       "The UserObject you want to transfer values from.  Note: This might be a UserObject from "
       "your MultiApp's input file!");
 
+  // postprocessor cost function user object
+  /// 📝 @TODO: I would like to restrict it to from multiapp only. Or we can suppress it and force its
+  // name on the user.
+  params.addRequiredParam<PostprocessorName>(
+      "objective_name",
+      "The objective function name as defined in the subapp postprocessors block. This "
+      "function is the one you would like to transfer its value to the optimizer.  Note: This is a "
+      "post processor name from your MultiApp's input file!");
+
+  // Those are postprocessors that are related to the objective function components, so they will be
+  // assigned from the postprocessors
+  params.addParam<std::vector<PostprocessorName>>(
+      "constraints_names",
+      "These are the postprocessors names that you would like to set constraints upon. Note: These "
+      "are postprocessors names from your MultiApps input file!. Another Note: The user should "
+      "make sure the names of the postprocessors are those included in the objective "
+      "functions!");
+
+  params.addParam<std::vector<std::string>>(
+      "inequality_operators",
+      "These are the inequality operators associated with each postprocessor names that you would "
+      "like to set constraints upon. Note: These "
+      "are postprocessors names from your MultiApps input file!. Another Note: The user should "
+      "make sure the names of the postprocessors are those included in the objective "
+      "functions!");
+
+  params.addParam<std::vector<PostprocessorValue>>(
+      "constraints_values",
+      "These are the constraints values you would like to set on your postprocessors names. Note: "
+      "These are related to the postprocessors names and are in order of the"
+      " 'constraints_names' parameter!");
+
+  params.addParam<std::vector<std::string>>(
+      "domain_constraints",
+      "These are the constraints you can put on your doamin's mesh and they will be hardcoded in "
+      "the optimizer.");
+
   // Set and suppress the 'execute_on' flag.
   params.set<ExecFlagEnum>("execute_on") = {EXEC_INITIAL, EXEC_TIMESTEP_BEGIN};
   params.suppressParameter<ExecFlagEnum>("execute_on");
@@ -53,6 +108,37 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
   : MultiAppTransfer(parameters)
 
 {
+  // These variables are read only for the FROM_MULTIAPP
+  if (getFromMultiApp())
+  {
+
+    // This variable in the from_multiapp will be used to get the value associated with it to the
+    // objective function value by using the getPostprocessorValueByName
+    _objective_name = isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name")
+                                                     : "objective";
+
+    // Since those will not be used currently, as we need to know how they could be used, we wil
+    // adjourn working on them currently:
+    // These are the constraints which are the Postprocessors that are defined in the subapp and
+    // should be constitutes of the objective function.
+    if (isParamValid("constraints_names"))
+      _constraints_names = getParam<std::vector<PostprocessorName>>("constraints_names");
+    // else
+    //   _transfer_constraints_names = {"c1"};
+
+    if (isParamValid("inequality_operators"))
+      _inequality_operators = getParam<std::vector<std::string>>("inequality_operators");
+
+    // These are the constraints values and they will be used to limit the constituting components
+    // of the objective function if needed.
+    if (isParamValid("constraints_values"))
+      _constraints_values = getParam<std::vector<PostprocessorValue>>("constraints_values");
+    // else
+    //   _transfer_constraints_values = {1.0};
+
+    if (isParamValid("domain_constraints"))
+      _domain_constraints = getParam<std::vector<std::string>>("domain_constraints");
+  }
 }
 
 //***********************
@@ -76,7 +162,37 @@ DiscreteOptimizationTransfer::initialSetup()
   _it_transfer_from = 0;
 
   // getting the app information including the mesh and such
+  // Not needed, included in the multiapptransfer initial setup
   // getAppInfo();
+
+  // Now checking the if the constraints names provided have equivalent names in the subapps
+  // Check that postprocessor on sub-application exists and create vectors on results VPP
+  // const dof_id_type n = getFromMultiApp()->numGlobalApps();
+  // for (MooseIndex(n) i = 0; i < n; i++)
+  // {
+  if (getFromMultiApp()->hasLocalApp(0))
+  {
+
+    FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
+
+    for (const auto & name : _constraints_names)
+    {
+      if (!app_problem.hasPostprocessorValueByName(name))
+        mooseError("Unknown postprocesssor name '",
+                   name,
+                   "' on sub-application '",
+                   getFromMultiApp()->name(),
+                   "'");
+    }
+
+    if (!app_problem.hasPostprocessorValueByName(_objective_name))
+      mooseError("Unknown objective function name '",
+                 _objective_name,
+                 "' on sub-application '",
+                 getFromMultiApp()->name(),
+                 "'");
+  }
+  // }
 }
 
 void
@@ -93,340 +209,476 @@ DiscreteOptimizationTransfer::execute()
   // general iteration
   _it_transfer += 1;
 
-  // Important question, do we start executing the transfer from the start everytime we
-  // solve the physics problem??
-  // This is what happens currently
+  // Important question, do we start executing the transfer from the start
+  // everytime we solve the physics problem?? This is what happens currently
 
-  // Print the messages
-  std::cout << std::endl
-            << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
-            << std::endl;
-  // std::cout << "This marks the first invoking of this transfer class ..." << std::endl;
-  std::cout << "Your user object name is:  " << _reporter->name() << std::endl;
-  std::cout << "Now we should log into the MultiApp system starting with the TO_MULTIAPP logical "
-               "branch..."
-            << std::endl
-            << std::endl;
+  // Print the messages once for the very first iteration:
+  if (_it_transfer == 1)
+  {
+    std::cout << std::endl
+              << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
+              << std::endl;
+    // std::cout << "This marks the first invoking of this transfer class ..." <<
+    // std::endl;
+    std::cout << "Your user object name is:  " << _reporter->name() << std::endl;
+    std::cout << "Now we should log into the MultiApp system starting with the "
+                 "TO_MULTIAPP logical branch to start the optimization process! Buckle up!..."
+              << std::endl
+              << std::endl;
+  }
 
   // _current_direction variable is found inside the MultiAppTransfer class.
   switch (_current_direction)
   {
     case TO_MULTIAPP:
     {
-      // iterators
       _it_transfer_to += 1;
 
-      // Print the messages
-      std::cout << "*** You are currently in the TO_MULTIAPP branch! ***" << std::endl << std::endl;
-      std::cout << "The transfer iterations are as follows:" << std::endl;
-      std::cout << "TOTAL Iterations:" << _it_transfer << std::endl;
-      std::cout << "TO_MULTIAPP Iterations:" << _it_transfer_to << std::endl;
+      std::cout << "\n*** You are currently in the TO_MULTIAPP branch! ***\n\n"
+                << "The transfer iterations are as follow: \n"
+                << "Total Iterations: " << _it_transfer << '\n'
+                << "Total TO_MULTIAPP Iterations: " << _it_transfer_to << "\n\n";
 
-      // Return to the multiapp system for initial invoking only
-      if (_it_transfer_to == 1)
+      if (_it_transfer_to == 1) // First invocation
       {
-
-        // Steps 1, 2, and 3!
-        // Step 1: is going to the TO multiapp system.
-        // Step 2: is skipping doing anything here.
-        // Step 3: is solving the multipapp system physics problem.
-        // Go to the FROM branch for Step 4.
-
-        std::cout << std::endl
-                  << "*** This marks as the first invoking of the TO_MULTIAPP branch ***"
-                  << std::endl
-                  << std::endl;
         std::cout
-            << "Nothing major will happen in the very first invoking of the TO_MULTIAPP branch..."
-            << std::endl;
-        std::cout << "Returning to the MULTIAPP system to continue the optimization process..."
-                  << std::endl;
+            << "*** This marks as the first invoking of the TO_MULTIAPP branch ***\n\n"
+            << "Nothing major will happen in the very first invoking of the TO_MULTIAPP branch...\n"
+            << "Returning to the MULTIAPP system to continue the optimization process...\n\n";
         return;
       }
-
-      // Check if the _to_problem is a single problem. Print error if not, for now.
-      // TODO: Allow for multiphysics problems optimization! I think one can say several to_problem
-      // meshes.
-
-      if (_to_problems.size() > 1)
+      else // Subsequent invocations
       {
-        mooseError("The size of the _to_problem is more than one! "
-                   "Please check the current discrete transfer capabilities.");
+        handleSubsequentToInvocations(to_mesh, _it_transfer_to);
+
+        std::cout << "*** Finished the current handling of the TO_MULTIAPP branch! ***\n\n";
       }
 
-      // Step 10: In the TO_problem, we get the updated mesh domain, assign the mesh,
-      // making it ready for the solve step.
-
-      std::cout << std::endl
-                << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***" << std::endl
-                << "*** Receiving the domain's mesh elements and subdomains ids ***" << std::endl
-                << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***" << std::endl
-                << std::endl;
-
-      // For now, we just change the mesh domain randomly before passing it to the MULTIAPP system.
-      // FIXME: This is for testing only. The updateSubdomainID updates the mesh vectors and maps
-      // based on some random work.
-
-      // First we access the passed values through the _reporter object using a TUBLE getter
-      // function.
-      // This is not needed for the testing phase!
-      // auto & [_transfer_allowed_parameter_values,
-      //         _transfer_initial_pairs_to_optimize,
-      //         _transfer_pairs_to_optimize] = _reporter->getMeshParameters();
-
-      auto mesh_params = _reporter->getMeshParameters();
-      _transfer_allowed_parameter_values = std::get<0>(mesh_params);
-      _transfer_initial_pairs_to_optimize = std::get<1>(mesh_params);
-      _transfer_pairs_to_optimize = std::get<2>(mesh_params);
-
-      std::cout << std::endl
-                << "Domain's mesh content was received successfully! ... " << std::endl
-                << std::endl;
-
-      std::cout << "*** Updating the domain's mesh elements and subdomains ids ***" << std::endl
-                << "CAUTION! This is for testing purposes only! Otherwise, we assign the mesh "
-                   "directly ..."
-                << std::endl;
-
-      // Next we update the subdomain ID in the reporter based on the supplied mesh (FOR Testing
-      // only!):
-      _reporter->updateSubdomainID(_transfer_allowed_parameter_values,
-                                   _transfer_initial_pairs_to_optimize,
-                                   _transfer_pairs_to_optimize,
-                                   to_mesh);
-
-      // Q: Confirm if the variables will be udpated accordingly or not based on reference the way
-      // they are currently.
-
-      // Next we assign the mesh:
-
-      std::cout << "*** Great! Now reassigning the Mesh ***" << std::endl << std::endl;
-
-      assignMesh(_transfer_pairs_to_optimize, to_mesh);
-
-      for (auto & elem : to_mesh.getMesh().active_local_element_ptr_range())
-      {
-        std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
-                  << std::endl;
-      }
-
-      // The reporter should have the optimizer's domain constraints (e.g., moderator specific
-      // locations) set by a user and pass it to the optimizer (an executioner) (TODO). This is
-      // different from the cost function constraints (TODO)!
-      // TODO: Add specifics for the elements on the boundary if needed.
-
-      if (_it_transfer == 10)
-        exit(EXIT_SUCCESS);
+      std::cout
+          << "*** Great! See you on the other side then after the MultiApp solve! 👋 ***\n\n\n"
+          << std::endl;
 
       break;
     }
+
     case FROM_MULTIAPP:
     {
-
-      // iterators
       _it_transfer_from += 1;
 
-      // Print the messages
-      std::cout << "*** You are currently in the FROM_MULTIAPP branch! ***" << std::endl
-                << std::endl;
-      std::cout << "The transfer iterations are as follow:" << std::endl;
-      std::cout << "Total Iterations:" << _it_transfer << std::endl;
-      std::cout << "Total FROM_MULTIAPP Iterations:" << _it_transfer_from << std::endl;
+      std::cout << "\n*** You are currently in the FROM_MULTIAPP branch! ***\n\n"
+                << "The transfer iterations are as follow: \n"
+                << "Total Iterations: " << _it_transfer << '\n'
+                << "Total FROM_MULTIAPP Iterations: " << _it_transfer_from << "\n\n";
 
-      std::cout << " " << std::endl;
-      std::cout << "*** Current FROM Mesh: ***" << std::endl;
-      for (auto & elem : from_mesh.getMesh().active_local_element_ptr_range())
+      if (_it_transfer_from == 1) // First invocation
       {
-        std::cout << "Element ID: " << elem->id() << " Material ID: " << elem->subdomain_id()
-                  << std::endl;
+        handleFirstFromInvocation(from_mesh, _it_transfer_from);
+
+        std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
+      }
+      else // Subsequent invocations
+      {
+        handleSubsequentFromInvocations(_it_transfer_from);
+
+        std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
       }
 
-      // We need to read the mesh from the MultiApp system. The reporter only sees the main app
-      // mesh, but the mesh in the subapps are the one actually used by the problem solver.
-
-      // TODO: Check if new materials are added.
-      // TODO: Allow other materials to be present in the mesh even if not optimized for from start,
-      // by adding them to the allowed material function.
-
-      // TODO: Add a function to read any constraint added by the user imposed on the domain
-      // reconstruction (but domain construction does not happen in the "from" branch). Could
-      // be a set of options that the user can choose from. This should be in the reporter and
-      // passed over to the optimizer.
-
-      // TODO: Save unperturbed domain results to a file for comparisons.
-      // TODO: Add a parameter to enable testing the multiapp system optimization outside of the
-      // release version.
-
-      std::cout << std::endl;
-      std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***" << std::endl;
-      std::cout << "*** Post processing of the mesh in the FROM_MULTIAPP branch ***" << std::endl;
-      std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***" << std::endl;
-      std::cout << std::endl;
-
-      if (_it_transfer_from == 1)
-      {
-
-        // Step 4: We get the mesh for the first time, check it, and get the domain map.
-
-        std::cout << "*** Initiating the first invocation of the FROM_MULTIAPP branch ***"
-                  << std::endl;
-        std::cout << std::endl;
-
-        // Obtain the mesh and verify its integrity before performing post-processing
-        std::cout << "Obtaining and verifying the mesh before post-processing..." << std::endl;
-        std::cout << std::endl;
-
-        std::cout
-            << "*** Verifying if the materials utilized in the problem match those allowed for "
-               "optimization ***"
-            << std::endl;
-
-        _reporter->isMaterialAllowed(from_mesh);
-
-        std::cout << std::endl
-                  << "*** Acquiring the first-mesh domain elements and subdomain IDs ***"
-                  << std::endl;
-
-        _reporter->setInitialCondition(from_mesh);
-
-        std::cout << "Successful acquirment of the domain! The Discrete Optimization reporter now "
-                     "has the initial mesh information!..."
-                  << std::endl
-                  << std::endl;
-
-        // Step 5: We post process the initial mesh and write out the results to
-        // a file for comparison down the road!
-
-        std::cout << "*** Now postporcessing and storing the mesh data and the SubApp results in a "
-                     "file ***"
-                  << std::endl
-                  << std::endl;
-
-        // TODO: Add here the printing out of the mesh information and the results while
-        // postprocessing the data through postprocessors, such that the reporter will have all the
-        // information needed to compute the cost function, whenever needed!
-
-        //  --->        // Q: How to post_process?
-
-        // Maybe we can printout the results follwoing the post process step such that we print
-        // them out in one step
-
-        _reporter->printCurrentDomain(_it_transfer_from);
-
-        // std::cout << "*** Data is written and stored to a file successfully! ***" << std::endl;
-        // std::cout << std::endl;
-
-        // Step 6: Pass on this initial mesh postprocessing results to the reporter.
-        // The reporter then will have these reuslts ready to compute the initial cost function.
-
-        // Add here sending the post processed information to the reporter.
-        // Currently, nothing happens here in the testing phase!
-        //  --->        _reporter.setDomainPostProcessInformation(_it_transfer_from);
-
-        // Step 7: The reporter should pass the mesh data to the optimizer. The reporter should be
-        // called inside the optimizer (I guess through an object) to get its data.
-
-        // Step 8: In the optimizer, we solve and optimize the passed mesh domain. This happens
-        // inside the wrapper part of the optimizer.
-
-        // We do NOT compute the cost function just yet like they did with the old optimization
-        // domain!!
-
-        // Step 9: Instead, we then update the mesh parameters, i.e., map, in the reporter.
-
-        // Step 10: We then go to the TO_problem, to get the updated mesh domain (map), assign the
-        // mesh, making it ready for the solve step.
-
-        // This passing is done through the reporter, the only thing that connects the transfer and
-        // the executioner classes.
-
-        std::cout << "*** Now returning to the MULTIAPP System (and the next global iteration) ***"
-                  << std::endl
-                  << std::endl
-                  << std::endl
-                  << std::endl;
-
-        return;
-
-      } // if (_it_transfer_from == 1)
-
-      // Obtain the elements and subdomains of the current mesh targeted for optimization.
-      // This step establishes the domain for the subsequent solution stages.
-
-      std::cout << "*** Obtaining the domain mesh elements and subdomains ids ***" << std::endl;
-      std::cout << "CAUTION! For testing purposes only! Otherwise, we should proceed to "
-                   "postprocess the results for cost function computation ... "
+      std::cout << "*** Great! See you on the other side then with a new global iteration!👋 "
+                   "***\n\n\n\n\n\n\n"
                 << std::endl;
-
-      // sending the mesh and everything is being taken care of on the reporter side during the
-      // test phase only!
-      _reporter->setInitialCondition(from_mesh);
-
-      std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
-                   "Optimization Reporter for the cost function computation ***"
-                << std::endl;
-
-      // Step 11: After the physics problem is solved, we post process the results, pass it to the
-      // reporter to compute the new cost function.
-
-      // Note that we do not need to pass the mesh as it is the same one that the reporter already
-      // have and have been acquired by the TO multiapp system! UNLESS the mesh has changed in the
-      // physics solving section due to some adaptive mesh refinement or whatever.
-
-      // Lather, Rinse, Repeat until some constraint is achieved  as provided by the user for the
-      // cost function!
-
-      // TODO: Postprocessing the data through postprocessors.
-      // Postprocessors should call setters to set the data in the reporter class, I think.
-      // Or we can just pass the referenced variables through one function to the reporter to
-      // assign its variables.
-
-      // Get information from the physics problem and to use for our future objective function.
-      // Post processing on the mesh.
-      // User defined names and post processors.
-
-      // cost function is computed in the reporter side.
-
-      std::cout << "*** Now returning to the MULTIAPP System (and the next global iteration) ***"
-                << std::endl
-                << std::endl
-                << std::endl
-                << std::endl;
-
       break;
     }
   }
 }
 
 void
+DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
+                                                            dof_id_type & iteration)
+{
+
+  /// 📝 @TODO: Allow for multiphysics problems optimization! I think one can say
+  // several to_problem meshes.
+
+  if (_to_problems.size() > 1)
+  {
+    mooseError("The size of the _to_problem is more than one! "
+               "Please check the current discrete transfer capabilities.");
+  }
+
+  std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n"
+            << "*** Receiving the domain's mesh elements and subdomains ids ***\n"
+            << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
+
+  auto mesh_params = _reporter->getMeshParameters();
+  _allowed_parameter_values = std::get<0>(mesh_params);
+  _initial_pairs_to_optimize = std::get<1>(mesh_params);
+  _pairs_to_optimize = std::get<2>(mesh_params);
+
+  std::cout << "\nDomain's mesh content was received successfully for iteration " << iteration
+            << "! ...\n\n";
+
+  std::cout << "*** Updating the domain's mesh elements and subdomains ids and reassigning the "
+            << "mesh ***\n\n";
+
+  assignMesh(_pairs_to_optimize, to_mesh);
+
+  std::cout << "*** New mesh to pass to the MultiApp: ***\n";
+
+  // Print mesh elements to check
+  printMeshElements(to_mesh);
+}
+
+void
+DiscreteOptimizationTransfer::handleFirstFromInvocation(MooseMesh & from_mesh,
+                                                        dof_id_type & iteration)
+{
+  std::cout << "*** This marks as the first invoking of the FROM_MULTIAPP branch ***\n";
+
+  std::cout << "*** Current Mesh: ***\n";
+
+  // Print mesh elements to check
+  printMeshElements(from_mesh);
+
+  std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***"
+            << "\n*** Post processing of the mesh in the FROM_MULTIAPP branch ***"
+            << "\n*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
+
+  processAndVerifyMesh(from_mesh);
+
+  _reporter->printCurrentDomain(iteration);
+
+  std::cout << "*** Data is written and stored to a file successfully! ***\n\n";
+
+  // Set the objective function value in the reporter
+  objectiveFunctionPP(_objective_name, iteration);
+
+  // Set the objective function components comparison results in the reporter
+  buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+
+  // Call the domainConstraints function to set the domain's mesh constraints in the reporter
+  domainConstraints(_domain_constraints);
+}
+
+void
+DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iteration)
+{
+  /// 📝 @TODO: Check if new materials are added.
+  /// 📝 @TODO: Allow other materials to be present in the mesh even if not
+  // optimized for from start, by adding them to the allowed material function.
+
+  std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
+            << "Optimization Reporter for the objective function computation ***\n";
+
+  _reporter->printCurrentDomain(iteration);
+
+  std::cout << "*** Data is written and stored to a file successfully! ***\n\n";
+
+  // Set the objective function value in the reporter
+  objectiveFunctionPP(_objective_name, iteration);
+
+  // Set the objective function components comparison results in the reporter
+  buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+
+  // No need to call the domainConstraints function
+}
+
+void
 DiscreteOptimizationTransfer::assignMesh(
     const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize, MooseMesh & mesh)
 {
-  // elements owned by the processor (processor tag on it): active_local_element_ptr_range()
+  // elements owned by the processor (processor tag on it):
+  // active_local_element_ptr_range()
   for (auto & elem : mesh.getMesh().active_local_element_ptr_range())
   {
     auto p = pairs_to_optimize.find(elem->id());
     if (p != pairs_to_optimize.end())
       elem->subdomain_id() = p->second;
   }
-  // _to_problems[0]->mesh().reinit();
-  // _to_problems[0]->es().reinit();
-  // _to_problems[0]->mesh().prepare();
-  // mesh.prepare();
 
-  // We've performed some mesh adaptivity. We need to
-  // clear any quadrature nodes such that when we build the boundary node lists in
-  // MooseMesh::meshChanged we don't have any extraneous extra boundary nodes lying around
-  // mesh.clearQuadratureNodes();
-  // mesh.meshChanged();
-  // _to_problems[0]->mesh().clearQuadratureNodes();
-
-  // _to_problems[0]->mesh().meshChanged();
+  // Chaning the mesh and updating it
   mesh.meshChanged();
-  mesh.update();
 
-  // _to_problems[0]->mesh().update();
-  // _to_problems[0]->mesh().meshChanged();
+  std::cout << "*** Mesh Updated Successfully! ***\n\n";
+}
 
-  std::cout << "*** Mesh Updated Successfully! ***" << std::endl << std::endl;
+void
+DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & objective_name,
+                                                  const dof_id_type & iteration)
+{
+
+  // Logging
+  std::cout << "Starting objectiveFunctionPP with objective_name = " << objective_name
+            << " and iteration = " << iteration << "\n";
+
+  /// 📝 @TODO: Allow several apps as found in "SamplerPostprocessorTransfer::executeFromMultiapp()"
+  // Retrieve the FEProblemBase instance
+  FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
+
+  // Get the value of the objective function 🎯
+  PostprocessorValue objective_information;
+  objective_information = app_problem.getPostprocessorValueByName(objective_name);
+
+  // Logging
+  std::cout << "Got objective result = " << objective_information << "\n";
+
+  // Set the value in the reporter allowing for the optimizer to get it
+  _reporter->setObjectiveInformation(objective_information, iteration);
+
+  // Logging
+  std::cout << "Finished setting objective information for iteration " << iteration << "\n\n";
+}
+
+void
+DiscreteOptimizationTransfer::buildAndComparePP(
+    const std::vector<PostprocessorName> & constraints_names,
+    const std::vector<PostprocessorValue> & constraints_values,
+    const std::vector<std::string> & inequality_operators,
+    const dof_id_type & iteration)
+{
+
+  // Check that the constraints names and values vectors match in size
+  if (constraints_names.size() != constraints_values.size() ||
+      constraints_names.size() != inequality_operators.size())
+  {
+    throw std::runtime_error(
+        "Mismatched vector sizes! Please revise the sizes of your input constraints vectors.");
+  }
+
+  /// 📝 @TODO: Allow several apps as found in "SamplerPostprocessorTransfer::executeFromMultiapp()"
+
+  // Retrieve the FEProblemBase instance
+  FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
+
+  // Build the pp_map using getPostprocessorValueByName method from the app_problem
+  std::map<PostprocessorName, PostprocessorValue> pp_map;
+  for (const auto & name : constraints_names)
+  {
+    pp_map[name] = app_problem.getPostprocessorValueByName(name);
+  }
+
+  // Build the constraints_map and inequality_operators_map
+  std::map<PostprocessorName, PostprocessorValue> constraints_map;
+  std::map<PostprocessorName, std::string> inequality_operators_map;
+  for (std::size_t i = 0; i < constraints_names.size(); i++)
+  {
+    constraints_map[constraints_names[i]] = constraints_values[i];
+    inequality_operators_map[constraints_names[i]] = inequality_operators[i];
+  }
+
+  // Call the comparePP function and store its results as boolean
+  std::vector<bool> comparison_results =
+      comparePP(pp_map, constraints_map, inequality_operators_map);
+
+  // Now we can use comparison_results internally in the buildAndComparePP function
+  printComparisonTable(comparison_results, pp_map, constraints_map, constraints_names, iteration);
+
+  // // For example, let us print the results:
+  // for (std::size_t i = 0; i < comparison_results.size(); i++)
+  // {
+  //   PostprocessorName constraint_name = constraints_names[i];
+  //   std::cout << "Constraint " << constraint_name
+  //             << " passed: " << std::boolalpha // to print true or false and not 1 or 0.
+  //             << comparison_results[i] << std::endl;
+  // }
+
+  // // Print the maps for debugging, some good visuals, and to follow the process
+  // std::cout << "Postprocessor values:" << std::endl;
+  // printMap(pp_map);
+  // std::cout << "Constraint values:" << std::endl;
+  // printMap(constraints_map);
+
+  // Now we pass the comparison results to the reporter for further actions
+  _reporter->setConstraintsComparisonInformation(comparison_results);
+}
+
+std::vector<bool>
+DiscreteOptimizationTransfer::comparePP(
+    const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
+    const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
+    const std::map<PostprocessorName, std::string> & inequality_operators)
+{
+
+  std::vector<bool> results;
+
+  // Loop over the constraint values
+  for (const auto & constraint_entry : constraints_values)
+  {
+    const auto & constraint_name = constraint_entry.first;
+    auto constraint_value = constraint_entry.second;
+
+    // Check if there's a corresponding postprocessor value
+    auto pp_iter = postprocessors_values.find(constraint_name);
+    if (pp_iter == postprocessors_values.end())
+    {
+      throw std::runtime_error("Missing postprocessor value for " + constraint_name +
+                               "! Please check your input and try again.");
+    }
+    auto pp_value = pp_iter->second;
+
+    // Check if there's a corresponding inequality operator
+    auto inequality_iter = inequality_operators.find(constraint_name);
+    if (inequality_iter == inequality_operators.end())
+    {
+      throw std::runtime_error("Missing inequality operator for " + constraint_name +
+                               "! Please check your input and try again.");
+    }
+    auto inequality = inequality_iter->second;
+
+    // Perform the comparison based on the inequality operator
+    if (inequality == "<")
+    {
+      results.push_back(pp_value < constraint_value);
+    }
+    else if (inequality == ">")
+    {
+      results.push_back(pp_value > constraint_value);
+    }
+    else if (inequality == "<=")
+    {
+      results.push_back(pp_value <= constraint_value);
+    }
+    else if (inequality == ">=")
+    {
+      results.push_back(pp_value >= constraint_value);
+    }
+    else
+    {
+      throw std::runtime_error("Unknown inequality operator for " + constraint_name + ": " +
+                               inequality +
+                               "! Please use the following inequalities only: >, <, >=, <= ");
+    }
+  }
+
+  // The results vector will be cleared everytime we log into this function, no need for clear() if
+  // I correctly understand.
+  return results;
+}
+
+void
+DiscreteOptimizationTransfer::printComparisonTable(
+    const std::vector<bool> & comparison_results,
+    const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
+    const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
+    const std::vector<PostprocessorName> & constraints_names,
+    const dof_id_type & iteration)
+{
+  std::cout << "+----------------------------+------------------+------------------+---------+"
+            << std::endl;
+  std::cout << "| " << std::setw(77) << std::left << "iteration " << iteration << " |" << std::endl;
+  std::cout << "+----------------------------+------------------+------------------+---------+"
+            << std::endl;
+  std::cout << "| " << std::setw(26) << std::left << "Constraint Name"
+            << " | " << std::setw(16) << "PP Value"
+            << " | " << std::setw(14) << "Constraint Value"
+            << " | " << std::setw(7) << "Result"
+            << " |" << std::endl;
+  std::cout << "+----------------------------+------------------+------------------+---------+"
+            << std::endl;
+  for (std::size_t i = 0; i < comparison_results.size(); i++)
+  {
+    PostprocessorName constraint_name = constraints_names[i];
+    PostprocessorValue pp_value = postprocessors_values.at(constraint_name);
+    PostprocessorValue constraint_value = constraints_values.at(constraint_name);
+    std::cout << "| " << std::setw(26) << std::left << constraint_name << " | " << std::setw(16)
+              << pp_value << " | " << std::setw(14) << constraint_value << " | " << std::setw(7)
+              << std::boolalpha << comparison_results[i] << " |" << std::endl;
+  }
+  std::cout << "+----------------------------+------------------+------------------+---------+"
+            << std::endl;
+}
+
+void
+DiscreteOptimizationTransfer::domainConstraints(const std::vector<std::string> & domain_constraints)
+{
+  // Create a set of allowed constraints
+  std::set<std::string> allowed_constraints = {
+      "moderator_at_boundaries", "volume_preserved", "neighbour_same_type"};
+
+  // Check if the vector is empty
+  if (domain_constraints.empty())
+  {
+    std::cout << "No domain constraints provided.\n";
+  }
+  else
+  {
+    // Print the domain constraints
+    std::cout << "Domain Constraints: \n";
+    for (const auto & constraint : domain_constraints)
+    {
+      // Check if the constraint is allowed
+      if (allowed_constraints.find(constraint) == allowed_constraints.end())
+      {
+        // If the constraint is not allowed, print an error message
+        mooseError(
+            "Error: Invalid domain constraint '",
+            constraint,
+            "'. Current allowed constraints are 'moderator_at_boundaries', 'volume_preserved', "
+            "and 'neighbour_same_type'.");
+      }
+
+      // If the constraint is allowed, print it
+      std::cout << constraint << std::endl;
+    }
+  }
+
+  // Set the domain constraints in the reporter object
+  _reporter->setDomainConstraints(domain_constraints);
+}
+
+void
+DiscreteOptimizationTransfer::printMap(const std::map<PostprocessorName, PostprocessorValue> & map)
+{
+  if (map.empty())
+  {
+    std::cout << "The map you would like to print is empty! " << std::endl;
+    return;
+  }
+
+  // Find the longest key to calculate the width of the output
+  std::size_t max_key_length = 0;
+  for (const auto & pair : map)
+  {
+    if (pair.first.size() > max_key_length)
+    {
+      max_key_length = pair.first.size();
+    }
+  }
+
+  // Create a format string for the output
+  // The width of the first column is max_key_length + 4, to add some padding
+  std::string format = "%-" + std::to_string(max_key_length + 4) + "s %f\n";
+
+  // Print the contents of the map
+  for (const auto & pair : map)
+  {
+    printf(format.c_str(), pair.first.c_str(), pair.second);
+  }
+}
+
+void
+DiscreteOptimizationTransfer::printMeshElements(MooseMesh & mesh)
+{
+  // Loop over elements
+  for (auto & elem : mesh.getMesh().active_local_element_ptr_range())
+  {
+    std::cout << "Element ID: " << std::setw(7) << std::left << elem->id()
+              << " Material ID: " << std::setw(7) << std::left << elem->subdomain_id() << "\n";
+  }
+  std::cout << std::endl;
+}
+
+void
+DiscreteOptimizationTransfer::processAndVerifyMesh(MooseMesh & mesh)
+{
+  std::cout << "\nObtaining and verifying the mesh before post-processing...\n\n";
+
+  std::cout << "Verifying if the materials utilized in the problem match those allowed for "
+               "optimization\n";
+  _reporter->isMaterialAllowed(mesh);
+
+  std::cout << "\nAcquiring the first-mesh domain elements and subdomain IDs\n";
+  _reporter->setInitialCondition(mesh);
+
+  std::cout << "\nSuccessful acquisition of the domain! The Discrete Optimization reporter now has "
+               "the initial mesh information!\n\n";
 }

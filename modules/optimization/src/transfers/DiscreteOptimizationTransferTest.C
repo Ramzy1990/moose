@@ -216,8 +216,8 @@ DiscreteOptimizationTransferTest::execute()
       // different from the cost function constraints (TODO)!
       // TODO: Add specifics for the elements on the boundary if needed.
 
-      if (_it_transfer == 10)
-        exit(EXIT_SUCCESS);
+      // if (_it_transfer == 10)
+      //   exit(EXIT_SUCCESS);
 
       break;
     }
@@ -424,7 +424,6 @@ DiscreteOptimizationTransferTest::assignMesh(
 
   // _to_problems[0]->mesh().meshChanged();
   mesh.meshChanged();
-  mesh.update();
 
   // _to_problems[0]->mesh().update();
   // _to_problems[0]->mesh().meshChanged();

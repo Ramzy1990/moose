@@ -19,22 +19,6 @@
 //*********************
 registerMooseObject("OptimizationApp", DiscreteOptimizationReporter);
 
-std::vector<VectorPostprocessorName>
-DiscreteOptimizationReporter::getVectorNamesHelper(const std::string & prefix,
-                                                   const std::vector<PostprocessorName> & pp_names)
-{
-  std::vector<VectorPostprocessorName> vec_names;
-  vec_names.reserve(pp_names.size());
-  for (const auto & pp_name : pp_names)
-  {
-    if (!prefix.empty())
-      vec_names.push_back(prefix + ":" + pp_name);
-    else
-      vec_names.push_back(pp_name);
-  }
-  return vec_names;
-}
-
 //*************************
 // Adding Input Parameters
 //*************************
@@ -210,9 +194,9 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
     if (_assign_type == "manual")
     {
 
-      std::cout << std::endl;
-      std::cout << std::endl;
-      std::cout << "***Discrete Optimization Class: Manual MainApp Test Mode***" << std::endl;
+      std::cout << std::endl
+                << std::endl
+                << "***Discrete Optimization Class: Manual MainApp Test Mode***" << std::endl;
       for (subdomain_id_type & element : _allowed_parameter_values)
       {
         if (element == _initial_material_used)
@@ -234,8 +218,8 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
     }
     else // For automatic insertion using the generated mesh.
     {
-      std::cout << std::endl;
-      std::cout << "***Discrete Optimization Class: Automated MainApp Test Mode***" << std::endl;
+      std::cout << std::endl
+                << "***Discrete Optimization Class: Automated MainApp Test Mode***" << std::endl;
 
       for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
       {
@@ -256,8 +240,7 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
 
   if (_fe_problem.hasMultiApps())
   {
-    std::cout << std::endl;
-    std::cout << "***Discrete Optimization Class: SubApp Mode***" << std::endl;
+    std::cout << "***Discrete Optimization Reporter: SubApp Mode***" << std::endl;
 
     // This could be better if it is checking for materials names.
 
@@ -274,7 +257,7 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
                    "Please check your input file");
       }
     }
-    std::cout << "Verification done successfully!... " << std::endl;
+    std::cout << "Verification done successfully!... " << std::endl << std::endl;
   }
 }
 
@@ -315,45 +298,39 @@ DiscreteOptimizationReporter::execute()
 void
 DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mesh)
 {
-
   std::cout << "Assigning the elements and subdomains ids to their respective map from the mesh..."
-            << std::endl;
-  std::cout << "***Elements ids are your key, while subdomain ids are the respective values***"
+            << std::endl
+            << "***Elements ids are your key, while subdomain ids are the respective values***"
             << std::endl;
 
-  // Loop over elements in the mesh
-  if (!_fe_problem.hasMultiApps())
+  // Check the multi-app condition before the loop to avoid checking it for each element
+  bool is_multi_apps = _fe_problem.hasMultiApps();
+
+  // Clear previous assignments for pairs_to_optimize
+  _pairs_to_optimize.clear();
+
+  for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
   {
-    for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
-    // for (auto & elem : _mesh.getMesh().elem_ptr())
+    // Always add the pairs to optimize
+    _pairs_to_optimize.insert(
+        std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
+
+    // Only add to elements_to_optimize and subdomains_to_optimize if not multiApps
+    if (!is_multi_apps)
     {
       _elements_to_optimize.push_back(elem->id());
       _subdomains_to_optimize.push_back(elem->subdomain_id());
-      _pairs_to_optimize.insert(
-          std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
     }
-    std::cout << std::endl;
-    std::cout << "Assignment done successfully!" << std::endl;
-    std::cout << std::endl;
   }
 
-  // Loop over elements in the subapp mesh and get the domain
-  if (_fe_problem.hasMultiApps())
+  // Print a success message based on the mode
+  if (is_multi_apps)
   {
-    _pairs_to_optimize
-        .clear(); // Clear the map before populating it again. This is becuase if the keys are the
-                  // same, then the values will stay as they are! The code then will use the same
-                  // pairs as we previously used even when the mesh is different!
-
-    for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
-    // for (auto & elem : _mesh.getMesh().elem_ptr())
-    {
-      // _elements_to_optimize.push_back(elem->id());
-      // _subdomains_to_optimize.push_back(elem->subdomain_id());
-      _pairs_to_optimize.insert(
-          std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
-    }
-    std::cout << "Assignment done successfully! ..." << std::endl;
+    std::cout << "Assignment done successfully for MultiApp case!..." << std::endl;
+  }
+  else
+  {
+    std::cout << "Assignment done successfully for Testing case!" << std::endl;
   }
 }
 
@@ -361,72 +338,48 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
 void
 DiscreteOptimizationReporter::setInitialCondition(const MooseMesh & domain_mesh)
 {
-
   if (!_fe_problem.hasMultiApps())
   {
-
-    std::cout << std::endl;
     std::cout << "Initializing the domain..." << std::endl;
-    std::cout << std::endl;
 
-    // For manual insertion, for testing purposes, use general loop element.
-    // Initialization is also done based on the data read and not the current mesh.
     if (_assign_type == "manual")
     {
-      std::cout << std::endl;
       std::cout << "Manually initializing the domain using the test file information and random "
                    "numbers..."
                 << std::endl;
-      std::cout << std::endl;
 
-      // Loop to add elements to our map vector given the number of elements
       for (dof_id_type i = 0; i < _total_cells; ++i)
       {
-
-        // for testing purposes, it does not matter what is the element id.
         _initial_elements_to_optimize.push_back(i);
-
         _initial_subdomains_to_optimize.push_back(_initial_material_used);
-
         _initial_pairs_to_optimize.insert(std::pair<dof_id_type, subdomain_id_type>(
             _initial_elements_to_optimize.back(), _initial_subdomains_to_optimize.back()));
-
         _pairs_to_optimize.insert(std::pair<dof_id_type, subdomain_id_type>(
             _initial_elements_to_optimize.back(), _initial_subdomains_to_optimize.back()));
       }
     }
     else
     {
-      std::cout << std::endl;
       std::cout << "Initializing the domain using the supplied mesh..." << std::endl;
-      std::cout << std::endl;
 
-      getOptimizationDomain(domain_mesh); // get the current optimization domain mesh.
+      getOptimizationDomain(domain_mesh);
 
-      // The initialization is done such that we have two vectors, one for the initial
-      // (eventually the previous domain), and one for the current domain.
       _initial_elements_to_optimize = _elements_to_optimize;
       _initial_subdomains_to_optimize = _subdomains_to_optimize;
       _initial_pairs_to_optimize = _pairs_to_optimize;
     }
-  } // if (!_fe_problem.hasMultiApps())
+  }
 
   if (_fe_problem.hasMultiApps())
   {
-    std::cout << std::endl
-              << "*** Discrete Otpimization Reporter: SubApp supplied mesh initialization ***"
+    std::cout << "*** Discrete Optimization Reporter: SubApp supplied mesh initialization ***"
               << std::endl;
-    getOptimizationDomain(domain_mesh); // get the current optimization domain mesh.
 
-    // The initialization is done such that we have two vectors, one for the initial
-    // (eventually the previous domain), and one for the current domain.
-    // Hence maybe we can call the initilaization as the previousization! :)
-    // _initial_elements_to_optimize = _elements_to_optimize;
-    // _initial_subdomains_to_optimize = _subdomains_to_optimize;
+    getOptimizationDomain(domain_mesh);
+
     _initial_pairs_to_optimize = _pairs_to_optimize;
 
-    std::cout << std::endl
-              << "After initialization, the domain pairs to optimize are:" << std::endl;
+    std::cout << "After initialization, the domain pairs to optimize are:" << std::endl;
     printMap(_pairs_to_optimize);
   }
 }
@@ -776,7 +729,7 @@ DiscreteOptimizationReporter::updateSubdomainID(
         }
       }
       // std::cout << "End of iteration. Current temperature: " << current_temperature << "\n\n";
-      // TODO: We can eventually separate the methods into ones for testing and ones for release.
+      /// 📝 @TODO: We can eventually separate the methods into ones for testing and ones for release.
 
       // Cool down the temperature
       // current_temperature *= cooling_rate;
@@ -908,51 +861,90 @@ DiscreteOptimizationReporter::costFunction(
   return total_cost;
 }
 
+// set the constraints information in the reporter.
+void
+DiscreteOptimizationReporter::setConstraintsComparisonInformation(
+    const std::vector<bool> & comparison_results)
+{
+  // Here we set the class variable constraints_information to get it by the optimizer
+  _constraints_information = comparison_results;
+
+  // We could use the iteration number if needed, so we pass it as well.
+}
+
+std::vector<bool>
+DiscreteOptimizationReporter::getConstraintsComparisonInformation() const
+{
+  return _constraints_information;
+}
+
+void
+DiscreteOptimizationReporter::setObjectiveInformation(
+    const PostprocessorValue & objective_information, const dof_id_type & iteration)
+{
+  // Logging
+  std::cout << "Setting objective information with objective_information = "
+            << objective_information << " and iteration = " << iteration << std::endl;
+
+  // Set the objective information for this iteration
+  _objective_result = objective_information;
+}
+
+PostprocessorValue
+DiscreteOptimizationReporter::getObjectiveInformation() const
+{
+  return _objective_result;
+}
+
+// set the constraints information in the reporter.
+void
+DiscreteOptimizationReporter::setDomainConstraints(
+    const std::vector<std::string> & domain_constraints)
+{
+  // Here we set the class variable domain_constraints to get it by the optimizer
+  _domain_constraints = domain_constraints;
+}
+
+std::vector<std::string>
+DiscreteOptimizationReporter::getDomainConstraints() const
+{
+  return _domain_constraints;
+}
+
 void
 DiscreteOptimizationReporter::printCurrentDomain(const dof_id_type & iteration)
 {
+  std::ofstream file;
+  std::string fileName;
+  std::string directoryPath =
+      "/home/ramzy/projects/moose/modules/combined/test/tests/DiscreteOptimization/";
 
-  if (iteration == 1)
+  fileName = "Current_Domain.txt";
+
+  // Open the file. Use std::ios::app to append to existing file
+  file.open(directoryPath + fileName, std::ios::app);
+
+  // If the file can not be opened, log an error message and return
+  if (!file.is_open())
   {
-    std::ofstream file_Initial;
-
-    // Open the file
-    file_Initial.open("Initial_Domain.txt");
-
-    // Check if file has been opened correctly
-    if (!file_Initial)
-    {
-      std::cerr << "Failed to open file.\n";
-      return;
-    }
-
-    // Print the updated map
-    file_Initial << "The Initial map is..." << std::endl;
-    for (const auto & pair : _initial_pairs_to_optimize)
-    {
-      file_Initial << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-    }
-
-    // close the file
-    file_Initial.close();
+    std::cout << "Failed to open file at path: " << directoryPath + fileName << std::endl;
+    return;
   }
-  else if (iteration > 1)
+
+  // Print a separator with iteration number
+  file << "Iteration " << iteration << ":" << std::endl;
+
+  // Print the map
+  for (const auto & pair : _pairs_to_optimize)
   {
-    std::ofstream file;
-
-    // Open the file
-    file.open("Current_Domain.txt");
-
-    // Print the updated map
-    file << "The Current map for iteration " << iteration << " is:" << std::endl;
-    for (const auto & pair : _pairs_to_optimize)
-    {
-      file << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
-    }
-
-    // close the file
-    file.close();
+    file << "Key: " << std::setw(6) << std::left << pair.first << ", Value: " << pair.second
+         << std::endl;
   }
+
+  file << "-------------------------------------------------------" << std::endl;
+
+  // Close the file
+  file.close();
 }
 
 void
@@ -992,6 +984,9 @@ DiscreteOptimizationReporter::printMap(
   std::ostringstream keysStream;
   std::ostringstream valuesStream;
 
+  // Limit on number of elements to print.
+  const std::size_t printLimit = 10;
+
   // Find the length of the longest element ID
   int max_length = 0;
   for (const auto & pair : pairs_to_optimize)
@@ -1004,10 +999,22 @@ DiscreteOptimizationReporter::printMap(
   }
 
   // Now print the element IDs and subdomain IDs with appropriate spacing
+  std::size_t count = 0;
   for (const auto & pair : pairs_to_optimize)
   {
-    keysStream << std::setw(max_length) << pair.first << " ";
-    valuesStream << std::setw(max_length) << pair.second << " ";
+    // Only print up to the limit at the start and end of the map.
+    if (count < printLimit || count >= pairs_to_optimize.size() - printLimit)
+    {
+      keysStream << std::setw(max_length) << pair.first << " ";
+      valuesStream << std::setw(max_length) << pair.second << " ";
+    }
+    else if (count == printLimit)
+    {
+      // Indicate that some elements were omitted.
+      keysStream << "... ";
+      valuesStream << "... ";
+    }
+    ++count;
   }
 
   std::cout << "Element IDs:  " << keysStream.str() << std::endl;

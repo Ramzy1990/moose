@@ -15,6 +15,10 @@
 // class FEProblemBase;
 // class MooseMesh;
 
+/// 📝 @TODO: Remove unnecessary comments
+/// 📝 @TODO: Add describtion to each function
+/// 📝 @TODO: Revise the functions in the reporter to polish it up 👍
+
 /**
  * Contains reporters for communicating between optimizeSolveDiscrete and subapps. Methods
  * in OptimizeSolve is gradient-free (derivastive-free). Currently it includes TAO POUNDERS
@@ -31,15 +35,6 @@ public:
   static InputParameters validParams();
 
   DiscreteOptimizationReporter(const InputParameters & parameters);
-
-  /**
-   * Function to help in getting the domain's post processed results names.
-   * @param[in] prefix: Use the supplied string as the prefix for vector postprocessor name
-   * @param[in] pp_names: The post prcessors names as supplied from the subapps.
-   * to print.
-   */
-  std::vector<VectorPostprocessorName>
-  getVectorNamesHelper(const std::string & prefix, const std::vector<PostprocessorName> & pp_names);
 
   // void initialize() override {}
   // void execute() override {}
@@ -66,12 +61,46 @@ public:
                          const MooseMesh & domain_mesh);
 
   /**
-   * Function to bring in the post process results of the mesh to the reporter for it to pass it to
-   * the optimizer.
+   * Function to bring in the postprocessing comparison results of the mesh to the reporter for it
+   * to pass it to the optimizer.
    * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
    * Transfer class.
    */
   void setDomainPostProcessInformation(const dof_id_type & iteration);
+
+  /**
+   * Function to set the constraints comparison results in the reporter.
+   * @param[in] comparison_results: a boolean vector that holds the comaprison results.
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void setConstraintsComparisonInformation(const std::vector<bool> & comparison_results);
+
+  /**
+   * Function to get the constraints comparison results from the reporter.
+   */
+  std::vector<bool> getConstraintsComparisonInformation() const;
+
+  /**
+   * Function to set the objective function value in the reporter.
+   * @param[in] objective_value: the value of the objective function 🎯 for the optimizer
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
+   * Transfer class.
+   */
+  void setObjectiveInformation(const PostprocessorValue & objective_result,
+                               const dof_id_type & iteration);
+
+  /**
+   * Function to get the constraints comparison results from the reporter.
+   */
+  PostprocessorValue getObjectiveInformation() const;
+
+  void setDomainConstraints(const std::vector<std::string> & domain_constraints);
+
+  /**
+   * Function to get the domain constraints from the reporter.
+   */
+  std::vector<std::string> getDomainConstraints() const;
 
   /**
    * Function to printout the domain mesh and information to a file
@@ -101,6 +130,9 @@ public:
              std::map<dof_id_type, subdomain_id_type> &>
   getMeshParameters();
 
+  //
+  //
+  //
   //
   //
   //
@@ -170,6 +202,9 @@ protected:
   //
   //
   //
+  //
+  //
+  //
   //************************
   // Variables Declarations
   //************************
@@ -232,6 +267,15 @@ protected:
   /// mapping between elements and subdomains. /// the current elem->subdomain assignment
   std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
 
+  /// @brief The constraints infromation as we got it from the discrete transfer, and to pass it to the optimizer
+  std::vector<bool> _constraints_information;
+
+  /// @brief The objective infromation as we got it from the discrete transfer, and to pass it to the optimizer
+  PostprocessorValue _objective_result;
+
+  /// @brief The domain constraints infromation as we got it from the discrete transfer, and to pass it to the optimizer
+  std::vector<std::string> _domain_constraints;
+
   /// pairing between subdomains_ids and their names
   /// use getSubdomainNames in a function with ->first and ->second
   // std::map<SubdomainID, SubdomainName> _subdomain_id_to_name;
@@ -255,6 +299,9 @@ private:
   //************************
   // Nothing to see here
 
+  //
+  //
+  //
   //
   //
   //

@@ -1,5 +1,5 @@
-[Optimization]
-[]
+# [Optimization]
+# []
 
 [Problem]
   solve = false
@@ -27,6 +27,7 @@
     number_of_elements = 12
     allowed_mateirals = '1 2'
     outputs = "none"
+    # pp = objective
     # execute_on = "ALWAYS"
   []
   #   [test123]
@@ -37,13 +38,13 @@
 
 [Executioner]
   type = Transient
-  num_steps = 10
+  num_steps = 100
   # dt = 0.1
   # solve_type = PJFNK
   # nl_abs_tol = 1e-6
-  nl_rel_tol = 1e-8
-  petsc_options_iname = '-pc_type'
-  petsc_options_value = 'lu'
+  # nl_rel_tol = 1e-8
+  # petsc_options_iname = '-pc_type'
+  # petsc_options_value = 'lu'
 []
 
 # [Problem]
@@ -88,11 +89,13 @@
 [Transfers]
   #active = ''
   [toforward]
+    # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransferTest
     to_multi_app = forward
     user_object = 'discrete_reporter'
   []
   [fromforward]
+    # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransferTest
     from_multi_app = forward
     user_object = 'discrete_reporter'
