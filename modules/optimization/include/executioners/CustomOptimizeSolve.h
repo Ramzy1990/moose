@@ -9,27 +9,90 @@
 
 #pragma once
 
+// Moose Includes
 #include "SolveObject.h"
 #include "ExecFlagEnum.h"
 
+// Forward Declarations If Any
+class DiscreteOptimizationReporter;
 class OptimizationReporterBase;
 class CustomOptimizationAlgorithm;
 class SimulatedAnnealingAlgorithm;
+
 /**
- *
+ * Contains methods for communicating between DiscreteOptimizationReporter and optimizers.
  */
+
 class CustomOptimizeSolve : public SolveObject
 {
 public:
+  //************************
+  // Functions Declarations
+  //************************
+
   static InputParameters validParams();
   CustomOptimizeSolve(Executioner & ex);
 
   virtual bool solve() override;
 
   OptimizationReporterBase & getOptimizationReporter() const { return *_obj_function; }
+  DiscreteOptimizationReporter & getDiscreteOptimizationReporter() const { return *_reporter; }
   // const std::vector<Real> & getRealParameters() const { return _real_parameters; }
 
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //************************
+  // Variables Declarations
+  //************************
+  // Nothing to see here
+
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+
 protected:
+  //************************
+  // Functions Declarations
+  //************************
+
+  static void objectiveFunctionWrapper(Real & objective,
+                                       const std::vector<Real> & rparams,
+                                       const std::vector<int> & iparams,
+                                       void * ctx);
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //************************
+  // Variables Declarations
+  //************************
+
+  /// @brief Object of the reporter class we are using
+  DiscreteOptimizationReporter * _reporter;
+
+  /// @brief Vector to hold the objective function value (assuming it has many components among different MultiApps)
+  // std::vector<PostprocessorValue> & _objective_function_vector;
+
+  /// @brief Variable to hold the objective function value
+  // PostprocessorValue _objective_function_value;
+
+  /// @brief Vector to hold the constraints results
+  std::vector<bool> _constraints_reults;
+
+  /// @brief Vector to hold the domain's constraints results
+  std::vector<std::string> _domain_constraints;
+
+  /// objective function defining objective, gradient, and hessian
+  OptimizationReporterBase * _obj_function = nullptr;
+
   /// Communicator used for operations
   const libMesh::Parallel::Communicator _my_comm;
 
@@ -43,18 +106,28 @@ protected:
   // std::unique_ptr<MooseMesh> _mesh;
   std::unique_ptr<CustomOptimizationAlgorithm> _opt_alg;
 
-  /// objective function defining objective, gradient, and hessian
-  OptimizationReporterBase * _obj_function = nullptr;
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
 
 private:
-  ///@{
-  /// Function wrappers for tao
-  static void objectiveFunctionWrapper(Real & objective,
-                                       const std::vector<Real> & rparams,
-                                       const std::vector<int> & iparams,
-                                       void * ctx);
-  ///@}
+  //************************
+  // Functions Declarations
+  //************************
 
-  // std::vector<Real> _real_parameters;
-  // unsigned int _ndof;
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //************************
+  // Variables Declarations
+  //************************
+  // Nothing to see here
+
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
+  //****************************************************************************************************************************//
 };

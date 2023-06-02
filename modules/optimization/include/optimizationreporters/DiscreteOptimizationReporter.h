@@ -61,12 +61,15 @@ public:
                          const MooseMesh & domain_mesh);
 
   /**
-   * Function to bring in the postprocessing comparison results of the mesh to the reporter for it
-   * to pass it to the optimizer.
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
+   * Function to set in the optimization results of the mesh to the reporter.
+   * @param[in] pairs_optimized: the domain's mesh optimized by the optimizer
    */
-  void setDomainPostProcessInformation(const dof_id_type & iteration);
+  void setMeshDomain(std::map<dof_id_type, subdomain_id_type> & pairs_optimized);
+
+  /**
+   * Function to get the mesh domain from the reporter
+   */
+  std::map<dof_id_type, subdomain_id_type> getMeshDomain() const;
 
   /**
    * Function to set the constraints comparison results in the reporter.
@@ -271,7 +274,7 @@ protected:
   std::vector<bool> _constraints_information;
 
   /// @brief The objective infromation as we got it from the discrete transfer, and to pass it to the optimizer
-  PostprocessorValue _objective_result;
+  Real _objective_result;
 
   /// @brief The domain constraints infromation as we got it from the discrete transfer, and to pass it to the optimizer
   std::vector<std::string> _domain_constraints;

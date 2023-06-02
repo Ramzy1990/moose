@@ -230,7 +230,11 @@
       "random": "cpp",
       "MultiApp.C": "cpp",
       "AuxKernel.C": "cpp",
-      "VectorPostprocessorAux.C": "cpp"
+      "VectorPostprocessorAux.C": "cpp",
+      "TraceRay.C": "cpp",
+      "RayTracingStudy.C": "cpp",
+      "FlowChannel1Phase.C": "cpp",
+      "CustomOptimizeSolve.C": "cpp"
     }
   }
 }

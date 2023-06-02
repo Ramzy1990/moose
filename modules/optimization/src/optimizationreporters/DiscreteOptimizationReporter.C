@@ -948,24 +948,20 @@ DiscreteOptimizationReporter::printCurrentDomain(const dof_id_type & iteration)
 }
 
 void
-DiscreteOptimizationReporter::setDomainPostProcessInformation(const dof_id_type & iteration)
+DiscreteOptimizationReporter::setMeshDomain(
+    std::map<dof_id_type, subdomain_id_type> & pairs_optimized)
 {
 
-  if (iteration == 1)
-  {
-  }
-  else if (iteration > 1)
-  {
-  }
-
-  return;
+  // Here we set the class variables _initial_pairs_to_optimize and _pairs_to_optimize to get it by
+  // the transfer when needed
+  _initial_pairs_to_optimize = _pairs_to_optimize;
+  _pairs_to_optimize = pairs_optimized;
 }
 
-void
-DiscreteOptimizationReporter::updateMeshDomain(
-    const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize)
+std::map<dof_id_type, subdomain_id_type>
+DiscreteOptimizationReporter::getMeshDomain() const
 {
-
+  // Nothing to do here I guess?
   return;
 }
 

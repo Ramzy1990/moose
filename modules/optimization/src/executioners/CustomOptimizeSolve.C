@@ -10,6 +10,7 @@
 #include "CustomOptimizeSolve.h"
 #include "OptimizationAppTypes.h"
 #include "OptimizationReporterBase.h"
+#include "DiscreteOptimizationReporter.h" // declared in the header file
 #include "CustomOptimizationAlgorithm.h"
 #include "SimulatedAnnealingAlgorithm.h"
 
@@ -18,6 +19,7 @@ CustomOptimizeSolve::validParams()
 {
   InputParameters params = emptyInputParameters();
   ExecFlagEnum exec_enum = ExecFlagEnum();
+
   exec_enum.addAvailableFlags(EXEC_NONE,
                               OptimizationAppTypes::EXEC_FORWARD,
                               OptimizationAppTypes::EXEC_ADJOINT,
@@ -31,6 +33,13 @@ CustomOptimizeSolve::validParams()
   MooseEnum custom_optimizer_type("simulated_annealing", "simulated_annealing");
   params.addParam<MooseEnum>(
       "custom_optimizer_type", custom_optimizer_type, "The optimization algorithm.");
+
+  // DiscreteOptimizationReporter user object
+  params.addRequiredParam<UserObjectName>("reporter_user_object",
+                                          "The Reporter UserObject you want to transfer values "
+                                          "from.  Note: This might be a UserObject from "
+                                          "your MultiApp's input file!");
+
   return params;
 }
 
@@ -52,6 +61,15 @@ bool
 CustomOptimizeSolve::solve()
 {
   TIME_SECTION("CustomOptimizeSolve", 1, "Custom optimization solve");
+
+  // // _reporter = &_problem.getUserObject<DiscreteOptimizationReporter>(
+  // //     getParam<UserObjectName>("reporter_user_object"));
+
+  _reporter = &_problem.getUserObject<DiscreteOptimizationReporter>("reporter_user_object");
+  // _objective_function_value = _reporter->getObjectiveInformation();
+  _constraints_reults = _reporter->getConstraintsComparisonInformation();
+  _domain_constraints = _reporter->getDomainConstraints();
+
   // Initial solve
   _inner_solve->solve();
 
@@ -87,9 +105,9 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
                                               void * ctx)
 {
   auto * solver = static_cast<CustomOptimizeSolve *>(ctx);
-  solver->getOptimizationReporter().updateParameters(iparams, rparams);
-  objective =
-      solver->getOptimizationReporter().computeObjective(); // call actual objective function here
+  solver->getDiscreteOptimizationReporter().updateParameters(iparams, rparams);
+  objective = solver->getDiscreteOptimizationReporter()
+                  .getObjectiveInformation(); // call actual objective function here
 
   std::cout << rparams[0] << " " << rparams[1] << " " << objective << std::endl;
 }
