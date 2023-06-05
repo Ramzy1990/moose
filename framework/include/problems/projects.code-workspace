@@ -234,7 +234,22 @@
       "TraceRay.C": "cpp",
       "RayTracingStudy.C": "cpp",
       "FlowChannel1Phase.C": "cpp",
-      "CustomOptimizeSolve.C": "cpp"
+      "CustomOptimizeSolve.C": "cpp",
+      "ADRayKernel.C": "cpp",
+      "RayKernel.C": "cpp",
+      "CoupledVariableValueMaterial.C": "cpp",
+      "SimulatedAnnealingAlgorithm.C": "cpp",
+      "CustomOptimizationAlgorithm.C": "cpp",
+      "TerminateControl.C": "cpp",
+      "Simulation.C": "cpp",
+      "GaussianProcess.C": "cpp",
+      "GaussianProcessHandler.C": "cpp",
+      "TravelingSalesmanUO.C": "cpp",
+      "OptimizationInfo.C": "cpp",
+      "CustomOptimize.C": "cpp",
+      "LevelSetOlssonTerminator.C": "cpp",
+      "ExternalPETScProblem.C": "cpp",
+      "IterationInfo.C": "cpp"
     }
   }
 }

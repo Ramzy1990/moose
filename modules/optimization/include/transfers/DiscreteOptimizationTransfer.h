@@ -104,40 +104,6 @@ protected:
   void objectiveFunctionPP(const PostprocessorName & objective_name, const dof_id_type & iteration);
 
   /**
-   * Function to build the constraints maps and compare between the values returned from
-   postprocessors and those that are set as constraints. We
-   * @param[in] constraints_names: The constraints names as read from the input and as
-   found in the subapp. They are basically specific post processors assigned by the user.
-   * @param[in] constraints_values: The constraints values as assigned by the user in the transfer
-   block. Those are used to ocmpare the values we got from the postprocessors against them.
-   * @param[in] inequality_operators: The inequality operators as set by the user in the transfer
-   block. Those are assigned for each name, and value, in the constraints (and hence should have the
-   same size).
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * transfer class.
-   */
-  void buildAndComparePP(const std::vector<PostprocessorName> & constraints_names,
-                         const std::vector<PostprocessorValue> & constraints_values,
-                         const std::vector<std::string> & inequality_operators,
-                         const dof_id_type & iteration);
-  /**
-   * Function to compare the constraints values and those of the specific pp assocaited with them/
-   * @param[in] postprocessors_values: map of the pp values as assigned in its parent method
-   * "buildAndComparePP".
-   * @param[in] constraints_values: map of the constraints values as assigned in its parent method
-   * "buildAndComparePP".
-   * @param[in] inequality_operators: map of thecinequality_operators as assigned in its parent
-   * method "buildAndComparePP".
-   * @return results: a boolean vector that holds the comaprison results and if the individual
-   * components' constraints have been satisfied, allowing a devleoper to use this infromation to
-   * control the optimization process.
-   */
-  std::vector<bool>
-  comparePP(const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
-            const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
-            const std::map<PostprocessorName, std::string> & inequality_operators);
-
-  /**
    * Function to compare the constraints values and those of the specific pp assocaited with them/
    * @param[in] comparison_results: The comparison results between pp values and constraints values
    * @param[in] postprocessors_values: map of the pp values as assigned in its parent method
@@ -149,19 +115,12 @@ protected:
    * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
    * transfer class.
    */
-
-  void printComparisonTable(
-      const std::vector<bool> & comparison_results,
-      const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
-      const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
-      const std::vector<PostprocessorName> & constraints_names,
-      const dof_id_type & iteration);
-
-  /**
-   * Function to put specific constraints on the domain's mesh
-   * @param[in] domain_constraints: specific constraints on the domain's mesh.
-   */
-  void domainConstraints(const std::vector<std::string> & domain_constraints);
+  // void printComparisonTable(
+  //     const std::vector<bool> & comparison_results,
+  //     const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
+  //     const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
+  //     const std::vector<PostprocessorName> & constraints_names,
+  //     const dof_id_type & iteration);
 
   /**
    * Function to print the mesh elements (ids and subdomain ids)
@@ -175,11 +134,11 @@ protected:
    */
   void processAndVerifyMesh(MooseMesh & mesh);
 
-  /**
-   * Function to print a map of the constraints size or shape.
-   * @param[in] map: map of pp to print
-   */
-  void printMap(const std::map<PostprocessorName, PostprocessorValue> & map);
+  // /**
+  //  * Function to print a map of the constraints size or shape.
+  //  * @param[in] map: map of pp to print
+  //  */
+  // void printMap(const std::map<PostprocessorName, PostprocessorValue> & map);
 
   //
   //
@@ -223,22 +182,8 @@ protected:
   std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
   std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
 
-  /// @brief variable that hold the name and value of the postprocessors.
-  std::vector<PostprocessorValue> _postprocessors_values;
-
   /// @brief variables that hold the name and value of our objective function.
   PostprocessorName _objective_name;
-
-  /// @brief variable associated with the constraints on the objective function.
-  std::vector<PostprocessorName> _constraints_names;
-
-  /// @brief variable that houses the inequality operators used to compare the pp and constraints
-  std::vector<std::string> _inequality_operators;
-
-  /// @brief variable associated with the constraints on the objective function.
-  std::vector<PostprocessorValue> _constraints_values;
-
-  std::vector<std::string> _domain_constraints;
 
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//

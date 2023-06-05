@@ -861,26 +861,9 @@ DiscreteOptimizationReporter::costFunction(
   return total_cost;
 }
 
-// set the constraints information in the reporter.
 void
-DiscreteOptimizationReporter::setConstraintsComparisonInformation(
-    const std::vector<bool> & comparison_results)
-{
-  // Here we set the class variable constraints_information to get it by the optimizer
-  _constraints_information = comparison_results;
-
-  // We could use the iteration number if needed, so we pass it as well.
-}
-
-std::vector<bool>
-DiscreteOptimizationReporter::getConstraintsComparisonInformation() const
-{
-  return _constraints_information;
-}
-
-void
-DiscreteOptimizationReporter::setObjectiveInformation(
-    const PostprocessorValue & objective_information, const dof_id_type & iteration)
+DiscreteOptimizationReporter::setObjectiveInformation(const Real & objective_information,
+                                                      const dof_id_type & iteration)
 {
   // Logging
   std::cout << "Setting objective information with objective_information = "
@@ -890,25 +873,10 @@ DiscreteOptimizationReporter::setObjectiveInformation(
   _objective_result = objective_information;
 }
 
-PostprocessorValue
+Real
 DiscreteOptimizationReporter::getObjectiveInformation() const
 {
   return _objective_result;
-}
-
-// set the constraints information in the reporter.
-void
-DiscreteOptimizationReporter::setDomainConstraints(
-    const std::vector<std::string> & domain_constraints)
-{
-  // Here we set the class variable domain_constraints to get it by the optimizer
-  _domain_constraints = domain_constraints;
-}
-
-std::vector<std::string>
-DiscreteOptimizationReporter::getDomainConstraints() const
-{
-  return _domain_constraints;
 }
 
 void
@@ -948,21 +916,49 @@ DiscreteOptimizationReporter::printCurrentDomain(const dof_id_type & iteration)
 }
 
 void
-DiscreteOptimizationReporter::setMeshDomain(
-    std::map<dof_id_type, subdomain_id_type> & pairs_optimized)
+DiscreteOptimizationReporter::setMeshDomain(const std::vector<int> & optimized_vector)
 {
+  // Initialize the converted vector
+  std::vector<subdomain_id_type> converted_vector;
 
-  // Here we set the class variables _initial_pairs_to_optimize and _pairs_to_optimize to get it by
-  // the transfer when needed
-  _initial_pairs_to_optimize = _pairs_to_optimize;
-  _pairs_to_optimize = pairs_optimized;
+  // Check that the size of the input vector matches the size of the keys in the map
+  if (optimized_vector.size() != _pairs_to_optimize.size())
+  {
+    mooseError("Size of the input vector does not match the size of the map keys!");
+  }
+
+  // Iterate over the input vector
+  for (int val : optimized_vector)
+  {
+    // Check if conversion would overflow
+    if (val > std::numeric_limits<subdomain_id_type>::max())
+    {
+      // If so, throw an error
+      mooseError("Int value cannot be converted to subdomain_id_type without overflow!");
+    }
+
+    // Safely convert int to subdomain_id_type and add to the new vector
+    converted_vector.push_back(static_cast<subdomain_id_type>(val));
+  }
+  // Assuming _pairs_to_optimize is the map with correct keys
+  _pairs_to_optimize = valuesVectorToMap(_pairs_to_optimize, converted_vector);
 }
 
-std::map<dof_id_type, subdomain_id_type>
-DiscreteOptimizationReporter::getMeshDomain() const
+void
+DiscreteOptimizationReporter::getMeshDomain(std::vector<int> & iparams, std::vector<Real> & rparams)
 {
-  // Nothing to do here I guess?
-  return;
+  std::vector<subdomain_id_type> originalVector = mapToValuesVector(_pairs_to_optimize);
+  iparams.clear(); // Clear the original vector
+  iparams.reserve(originalVector.size());
+
+  for (subdomain_id_type val : originalVector)
+  {
+    // This may potentially lose information if the subdomain_id_type is larger than what an int can
+    // hold!! Not to mention it is unsigned while int is signed!
+    iparams.push_back(static_cast<int>(val));
+  }
+
+  rparams = {};
 }
 
 std::tuple<std::vector<subdomain_id_type> &,

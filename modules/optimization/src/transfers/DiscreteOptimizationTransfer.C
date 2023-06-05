@@ -66,34 +66,6 @@ DiscreteOptimizationTransfer::validParams()
       "function is the one you would like to transfer its value to the optimizer.  Note: This is a "
       "post processor name from your MultiApp's input file!");
 
-  // Those are postprocessors that are related to the objective function components, so they will be
-  // assigned from the postprocessors
-  params.addParam<std::vector<PostprocessorName>>(
-      "constraints_names",
-      "These are the postprocessors names that you would like to set constraints upon. Note: These "
-      "are postprocessors names from your MultiApps input file!. Another Note: The user should "
-      "make sure the names of the postprocessors are those included in the objective "
-      "functions!");
-
-  params.addParam<std::vector<std::string>>(
-      "inequality_operators",
-      "These are the inequality operators associated with each postprocessor names that you would "
-      "like to set constraints upon. Note: These "
-      "are postprocessors names from your MultiApps input file!. Another Note: The user should "
-      "make sure the names of the postprocessors are those included in the objective "
-      "functions!");
-
-  params.addParam<std::vector<PostprocessorValue>>(
-      "constraints_values",
-      "These are the constraints values you would like to set on your postprocessors names. Note: "
-      "These are related to the postprocessors names and are in order of the"
-      " 'constraints_names' parameter!");
-
-  params.addParam<std::vector<std::string>>(
-      "domain_constraints",
-      "These are the constraints you can put on your doamin's mesh and they will be hardcoded in "
-      "the optimizer.");
-
   // Set and suppress the 'execute_on' flag.
   params.set<ExecFlagEnum>("execute_on") = {EXEC_INITIAL, EXEC_TIMESTEP_BEGIN};
   params.suppressParameter<ExecFlagEnum>("execute_on");
@@ -109,36 +81,14 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 
 {
   // These variables are read only for the FROM_MULTIAPP
-  if (getFromMultiApp())
-  {
+  // if (getFromMultiApp())
+  // {
 
-    // This variable in the from_multiapp will be used to get the value associated with it to the
-    // objective function value by using the getPostprocessorValueByName
-    _objective_name = isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name")
-                                                     : "objective";
-
-    // Since those will not be used currently, as we need to know how they could be used, we wil
-    // adjourn working on them currently:
-    // These are the constraints which are the Postprocessors that are defined in the subapp and
-    // should be constitutes of the objective function.
-    if (isParamValid("constraints_names"))
-      _constraints_names = getParam<std::vector<PostprocessorName>>("constraints_names");
-    // else
-    //   _transfer_constraints_names = {"c1"};
-
-    if (isParamValid("inequality_operators"))
-      _inequality_operators = getParam<std::vector<std::string>>("inequality_operators");
-
-    // These are the constraints values and they will be used to limit the constituting components
-    // of the objective function if needed.
-    if (isParamValid("constraints_values"))
-      _constraints_values = getParam<std::vector<PostprocessorValue>>("constraints_values");
-    // else
-    //   _transfer_constraints_values = {1.0};
-
-    if (isParamValid("domain_constraints"))
-      _domain_constraints = getParam<std::vector<std::string>>("domain_constraints");
-  }
+  // This variable in the from_multiapp will be used to get the value associated with it to the
+  // objective function value by using the getPostprocessorValueByName
+  _objective_name =
+      isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name") : "objective";
+  // }
 }
 
 //***********************
@@ -170,26 +120,16 @@ DiscreteOptimizationTransfer::initialSetup()
   // const dof_id_type n = getFromMultiApp()->numGlobalApps();
   // for (MooseIndex(n) i = 0; i < n; i++)
   // {
-  if (getFromMultiApp()->hasLocalApp(0))
+  if (getMultiApp()->hasLocalApp(0))
   {
 
-    FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
-
-    for (const auto & name : _constraints_names)
-    {
-      if (!app_problem.hasPostprocessorValueByName(name))
-        mooseError("Unknown postprocesssor name '",
-                   name,
-                   "' on sub-application '",
-                   getFromMultiApp()->name(),
-                   "'");
-    }
+    FEProblemBase & app_problem = getMultiApp()->appProblemBase(0);
 
     if (!app_problem.hasPostprocessorValueByName(_objective_name))
       mooseError("Unknown objective function name '",
                  _objective_name,
                  "' on sub-application '",
-                 getFromMultiApp()->name(),
+                 getMultiApp()->name(),
                  "'");
   }
   // }
@@ -352,11 +292,11 @@ DiscreteOptimizationTransfer::handleFirstFromInvocation(MooseMesh & from_mesh,
   // Set the objective function value in the reporter
   objectiveFunctionPP(_objective_name, iteration);
 
-  // Set the objective function components comparison results in the reporter
-  buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+  // // Set the objective function components comparison results in the reporter
+  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
 
-  // Call the domainConstraints function to set the domain's mesh constraints in the reporter
-  domainConstraints(_domain_constraints);
+  // // Call the domainConstraints function to set the domain's mesh constraints in the reporter
+  // domainConstraints(_domain_constraints);
 }
 
 void
@@ -377,7 +317,7 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
   objectiveFunctionPP(_objective_name, iteration);
 
   // Set the objective function components comparison results in the reporter
-  buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
 
   // No need to call the domainConstraints function
 }
@@ -428,232 +368,70 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
   std::cout << "Finished setting objective information for iteration " << iteration << "\n\n";
 }
 
-void
-DiscreteOptimizationTransfer::buildAndComparePP(
-    const std::vector<PostprocessorName> & constraints_names,
-    const std::vector<PostprocessorValue> & constraints_values,
-    const std::vector<std::string> & inequality_operators,
-    const dof_id_type & iteration)
-{
+// void
+// DiscreteOptimizationTransfer::printComparisonTable(
+//     const std::vector<bool> & comparison_results,
+//     const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
+//     const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
+//     const std::vector<PostprocessorName> & constraints_names,
+//     const dof_id_type & iteration)
+// {
+//   std::cout << "+----------------------------+------------------+------------------+---------+"
+//             << std::endl;
+//   std::cout << "| " << std::setw(77) << std::left << "iteration " << iteration << " |" <<
+//   std::endl; std::cout <<
+//   "+----------------------------+------------------+------------------+---------+"
+//             << std::endl;
+//   std::cout << "| " << std::setw(26) << std::left << "Constraint Name"
+//             << " | " << std::setw(16) << "PP Value"
+//             << " | " << std::setw(14) << "Constraint Value"
+//             << " | " << std::setw(7) << "Result"
+//             << " |" << std::endl;
+//   std::cout << "+----------------------------+------------------+------------------+---------+"
+//             << std::endl;
+//   for (std::size_t i = 0; i < comparison_results.size(); i++)
+//   {
+//     PostprocessorName constraint_name = constraints_names[i];
+//     PostprocessorValue pp_value = postprocessors_values.at(constraint_name);
+//     PostprocessorValue constraint_value = constraints_values.at(constraint_name);
+//     std::cout << "| " << std::setw(26) << std::left << constraint_name << " | " << std::setw(16)
+//               << pp_value << " | " << std::setw(14) << constraint_value << " | " << std::setw(7)
+//               << std::boolalpha << comparison_results[i] << " |" << std::endl;
+//   }
+//   std::cout << "+----------------------------+------------------+------------------+---------+"
+//             << std::endl;
+// }
 
-  // Check that the constraints names and values vectors match in size
-  if (constraints_names.size() != constraints_values.size() ||
-      constraints_names.size() != inequality_operators.size())
-  {
-    throw std::runtime_error(
-        "Mismatched vector sizes! Please revise the sizes of your input constraints vectors.");
-  }
+// void
+// DiscreteOptimizationTransfer::printMap(const std::map<PostprocessorName, PostprocessorValue> &
+// map)
+// {
+//   if (map.empty())
+//   {
+//     std::cout << "The map you would like to print is empty! " << std::endl;
+//     return;
+//   }
 
-  /// 📝 @TODO: Allow several apps as found in "SamplerPostprocessorTransfer::executeFromMultiapp()"
+//   // Find the longest key to calculate the width of the output
+//   std::size_t max_key_length = 0;
+//   for (const auto & pair : map)
+//   {
+//     if (pair.first.size() > max_key_length)
+//     {
+//       max_key_length = pair.first.size();
+//     }
+//   }
 
-  // Retrieve the FEProblemBase instance
-  FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
+//   // Create a format string for the output
+//   // The width of the first column is max_key_length + 4, to add some padding
+//   std::string format = "%-" + std::to_string(max_key_length + 4) + "s %f\n";
 
-  // Build the pp_map using getPostprocessorValueByName method from the app_problem
-  std::map<PostprocessorName, PostprocessorValue> pp_map;
-  for (const auto & name : constraints_names)
-  {
-    pp_map[name] = app_problem.getPostprocessorValueByName(name);
-  }
-
-  // Build the constraints_map and inequality_operators_map
-  std::map<PostprocessorName, PostprocessorValue> constraints_map;
-  std::map<PostprocessorName, std::string> inequality_operators_map;
-  for (std::size_t i = 0; i < constraints_names.size(); i++)
-  {
-    constraints_map[constraints_names[i]] = constraints_values[i];
-    inequality_operators_map[constraints_names[i]] = inequality_operators[i];
-  }
-
-  // Call the comparePP function and store its results as boolean
-  std::vector<bool> comparison_results =
-      comparePP(pp_map, constraints_map, inequality_operators_map);
-
-  // Now we can use comparison_results internally in the buildAndComparePP function
-  printComparisonTable(comparison_results, pp_map, constraints_map, constraints_names, iteration);
-
-  // // For example, let us print the results:
-  // for (std::size_t i = 0; i < comparison_results.size(); i++)
-  // {
-  //   PostprocessorName constraint_name = constraints_names[i];
-  //   std::cout << "Constraint " << constraint_name
-  //             << " passed: " << std::boolalpha // to print true or false and not 1 or 0.
-  //             << comparison_results[i] << std::endl;
-  // }
-
-  // // Print the maps for debugging, some good visuals, and to follow the process
-  // std::cout << "Postprocessor values:" << std::endl;
-  // printMap(pp_map);
-  // std::cout << "Constraint values:" << std::endl;
-  // printMap(constraints_map);
-
-  // Now we pass the comparison results to the reporter for further actions
-  _reporter->setConstraintsComparisonInformation(comparison_results);
-}
-
-std::vector<bool>
-DiscreteOptimizationTransfer::comparePP(
-    const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
-    const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
-    const std::map<PostprocessorName, std::string> & inequality_operators)
-{
-
-  std::vector<bool> results;
-
-  // Loop over the constraint values
-  for (const auto & constraint_entry : constraints_values)
-  {
-    const auto & constraint_name = constraint_entry.first;
-    auto constraint_value = constraint_entry.second;
-
-    // Check if there's a corresponding postprocessor value
-    auto pp_iter = postprocessors_values.find(constraint_name);
-    if (pp_iter == postprocessors_values.end())
-    {
-      throw std::runtime_error("Missing postprocessor value for " + constraint_name +
-                               "! Please check your input and try again.");
-    }
-    auto pp_value = pp_iter->second;
-
-    // Check if there's a corresponding inequality operator
-    auto inequality_iter = inequality_operators.find(constraint_name);
-    if (inequality_iter == inequality_operators.end())
-    {
-      throw std::runtime_error("Missing inequality operator for " + constraint_name +
-                               "! Please check your input and try again.");
-    }
-    auto inequality = inequality_iter->second;
-
-    // Perform the comparison based on the inequality operator
-    if (inequality == "<")
-    {
-      results.push_back(pp_value < constraint_value);
-    }
-    else if (inequality == ">")
-    {
-      results.push_back(pp_value > constraint_value);
-    }
-    else if (inequality == "<=")
-    {
-      results.push_back(pp_value <= constraint_value);
-    }
-    else if (inequality == ">=")
-    {
-      results.push_back(pp_value >= constraint_value);
-    }
-    else
-    {
-      throw std::runtime_error("Unknown inequality operator for " + constraint_name + ": " +
-                               inequality +
-                               "! Please use the following inequalities only: >, <, >=, <= ");
-    }
-  }
-
-  // The results vector will be cleared everytime we log into this function, no need for clear() if
-  // I correctly understand.
-  return results;
-}
-
-void
-DiscreteOptimizationTransfer::printComparisonTable(
-    const std::vector<bool> & comparison_results,
-    const std::map<PostprocessorName, PostprocessorValue> & postprocessors_values,
-    const std::map<PostprocessorName, PostprocessorValue> & constraints_values,
-    const std::vector<PostprocessorName> & constraints_names,
-    const dof_id_type & iteration)
-{
-  std::cout << "+----------------------------+------------------+------------------+---------+"
-            << std::endl;
-  std::cout << "| " << std::setw(77) << std::left << "iteration " << iteration << " |" << std::endl;
-  std::cout << "+----------------------------+------------------+------------------+---------+"
-            << std::endl;
-  std::cout << "| " << std::setw(26) << std::left << "Constraint Name"
-            << " | " << std::setw(16) << "PP Value"
-            << " | " << std::setw(14) << "Constraint Value"
-            << " | " << std::setw(7) << "Result"
-            << " |" << std::endl;
-  std::cout << "+----------------------------+------------------+------------------+---------+"
-            << std::endl;
-  for (std::size_t i = 0; i < comparison_results.size(); i++)
-  {
-    PostprocessorName constraint_name = constraints_names[i];
-    PostprocessorValue pp_value = postprocessors_values.at(constraint_name);
-    PostprocessorValue constraint_value = constraints_values.at(constraint_name);
-    std::cout << "| " << std::setw(26) << std::left << constraint_name << " | " << std::setw(16)
-              << pp_value << " | " << std::setw(14) << constraint_value << " | " << std::setw(7)
-              << std::boolalpha << comparison_results[i] << " |" << std::endl;
-  }
-  std::cout << "+----------------------------+------------------+------------------+---------+"
-            << std::endl;
-}
-
-void
-DiscreteOptimizationTransfer::domainConstraints(const std::vector<std::string> & domain_constraints)
-{
-  // Create a set of allowed constraints
-  std::set<std::string> allowed_constraints = {
-      "moderator_at_boundaries", "volume_preserved", "neighbour_same_type"};
-
-  // Check if the vector is empty
-  if (domain_constraints.empty())
-  {
-    std::cout << "No domain constraints provided.\n";
-  }
-  else
-  {
-    // Print the domain constraints
-    std::cout << "Domain Constraints: \n";
-    for (const auto & constraint : domain_constraints)
-    {
-      // Check if the constraint is allowed
-      if (allowed_constraints.find(constraint) == allowed_constraints.end())
-      {
-        // If the constraint is not allowed, print an error message
-        mooseError(
-            "Error: Invalid domain constraint '",
-            constraint,
-            "'. Current allowed constraints are 'moderator_at_boundaries', 'volume_preserved', "
-            "and 'neighbour_same_type'.");
-      }
-
-      // If the constraint is allowed, print it
-      std::cout << constraint << std::endl;
-    }
-  }
-
-  // Set the domain constraints in the reporter object
-  _reporter->setDomainConstraints(domain_constraints);
-}
-
-void
-DiscreteOptimizationTransfer::printMap(const std::map<PostprocessorName, PostprocessorValue> & map)
-{
-  if (map.empty())
-  {
-    std::cout << "The map you would like to print is empty! " << std::endl;
-    return;
-  }
-
-  // Find the longest key to calculate the width of the output
-  std::size_t max_key_length = 0;
-  for (const auto & pair : map)
-  {
-    if (pair.first.size() > max_key_length)
-    {
-      max_key_length = pair.first.size();
-    }
-  }
-
-  // Create a format string for the output
-  // The width of the first column is max_key_length + 4, to add some padding
-  std::string format = "%-" + std::to_string(max_key_length + 4) + "s %f\n";
-
-  // Print the contents of the map
-  for (const auto & pair : map)
-  {
-    printf(format.c_str(), pair.first.c_str(), pair.second);
-  }
-}
+//   // Print the contents of the map
+//   for (const auto & pair : map)
+//   {
+//     printf(format.c_str(), pair.first.c_str(), pair.second);
+//   }
+// }
 
 void
 DiscreteOptimizationTransfer::printMeshElements(MooseMesh & mesh)

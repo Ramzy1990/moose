@@ -37,8 +37,9 @@
 []
 
 [Executioner]
-  type = Transient
-  num_steps = 100
+  type = CustomOptimize
+  reporter_user_object = discrete_reporter
+  # num_steps = 500
   # dt = 0.1
   # solve_type = PJFNK
   # nl_abs_tol = 1e-6
@@ -93,12 +94,14 @@
     type = DiscreteOptimizationTransferTest
     to_multi_app = forward
     user_object = 'discrete_reporter'
+    # objective_name = 'max_temperature'
   []
   [fromforward]
     # check_multiapp_execute_on = false
-    type = DiscreteOptimizationTransferTest
+    type = DiscreteOptimizationTransfer
     from_multi_app = forward
     user_object = 'discrete_reporter'
+    objective_name = 'max_temperature'
   []
 []
 

@@ -64,25 +64,15 @@ public:
    * Function to set in the optimization results of the mesh to the reporter.
    * @param[in] pairs_optimized: the domain's mesh optimized by the optimizer
    */
-  void setMeshDomain(std::map<dof_id_type, subdomain_id_type> & pairs_optimized);
+  void setMeshDomain(const std::vector<int> & optimized_vector);
 
   /**
-   * Function to get the mesh domain from the reporter
+   * Function to get the mesh domain from the reporter for the optimizer. (Basically used for the
+   * initial condition only)
+   * @param[inout] iparams: the integer parameters vector that will be optimized.
+   * @param[inout] rparams: the real parameters vector that will be optimized.
    */
-  std::map<dof_id_type, subdomain_id_type> getMeshDomain() const;
-
-  /**
-   * Function to set the constraints comparison results in the reporter.
-   * @param[in] comparison_results: a boolean vector that holds the comaprison results.
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
-   */
-  void setConstraintsComparisonInformation(const std::vector<bool> & comparison_results);
-
-  /**
-   * Function to get the constraints comparison results from the reporter.
-   */
-  std::vector<bool> getConstraintsComparisonInformation() const;
+  void getMeshDomain(std::vector<int> & iparams, std::vector<Real> & rparams);
 
   /**
    * Function to set the objective function value in the reporter.
@@ -90,20 +80,12 @@ public:
    * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
    * Transfer class.
    */
-  void setObjectiveInformation(const PostprocessorValue & objective_result,
-                               const dof_id_type & iteration);
+  void setObjectiveInformation(const Real & objective_result, const dof_id_type & iteration);
 
   /**
    * Function to get the constraints comparison results from the reporter.
    */
-  PostprocessorValue getObjectiveInformation() const;
-
-  void setDomainConstraints(const std::vector<std::string> & domain_constraints);
-
-  /**
-   * Function to get the domain constraints from the reporter.
-   */
-  std::vector<std::string> getDomainConstraints() const;
+  Real getObjectiveInformation() const;
 
   /**
    * Function to printout the domain mesh and information to a file
@@ -115,8 +97,8 @@ public:
   /**
    * Function to update the mesh domain in the reporter based on the optimizer results. It is called
    * inside the optimizer.
-   * @todo add the capability to have different Elements IDs instead of assuming them constant. Name
-   * change to updateMeshIds.
+   * @todo 📝 add the capability to have different Elements IDs instead of assuming them constant.
+   * Name change to updateMeshIds.
    * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
    * to optimize.
    * This pairs_to_optimize will be eventually sent to the TO_MULTIAPP branch of the discrete
@@ -132,6 +114,63 @@ public:
              std::map<dof_id_type, subdomain_id_type> &,
              std::map<dof_id_type, subdomain_id_type> &>
   getMeshParameters();
+
+  /**
+   * Template to convert a vector to a map (to the values part of a map). So basically, the
+   * retturned map will have its values part (second) updated with the vector content.
+   * @param[in] keysMap: The map from which the keys will be used.
+   * @param[in] values: The values vector to be assigned to the passed map
+   */
+  template <typename K, typename V>
+  std::map<K, V> valuesVectorToMap(const std::map<K, V> & keysMap, const std::vector<V> & values)
+  {
+    if (keysMap.size() != values.size())
+    {
+      mooseError("Size of map and vector must be the same!");
+    }
+
+    std::map<K, V> resultMap;
+    auto valueIt = values.begin();
+    for (const auto & kv : keysMap)
+    {
+      resultMap[kv.first] = *valueIt; // get the current value from the vector
+      ++valueIt;
+    }
+
+    return resultMap;
+
+    // std::map<K, V> resultMap;
+    // std::size_t i = 0;
+    // for (const auto& kv : keysMap) {
+    //     resultMap[kv.first] = values[i];
+    //     ++i;
+    // }
+
+    // return resultMap;
+  }
+
+  /**
+   * Template to convert a map to its values vector. So basically, the
+   * retturned vector will have the input map values part (second).
+   * @param[in] inputMap: The map from which the values will be exctracted.
+   */
+
+  template <typename K, typename V>
+  std::vector<V> mapToValuesVector(const std::map<K, V> & inputMap)
+  {
+
+    if (inputMap.empty())
+    {
+      mooseError("Input map must not be empty!");
+    }
+
+    std::vector<V> values;
+    for (const auto & kv : inputMap)
+    {
+      values.push_back(kv.second);
+    }
+    return values;
+  }
 
   //
   //
@@ -270,14 +309,8 @@ protected:
   /// mapping between elements and subdomains. /// the current elem->subdomain assignment
   std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
 
-  /// @brief The constraints infromation as we got it from the discrete transfer, and to pass it to the optimizer
-  std::vector<bool> _constraints_information;
-
   /// @brief The objective infromation as we got it from the discrete transfer, and to pass it to the optimizer
   Real _objective_result;
-
-  /// @brief The domain constraints infromation as we got it from the discrete transfer, and to pass it to the optimizer
-  std::vector<std::string> _domain_constraints;
 
   /// pairing between subdomains_ids and their names
   /// use getSubdomainNames in a function with ->first and ->second
