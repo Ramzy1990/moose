@@ -10,15 +10,32 @@
 #include "SimulatedAnnealingAlgorithm.h"
 #include <limits>
 
+// The vector_hash struct
+struct vector_hash
+{
+  template <class T1>
+  std::size_t operator()(const std::vector<T1> & vector) const
+  {
+    std::size_t seed = vector.size();
+    for (auto & i : vector)
+    {
+      seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
 SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
   : CustomOptimizationAlgorithm(),
     _alpha(1e-2),
     _temp_max(100.0),
-    _temp_min(0.0),
+    _temp_min(0.01),
     _min_objective(std::numeric_limits<Real>::max()),
-    _cooling(LinAdd),
-    _monotonic_cooling(true),
-    _res_var(0.0),
+    _cooling(trial), /*    LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd */
+    _monotonic_cooling(false), /* Whether cooling is monotonic or not */
+    _res_var(1), /*the initial temperature to start resetting the current state to the best found
+                       state when this temperature is reached. This temperature is halved every-time
+                       it is reached.*/
     _num_swaps(1),
     _num_reassignments(0),
     _real_perturbation_type(RandomDirectionStretching),
@@ -51,24 +68,77 @@ SimulatedAnnealingAlgorithm::solve()
   std::vector<int> best_int_solution = _current_int_solution;
   Real current_objective;
   objectiveFunction(current_objective, _current_real_solution, _current_int_solution, _ctx);
-  _min_objective = current_objective;
 
-  Real temp_current = _temp_max;
+  _min_objective = current_objective; // Minimum objective is e_best in the fortran code
+
+  Real temp_current = _temp_max;      // Current temperature is set to maximum one.
 
   // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
   _it_counter = 0;
 
+  // Sets the seed for the random number generator
+  MooseRandom::seed(std::time(0));
+
+  // Keeping track of the accepted solutions!
+  // This initializes with 3 pairs, each having a maximum possible objective value and an empty
+  // vector of integers
+  std::vector<std::pair<Real, std::vector<int>>> solutions(
+      3, std::make_pair(std::numeric_limits<Real>::max(), std::vector<int>()));
+
+  // Tabu list
+  std::deque<std::vector<int>> tabu_list;
+  const int max_tabu_size = 333; // maximum size of the Tabu list
+
+  // Solution cache
+  std::unordered_map<std::vector<int>, Real, vector_hash> solution_cache;
+
+  // Define a vector to store all accepted solutions and their objective values
+  // std::vector<std::pair<Real, std::vector<int>>> all_accepted_solutions;
+
   // simulated annealing loop
   while (_it_counter < _max_its && temp_current > _temp_min)
   {
+
+    // Sets the seed for the random number generator
+    // std::srand(std::time(0));
+    // MooseRandom::seed(std::time(0) + _it_counter);
+
     // get a new neighbor and compute energy
     createNeigborReal(_current_real_solution, neighbor_real_solution);
     createNeigborInt(_current_int_solution, neighbor_int_solution);
 
+    // Check if neighbor is in Tabu list
+    if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_solution) != tabu_list.end())
+    {
+      // Neighbor is in Tabu list, skip this iteration
+      continue;
+    }
+
     Real neigh_objective;
-    objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+
+    auto it = solution_cache.find(neighbor_int_solution);
+    if (it != solution_cache.end())
+    {
+      // If the solution is in the cache, use the cached objective value
+      neigh_objective = it->second;
+    }
+    else
+    {
+      // Otherwise, compute the objective value and add it to the cache
+      objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+      solution_cache[neighbor_int_solution] = neigh_objective;
+    }
+
+    // objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+
+    std::cout << "Here is the neighbour objective value:  " << neigh_objective << " !\n\n\n";
+    std::cout << "Here is the current objective value:  " << current_objective << " !\n\n\n";
+
+    // Copy the current solution
+    std::vector<int> current_int_solution_copy = _current_int_solution;
 
     // acceptance check: lower objective always accepted;
+    // acceptance check: lower temps always accepted;
     // higher objective sometimes accepted
     Real temp_r = MooseRandom::rand();
     if (temp_r <= acceptProbability(current_objective, neigh_objective, temp_current))
@@ -78,14 +148,31 @@ SimulatedAnnealingAlgorithm::solve()
       _current_real_solution = neighbor_real_solution;
       _current_int_solution = neighbor_int_solution;
       current_objective = neigh_objective;
+
+      // Add the current solution to the Tabu list
+      tabu_list.push_back(_current_int_solution);
+
+      // If the Tabu list is too big, remove the oldest element
+      if (tabu_list.size() > max_tabu_size)
+      {
+        tabu_list.pop_front();
+      }
+
+      std::cout << "IN THIS STEP, WE ACCEPTED THE SOLUTION!"
+                << "\n\n\n";
+      std::cout << "The current Objective value is: " << current_objective << "!\n";
+      std::cout << "The neighbor Objective value is: " << neigh_objective << "!\n";
     }
     else
     {
       // otherwise, it has a 50% chance to count as a new step to finish the problem
       // this is especially important for combinatorial problems
       Real temp_rr = MooseRandom::rand();
-      if (temp_rr <= 0.5)
+      if (temp_rr <= 0.25)
         ++_it_counter;
+
+      std::cout << "IN THIS STEP, WE DID NOT ACCEPT!"
+                << "\n\n\n";
     }
 
     // cool the temperature
@@ -96,7 +183,23 @@ SimulatedAnnealingAlgorithm::solve()
     {
       _min_objective = current_objective;
       best_real_solution = _current_real_solution;
-      best_int_solution = _current_int_solution;
+      // best_int_solution = _current_int_solution;
+      best_int_solution = current_int_solution_copy;
+
+      // Each time you find a better solution, add it to the vector
+      solutions.push_back(std::make_pair(_min_objective, best_int_solution));
+
+      // // Find the pair with the worst objective value
+      // // Here we are using the iterators functionality in C++
+      auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+      // // If the current objective is better than the worst stored one, replace it
+      if (current_objective < worst_it->first)
+      {
+        *worst_it = std::make_pair(_min_objective, best_int_solution);
+      }
+
+      // all_accepted_solutions.push_back(std::make_pair(_min_objective, best_int_solution));
     }
 
     // perform non-monotonic adjustment if applicable
@@ -117,17 +220,66 @@ SimulatedAnnealingAlgorithm::solve()
   current_objective = _min_objective;
   _current_real_solution = best_real_solution;
   _current_int_solution = best_int_solution;
+
+  // Add the ultimate best solution to the vector
+  solutions.push_back(std::make_pair(current_objective, _current_int_solution));
+
+  // // Find the pair with the worst objective value
+  // // Here we are using the iterators functionality in C++
+  auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+  // // If the current objective is better than the worst stored one, replace it
+  if (current_objective < worst_it->first)
+  {
+    *worst_it = std::make_pair(current_objective, _current_int_solution);
+  }
+
+  // Now sort the vector
+  // std::sort(solutions.begin(), solutions.end());
+  // std::sort(all_accepted_solutions.begin(), all_accepted_solutions.end());
+
+  // Insert the best 3 solutions into the solutions vector
+  // for (std::size_t i = 0; i < 3 && i < all_accepted_solutions.size(); i++)
+  // {
+  //   solutions[i] = all_accepted_solutions[i];
+  // }
+
+  // The best solution is the first one after sorting
+  std::sort(solutions.begin(), solutions.end());
+  std::pair<Real, std::vector<int>> best_pair = solutions[0];
+
+  // Print the best solution and its objective value
+  std::cout << "Best objective value: " << best_pair.first << "\n";
+  std::cout << "Associated solution: ";
+  for (int value : best_pair.second)
+  {
+    std::cout << value << " ";
+  }
+  std::cout << "\n";
 }
 
 Real
 SimulatedAnnealingAlgorithm::coolingSchedule(unsigned int step) const
 {
+
+  auto fraction = (((Real)_max_its - (Real)step) / (Real)_max_its);
+
   switch (_cooling)
   {
     case LinAdd:
-      return _temp_min + (_temp_max - _temp_min) * ((Real)_max_its - (Real)step) / (Real)_max_its;
+      return _temp_min + (_temp_max - _temp_min) * fraction;
+
+    case ExpMult:
+      return _temp_max * std::pow(_alpha, step);
+
+    case QuadAdd:
+      return _temp_min + (_temp_max - _temp_min) * std::pow(fraction, 2);
+    case trial:
+      return _temp_max * std::pow(_temp_min / _temp_max, (Real)step / (Real)_max_its);
+
     default:
-      ::mooseError("Cooling option not yet implemented");
+      ::mooseError("Cooling option not yet implemented! Please choose from the follwoing options: "
+                   "LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd");
   }
 
   return 1;
@@ -196,66 +348,145 @@ void
 SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
                                               std::vector<int> & int_neigh) const
 {
+  // Logging the size of the integer solution
+  std::cout << "Size of the integer solution: " << _int_size << std::endl;
+
+  // // SEEMS TO BE WORKING!!
   if (_int_size == 0)
   {
     int_neigh = {};
     return;
   }
-
-  // set neighbor to the current state
+  unsigned int index = MooseRandom::randl() % _int_size;
   int_neigh = int_sol;
-
-  // loop that ensures that there is a difference in int_sol and int_neigh
-  int diff = 0;
-  while (diff < 1)
+  // Flip the value at the chosen index (change 1 to 2 or vice versa)
+  if (int_neigh[index] == 1)
   {
-    // swaps
-    for (unsigned int j = 0; j < _num_swaps; ++j)
-    {
-      auto j1 = MooseRandom::randl() % _int_size;
-      auto j2 = MooseRandom::randl() % _int_size;
-      mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
-      mooseAssert(j2 < _int_size, "The index needs to be smaller than integer size");
-      int_neigh[j1] = int_sol[j2];
-      int_neigh[j2] = int_sol[j1];
-    }
-
-    // reassignments
-    for (unsigned int j = 0; j < _num_reassignments; ++j)
-    {
-      if (_valid_options.size() == 0)
-        mooseError("The number of reassignments is > 0, but no valid options for the "
-                   "integer/categorical parameters was provided.");
-
-      auto j1 = MooseRandom::randl() % _int_size;
-      auto j2 = MooseRandom::randl() % _valid_options.size();
-      mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
-      mooseAssert(j2 < _valid_options.size(),
-                  "The index needs to be smaller than valid options size");
-      int_neigh[j1] = _valid_options[j2];
-    }
-
-    // compute difference between int_sol and int_neigh
-    diff = 0;
-    for (unsigned int j = 0; j < _int_size; ++j)
-      diff += std::abs(int_neigh[j] - int_sol[j]);
+    int_neigh[index] = 2;
   }
+  else
+  {
+    int_neigh[index] = 1;
+  }
+
+  // if (_int_size == 0)
+  // {
+  //   int_neigh = {};
+  //   return;
+  // }
+
+  // // set neighbor to the current state
+  // int_neigh = int_sol;
+
+  // // Define the number of mutations
+  // unsigned int num_mutations = 7; // Feel free to adjust this value
+
+  // for (unsigned int i = 0; i < num_mutations; ++i)
+  // {
+  //   // Choose a random index
+  //   unsigned int index = MooseRandom::randl() % _int_size;
+
+  //   // Increment the value at the chosen index, wrap around to 1 if it's 2
+  //   if (int_neigh[index] == 1)
+  //   {
+  //     int_neigh[index] = 2;
+  //   }
+  //   else
+  //   {
+  //     int_neigh[index] = 1;
+  //   }
+  // }
+
+  // Check to make sure the domain contains at least one type of each material
+  bool hasOne = false, hasTwo = false;
+  for (unsigned int i = 0; i < _int_size; ++i)
+  {
+    if (int_neigh[i] == 1)
+    {
+      hasOne = true;
+    }
+    else if (int_neigh[i] == 2)
+    {
+      hasTwo = true;
+    }
+
+    // If both materials are found, break the loop early
+    if (hasOne && hasTwo)
+      break;
+  }
+
+  // If either material is missing, insert it at a random position
+  if (!hasOne || !hasTwo)
+  {
+    int_neigh[MooseRandom::randl() % _int_size] = !hasOne ? 1 : 2;
+  }
+
+  // int diff = 0;
+  // while (diff < 1)
+  // {
+  //   for (unsigned int j = 0; j < _num_swaps; ++j)
+  //   {
+  //     auto j1 = MooseRandom::randl() % _int_size;
+  //     auto j2 = MooseRandom::randl() % _int_size;
+
+  //     // Logging the indices chosen for swapping
+  //     std::cout << "Indices chosen for swapping: " << j1 << ", " << j2 << std::endl;
+
+  //     mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
+  //     mooseAssert(j2 < _int_size, "The index needs to be smaller than integer size");
+
+  //     int_neigh[j1] = int_sol[j2];
+  //     int_neigh[j2] = int_sol[j1];
+  //   }
+
+  //   for (unsigned int j = 0; j < _num_reassignments; ++j)
+  //   {
+  //     if (_valid_options.size() == 0)
+  //     {
+  //       mooseError("The number of reassignments is > 0, but no valid options for the "
+  //                  "integer/categorical parameters was provided.");
+  //     }
+  //     auto j1 = MooseRandom::randl() % _int_size;
+  //     auto j2 = MooseRandom::randl() % _valid_options.size();
+
+  //     // Logging the indices chosen for reassignment
+  //     std::cout << "Indices chosen for reassignment: " << j1 << ", " << j2 << std::endl;
+
+  //     mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
+  //     mooseAssert(j2 < _valid_options.size(),
+  //                 "The index needs to be smaller than valid options size");
+
+  //     int_neigh[j1] = _valid_options[j2];
+  //   }
+
+  //   diff = 0;
+  //   for (unsigned int j = 0; j < _int_size; ++j)
+  //   {
+  //     diff += std::abs(int_neigh[j] - int_sol[j]);
+  //   }
+
+  //   // Logging the computed difference
+  //   std::cout << "Computed difference: " << diff << std::endl;
+  // }
 }
 
 Real
 SimulatedAnnealingAlgorithm::acceptProbability(Real curr_obj, Real neigh_obj, Real curr_temp) const
 {
+
+  // Metropolis criterion
   Real delta_obj = neigh_obj - curr_obj;
   Real aprob;
   if (-delta_obj / curr_temp <= -700.0)
     aprob = 0.0;
   else if (-delta_obj / curr_temp >= 700.0)
-    aprob = 10.0;
+    aprob = 1.0;
   else
+    // aprob = std::exp(-delta_obj / curr_temp);
     aprob = std::exp(-delta_obj / curr_temp);
 
   if (delta_obj <= 0.0)
-    aprob = 10.0;
+    aprob = 1.0;
 
   if (std::isnan(aprob))
     aprob = 0.0;
