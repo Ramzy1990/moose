@@ -257,27 +257,27 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
                    "Please check your input file");
       }
     }
-    std::cout << "Verification done successfully!... " << std::endl << std::endl;
+    std::cout << "Verification done successfully!...\n\n";
   }
 }
 
-void
-DiscreteOptimizationReporter::execute()
-{
-  std::cout << std::endl;
-  std::cout << "Executing the Discrete Optimization Reporter... " << std::endl;
-  std::cout << std::endl;
-  std::cout << "Now transfering TO the MultiAPP... " << std::endl;
-  std::cout << "Well, basically, the TO Multiapp will *get* the updated mesh domain!... "
-            << std::endl
-            << std::endl
-            << std::endl
-            << std::endl
-            << std::endl
-            << std::endl
-            << std::endl
-            << std::endl;
-}
+// void
+// DiscreteOptimizationReporter::execute()
+// {
+//   std::cout << std::endl;
+//   std::cout << "Executing the Discrete Optimization Reporter... " << std::endl;
+//   std::cout << std::endl;
+//   std::cout << "Now transfering TO the MultiAPP... " << std::endl;
+//   std::cout << "Well, basically, the TO Multiapp will *get* the updated mesh domain!... "
+//             << std::endl
+//             << std::endl
+//             << std::endl
+//             << std::endl
+//             << std::endl
+//             << std::endl
+//             << std::endl
+//             << std::endl;
+// }
 
 // bool
 // DiscreteOptimizationReporter::isNewMaterialsInMesh(const MooseMesh & domain_mesh)
@@ -300,7 +300,7 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
 {
   std::cout << "Assigning the elements and subdomains ids to their respective map from the mesh..."
             << std::endl
-            << "***Elements ids are your key, while subdomain ids are the respective values***"
+            << "***Elements-IDs are the keys, while subdomain-IDs are the corresponding values***"
             << std::endl;
 
   // Check the multi-app condition before the loop to avoid checking it for each element
@@ -326,7 +326,7 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
   // Print a success message based on the mode
   if (is_multi_apps)
   {
-    std::cout << "Assignment done successfully for MultiApp case!..." << std::endl;
+    std::cout << "Assignment done successfully for MultiApp case!...\n\n";
   }
   else
   {
@@ -372,14 +372,13 @@ DiscreteOptimizationReporter::setInitialCondition(const MooseMesh & domain_mesh)
 
   if (_fe_problem.hasMultiApps())
   {
-    std::cout << "*** Discrete Optimization Reporter: SubApp supplied mesh initialization ***"
-              << std::endl;
+    std::cout << "*** Discrete Optimization Reporter: SubApp Mode ***" << std::endl;
 
     getOptimizationDomain(domain_mesh);
 
     _initial_pairs_to_optimize = _pairs_to_optimize;
 
-    std::cout << "After initialization, the domain pairs to optimize are:" << std::endl;
+    std::cout << "After initialization, the domain pairs to optimize are:\n";
     printMap(_pairs_to_optimize);
   }
 }

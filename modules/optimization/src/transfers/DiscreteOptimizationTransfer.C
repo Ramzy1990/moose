@@ -67,7 +67,7 @@ DiscreteOptimizationTransfer::validParams()
       "post processor name from your MultiApp's input file!");
 
   // Set and suppress the 'execute_on' flag.
-  params.set<ExecFlagEnum>("execute_on") = {EXEC_INITIAL, EXEC_TIMESTEP_BEGIN};
+  params.set<ExecFlagEnum>("execute_on") = {/*EXEC_INITIAL,*/ EXEC_TIMESTEP_BEGIN};
   params.suppressParameter<ExecFlagEnum>("execute_on");
 
   return params;
@@ -139,7 +139,7 @@ void
 DiscreteOptimizationTransfer::execute()
 {
   TIME_SECTION(
-      "DiscreteOptimizationTransfer::execute()", 5, "Performing transfer with a user object");
+      "DiscreteOptimizationTransfer::execute()", 3, "Performing transfer with a user object");
 
   // getting the mesh
   // probably will need the _to_problems mesh only in release
@@ -153,7 +153,7 @@ DiscreteOptimizationTransfer::execute()
   // everytime we solve the physics problem?? This is what happens currently
 
   // Print the messages once for the very first iteration:
-  if (_it_transfer == 1)
+  if (_it_transfer == 1 && hasToMultiApp())
   {
     std::cout << std::endl
               << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
@@ -184,7 +184,7 @@ DiscreteOptimizationTransfer::execute()
         std::cout
             << "*** This marks as the first invoking of the TO_MULTIAPP branch ***\n\n"
             << "Nothing major will happen in the very first invoking of the TO_MULTIAPP branch...\n"
-            << "Returning to the MULTIAPP system to continue the optimization process...\n\n";
+            << "Returning to the MULTIAPP system to continue the optimization process...\n\n\n\n";
         return;
       }
       else // Subsequent invocations
@@ -194,9 +194,8 @@ DiscreteOptimizationTransfer::execute()
         std::cout << "*** Finished the current handling of the TO_MULTIAPP branch! ***\n\n";
       }
 
-      std::cout
-          << "*** Great! See you on the other side then after the MultiApp solve! 👋 ***\n\n\n"
-          << std::endl;
+      std::cout << "*** Great! See you on the other side after the MultiApp solve! 👋 ***\n\n\n"
+                << std::endl;
 
       break;
     }
@@ -205,7 +204,7 @@ DiscreteOptimizationTransfer::execute()
     {
       _it_transfer_from += 1;
 
-      std::cout << "\n*** You are currently in the FROM_MULTIAPP branch! ***\n\n"
+      std::cout << "\n\n\n*** You are currently in the FROM_MULTIAPP branch! ***\n\n"
                 << "The transfer iterations are as follow: \n"
                 << "Total Iterations: " << _it_transfer << '\n'
                 << "Total FROM_MULTIAPP Iterations: " << _it_transfer_from << "\n\n";
@@ -223,8 +222,8 @@ DiscreteOptimizationTransfer::execute()
         std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
       }
 
-      std::cout << "*** Great! See you on the other side then with a new global iteration!👋 "
-                   "***\n\n\n\n\n\n\n"
+      std::cout << "*** Great! See you on the other side then with a new global iteration! 👋 "
+                   "***\n\n\n\n\n\n\n\n\n\n"
                 << std::endl;
       break;
     }
@@ -249,20 +248,22 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
             << "*** Receiving the domain's mesh elements and subdomains ids ***\n"
             << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
 
+  std::cout << "Starting to receive the domain's previous mesh content ...\n";
+
   auto mesh_params = _reporter->getMeshParameters();
   _allowed_parameter_values = std::get<0>(mesh_params);
   _initial_pairs_to_optimize = std::get<1>(mesh_params);
   _pairs_to_optimize = std::get<2>(mesh_params);
 
-  std::cout << "\nDomain's mesh content was received successfully for iteration " << iteration
-            << "! ...\n\n";
+  std::cout << "Domain's mesh content was received successfully for iteration: " << iteration
+            << "! ...\n";
 
-  std::cout << "*** Updating the domain's mesh elements and subdomains ids and reassigning the "
-            << "mesh ***\n\n";
+  std::cout << "Updating the domain's mesh elements-IDs and subdomains-IDs and reassigning the "
+            << "mesh ...\n\n";
 
   assignMesh(_pairs_to_optimize, to_mesh);
 
-  std::cout << "*** New mesh to pass to the MultiApp: ***\n";
+  std::cout << "*** New mesh to pass to the MultiApp ***\n";
 
   // Print mesh elements to check
   printMeshElements(to_mesh);
@@ -285,13 +286,14 @@ DiscreteOptimizationTransfer::handleFirstFromInvocation(MooseMesh & from_mesh,
 
   processAndVerifyMesh(from_mesh);
 
+  std::cout << "Storing Data to a file ... \n";
   _reporter->printCurrentDomain(iteration);
-
-  std::cout << "*** Data is written and stored to a file successfully! ***\n\n";
+  std::cout << "Data is written and stored to a file successfully! ...\n\n";
 
   // Set the objective function value in the reporter
+  std::cout << "Now setting the optimization function value in the reporter ... \n";
   objectiveFunctionPP(_objective_name, iteration);
-
+  std::cout << "Objective function acquired successfully! ...\n\n";
   // // Set the objective function components comparison results in the reporter
   // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
 
@@ -306,12 +308,15 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
   /// 📝 @TODO: Allow other materials to be present in the mesh even if not
   // optimized for from start, by adding them to the allowed material function.
 
-  std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
-            << "Optimization Reporter for the objective function computation ***\n";
+  std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***"
+            << "\n*** Post processing of the mesh in the FROM_MULTIAPP branch ***"
+            << "\n*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
 
+  // std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
+  //           << "Optimization Reporter for the objective function computation ***\n";
+  std::cout << "Storing Data to a file ... \n";
   _reporter->printCurrentDomain(iteration);
-
-  std::cout << "*** Data is written and stored to a file successfully! ***\n\n";
+  std::cout << "Data is written and stored to a file successfully! ...\n\n";
 
   // Set the objective function value in the reporter
   objectiveFunctionPP(_objective_name, iteration);
@@ -359,13 +364,13 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
   objective_information = app_problem.getPostprocessorValueByName(objective_name);
 
   // Logging
-  std::cout << "Got objective result = " << objective_information << "\n";
+  std::cout << "Got objective result 🎯 = " << objective_information << "\n";
 
   // Set the value in the reporter allowing for the optimizer to get it
   _reporter->setObjectiveInformation(objective_information, iteration);
 
   // Logging
-  std::cout << "Finished setting objective information for iteration " << iteration << "\n\n";
+  std::cout << "Finished setting objective information for iteration 🧮: " << iteration << "\n\n";
 }
 
 // void
@@ -436,27 +441,39 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
 void
 DiscreteOptimizationTransfer::printMeshElements(MooseMesh & mesh)
 {
+
+  // mesh map for printing
+  std::map<dof_id_type, subdomain_id_type> meshmap;
+  meshmap.clear();
+
   // Loop over elements
   for (auto & elem : mesh.getMesh().active_local_element_ptr_range())
   {
     std::cout << "Element ID: " << std::setw(7) << std::left << elem->id()
               << " Material ID: " << std::setw(7) << std::left << elem->subdomain_id() << "\n";
+
+    meshmap[elem->id()] = elem->subdomain_id();
+
+    // Always add the pairs to optimize
+    // _pairs_to_optimize.insert(
+    // std::pair<dof_id_type, subdomain_id_type>(elem->id(), elem->subdomain_id()));
   }
   std::cout << std::endl;
+  _reporter->printMap(meshmap);
 }
 
 void
 DiscreteOptimizationTransfer::processAndVerifyMesh(MooseMesh & mesh)
 {
-  std::cout << "\nObtaining and verifying the mesh before post-processing...\n\n";
+  std::cout << "Obtaining and verifying the mesh before post-processing...\n";
 
   std::cout << "Verifying if the materials utilized in the problem match those allowed for "
                "optimization\n";
   _reporter->isMaterialAllowed(mesh);
 
-  std::cout << "\nAcquiring the first-mesh domain elements and subdomain IDs\n";
+  std::cout << "Acquiring the first-mesh domain elements and subdomain IDs\n";
   _reporter->setInitialCondition(mesh);
 
-  std::cout << "\nSuccessful acquisition of the domain! The Discrete Optimization reporter now has "
+  std::cout << "Successful acquisition of the domain! The Discrete Optimization reporter now has "
                "the initial mesh information!\n\n";
 }

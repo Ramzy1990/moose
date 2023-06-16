@@ -1,5 +1,5 @@
-# [Optimization]
-# []
+[Optimization]
+[]
 
 [Problem]
   solve = false
@@ -38,7 +38,10 @@
 
 [Executioner]
   type = CustomOptimize
+  # nl_max_its = 50
   reporter_user_object = discrete_reporter
+  solve_on = 'FORWARD'
+  # execute_on = 'TIMESTEP_END'
   # num_steps = 500
   # dt = 0.1
   # solve_type = PJFNK
@@ -65,7 +68,7 @@
     type = FullSolveMultiApp
     input_files = simple_heat_cool.i
     # input_files = 'simple_heat_cool.i'
-    # execute_on = 'INITIAL TIMESTEP_BEGIN'
+    execute_on = 'TIMESTEP_BEGIN'
     # execute_on = 'FORWARD'
     #reset_apps = '0 0'
     #reset_time = '1 2'
@@ -91,10 +94,10 @@
   #active = ''
   [toforward]
     # check_multiapp_execute_on = false
-    type = DiscreteOptimizationTransferTest
+    type = DiscreteOptimizationTransfer
     to_multi_app = forward
     user_object = 'discrete_reporter'
-    # objective_name = 'max_temperature'
+    objective_name = 'max_temperature'
   []
   [fromforward]
     # check_multiapp_execute_on = false

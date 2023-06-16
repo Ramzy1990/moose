@@ -12,20 +12,20 @@ source = 10
 #     dy = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
 #     subdomain_id = '
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
+#                     1 2 1 1 1 1 1 1 2 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
 #                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 1 2 1 1 1 1 1 2
+#                     2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#                     2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#                     2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
 #                    '
 #   []
 # []
@@ -34,42 +34,20 @@ source = 10
   [cmg]
     type = CartesianMeshGenerator
     dim = 2
-    dx = '1 1 1 1 1'
-    dy = '1 1 1 1 1'
+    dx = '1 1 1 1'
+    dy = '1 1 1 1'
     subdomain_id = '
-
-2 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
+                    1 1 1 1
+                    1 2 1 1
+                    1 1 1 1
+                    1 1 1 1
                    '
   []
 []
 
-# 2 2 2 2 2
-# 2 2 2 2 2
-# 2 2 1 2 2
-# 2 2 2 2 2
-# 2 2 2 2 2
-
-# [Mesh]
-#   [cmg]
-#     type = CartesianMeshGenerator
-#     dim = 2
-#     dx = '1 1 1'
-#     dy = '1 1 1'
-#     subdomain_id = '
-#                     2 1 1
-#                     1 1 1
-#                     1 1 1
-#                    '
-#   []
-# []
-
 [Variables]
   [temperature]
-    initial_condition = 300
+    initial_condition = 10000
   []
 []
 
@@ -150,14 +128,11 @@ source = 10
     variable = temperature
   []
 
-  # [cost_function]
-  #   type = ParsedPostprocessor
-  #   pp_names = 'total_source max_temperature'
-  #   # function = '-1*(total_source * if(max_temperature < 360, 1, 0.01))'
-  #   # function = '-(total_source - (max_temperature / 2))'
-  #   function = 'max_temperature/total_source'
-  #   # function = '1/(total_source * if(max_temperature > 405, 0.001, if(max_temperature < 395, 2, 1 - (max_temperature - 400) / 5 + 0.001)))'
-  # []
+  [cost_function]
+    type = ParsedPostprocessor
+    pp_names = 'total_source max_temperature'
+    function = '-1*(total_source * if(max_temperature < 400, 1, 0.01))'
+  []
 
 []
 

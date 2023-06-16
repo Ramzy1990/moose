@@ -36,6 +36,8 @@ public:
   virtual bool solve() override;
 
   OptimizationReporterBase & getOptimizationReporter() const { return *_obj_function; }
+
+  // This way, we can use the funciton to get the class instance.
   DiscreteOptimizationReporter & getDiscreteOptimizationReporter() const { return *_reporter; }
   // const std::vector<Real> & getRealParameters() const { return _real_parameters; }
 
@@ -59,11 +61,13 @@ protected:
   //************************
   // Functions Declarations
   //************************
-
   static void objectiveFunctionWrapper(Real & objective,
                                        const std::vector<Real> & rparams,
                                        const std::vector<int> & iparams,
                                        void * ctx);
+
+  void updateTheApp() ;
+
   //
   //
   //

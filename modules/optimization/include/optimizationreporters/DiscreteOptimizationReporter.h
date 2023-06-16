@@ -34,10 +34,11 @@ public:
   //************************
   static InputParameters validParams();
 
+  // Constructor
   DiscreteOptimizationReporter(const InputParameters & parameters);
 
   // void initialize() override {}
-  // void execute() override {}
+  void execute() override {}
   // void threadJoin(const UserObject & /*uo*/); // since we include ElementUserObject.
   // void finalize() override {}
   // void initialSetup();
@@ -172,6 +173,14 @@ public:
     return values;
   }
 
+  /**
+   * Function to print the domain's mesh.
+   * @todo add the capability to have different Elements IDs instead of assuming them constant.
+   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
+   * to print.
+   */
+  void printMap(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
+
   //
   //
   //
@@ -194,7 +203,7 @@ protected:
   //************************
 
   virtual void initialize() override{};
-  void execute();
+  // void execute();
   virtual void finalize() override{};
   // These objects are not threaded
   // void threadJoin(const UserObject &) final {}
@@ -231,14 +240,6 @@ protected:
 
   // void updateMeshIds(const dof_id_type & iteration); // when we have both element and domain ids
   // changing.
-
-  /**
-   * Function to print the domain's mesh.
-   * @todo add the capability to have different Elements IDs instead of assuming them constant.
-   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
-   * to print.
-   */
-  void printMap(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
 
   //
   //

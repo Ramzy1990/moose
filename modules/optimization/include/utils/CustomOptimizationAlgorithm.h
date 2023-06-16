@@ -20,7 +20,7 @@ public:
    * Constructor.
    */
   CustomOptimizationAlgorithm();
-  virtual ~CustomOptimizationAlgorithm() = default;
+  virtual ~CustomOptimizationAlgorithm() = default; // destructor?
 
   /// sets the objective routine
   void setObjectiveRoutine(void (*fncptr)(Real & objective,
@@ -41,8 +41,10 @@ public:
   void setInitialSolution(const std::vector<Real> & real_sol, const std::vector<int> & int_sol);
   void setSeed(unsigned int seed);
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
-  const std::vector<int> & intSolution() const { return _current_int_solution; }
+  std::vector<int> & intSolution() { return _current_int_solution; }
   ///@}
+
+  std::vector<int> _current_int_solution;
 
 protected:
   void (*objectiveFunction)(Real & objective,
@@ -62,7 +64,7 @@ protected:
 
   ///@{ the current solution
   std::vector<Real> _current_real_solution;
-  std::vector<int> _current_int_solution;
+
   unsigned int _real_size;
   unsigned int _int_size;
   unsigned int _size;

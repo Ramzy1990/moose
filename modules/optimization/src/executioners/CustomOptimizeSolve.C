@@ -65,44 +65,31 @@ CustomOptimizeSolve::solve()
   _reporter = &_problem.getUserObject<DiscreteOptimizationReporter>(
       getParam<UserObjectName>("reporter_user_object"));
 
-  // if (!_problem.hasUserObject("reporter_user_object"))
-  //   mooseError("No DiscreteOptimizationReporter object found.");
-  // _reporter = &_problem.getUserObject<DiscreteOptimizationReporter>("reporter_user_object");
-  // _objective_function_value = _reporter->getObjectiveInformation();
-
   // Initial solve
   _inner_solve->solve();
-
-  // Grab objective function
-  // if (!_problem.hasUserObject("OptimizationReporter"))
-  //   mooseError("No OptimizationReporter object found.");
-  // _obj_function = &_problem.getUserObject<OptimizationReporterBase>("OptimizationReporter");
 
   // Initialize solution and matrix
   std::vector<int> iparams;
   std::vector<Real> rparams;
   _reporter->getMeshDomain(iparams, rparams);
   // _obj_function->setInitialCondition(iparams, rparams);
-
   SimulatedAnnealingAlgorithm * sa_alg =
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
-  sa_alg->maxIt() = 20000;
+
+  sa_alg->maxIt() = 2000;
+
   sa_alg->setInitialSolution({}, iparams);
 
-  // Those are for real!
-  // sa_alg->setLowerLimits({-1.2, 2.8});
-  // sa_alg->setUpperLimits({-1.1, 2.9});
-  // sa_alg->realNeighborSelection() = SimulatedAnnealingAlgorithm::BoxSampling;
-
   sa_alg->solve();
-  //_ndof = _real_parameters.size();
-  // bool solveInfo = (taoSolve() == 0);
-  std::cout << "ultimate answer " << _opt_alg->intSolution()[0] << " " << _opt_alg->intSolution()[1]
-            << std::endl;
 
-  // so the realSolution will give us the _current_real_solution
-  auto optimized_vector = _opt_alg->intSolution();
-  _reporter->setMeshDomain(optimized_vector);
+  // std::cout << "ultimate answer " << sa_alg->intSolution()[0] << " " << sa_alg->intSolution()[1]
+  //           << std::endl;
+
+  // // Print the map
+  // for (const auto & i : sa_alg->intSolution())
+  // {
+  //   std::cout << "ultimate mesh subdomain ids:  " << i << " " << std::endl;
+  // }
 
   return true; // solveInfo;
 }
@@ -114,12 +101,41 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
                                               void * ctx)
 {
 
+  // This Wrapper is called everytime inside the simualted annealing algorithm, or so I think!
   auto * solver = static_cast<CustomOptimizeSolve *>(ctx);
 
   // solver->getDiscreteOptimizationReporter().getMeshDomain();
 
+  // We get the optimized mesh solution
+  auto optimized_vector = solver->_opt_alg->intSolution();
+
+  // We set this optimized mesh solution in the reporter
+  solver->getDiscreteOptimizationReporter().setMeshDomain(optimized_vector);
+
+  // We then call the updateTheApp function to execute the problem we have!
+  solver->updateTheApp();
+
+  // We get the objective value! this is from the rpeorter and it have been set during the transfers
+  // execution
   objective = solver->getDiscreteOptimizationReporter()
                   .getObjectiveInformation(); // call actual objective function here
 
-  std::cout << iparams[0] << " " << iparams[1] << " " << objective << std::endl;
+  // Some outputs to show what we have!
+  std::cout << iparams[0] << " " << iparams[1] << " " << objective << "\n\n\n";
+}
+
+void
+CustomOptimizeSolve::updateTheApp()
+{
+  TIME_SECTION("updateTheApp", 2, "Objective forward solve");
+
+  // execute the MultiApp!
+  _problem.execute(OptimizationAppTypes::EXEC_FORWARD);
+
+  // _problem.restoreMultiApps(OptimizationAppTypes::EXEC_FORWARD);
+
+  if (!_problem.execMultiApps(OptimizationAppTypes::EXEC_FORWARD))
+    mooseError("Forward solve multiapp failed!");
+  if (_solve_on.contains(OptimizationAppTypes::EXEC_FORWARD))
+    _inner_solve->solve();
 }
