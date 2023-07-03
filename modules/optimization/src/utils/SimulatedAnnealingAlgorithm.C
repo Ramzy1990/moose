@@ -61,199 +61,255 @@ SimulatedAnnealingAlgorithm::solve()
     mooseError("The problem has a non-zero number of categorical parameters, but the number of "
                "swaps and number of reassignments for neighbor generation are both 0.");
 
-  // set neighbor & best states
-  std::vector<Real> neighbor_real_solution = _current_real_solution;
-  std::vector<int> neighbor_int_solution = _current_int_solution;
-  std::vector<Real> best_real_solution = _current_real_solution;
-  std::vector<int> best_int_solution = _current_int_solution;
+  int num_runs = 1000;                                           // number of runs to perform
+  std::vector<std::pair<Real, std::vector<int>>> best_solutions; // Store best solutions of each
+
+  // set initial neighbor & best states
+  std::vector<Real> init_real_solution = _current_real_solution;
+  std::vector<int> init_int_solution = _current_int_solution;
+  std::vector<Real> init_best_real_solution = _current_real_solution;
+  std::vector<int> init_best_int_solution = _current_int_solution;
+
   Real current_objective;
   objectiveFunction(current_objective, _current_real_solution, _current_int_solution, _ctx);
 
-  _min_objective = current_objective; // Minimum objective is e_best in the fortran code
+  Real initial_objective = current_objective;
+  _min_objective = initial_objective; // Initialize the minimum objective
 
-  Real temp_current = _temp_max;      // Current temperature is set to maximum one.
+  std::vector<Real> neighbor_real_solution;
+  std::vector<int> neighbor_int_solution;
+  std::vector<Real> best_real_solution;
+  std::vector<int> best_int_solution;
 
-  // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
-  _it_counter = 0;
-
-  // Sets the seed for the random number generator
-  MooseRandom::seed(std::time(0));
-
-  // Keeping track of the accepted solutions!
-  // This initializes with 3 pairs, each having a maximum possible objective value and an empty
-  // vector of integers
-  std::vector<std::pair<Real, std::vector<int>>> solutions(
-      3, std::make_pair(std::numeric_limits<Real>::max(), std::vector<int>()));
-
-  // Tabu list
-  std::deque<std::vector<int>> tabu_list;
-  const int max_tabu_size = 333; // maximum size of the Tabu list
-
-  // Solution cache
-  std::unordered_map<std::vector<int>, Real, vector_hash> solution_cache;
-
-  // Define a vector to store all accepted solutions and their objective values
-  // std::vector<std::pair<Real, std::vector<int>>> all_accepted_solutions;
-
-  // simulated annealing loop
-  while (_it_counter < _max_its && temp_current > _temp_min)
+  for (int run = 0; run < num_runs; ++run)
   {
+    // initialization code for each run...
+
+    // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
+    _it_counter = 0;
+
+    _res_var = 1.0;
 
     // Sets the seed for the random number generator
-    // std::srand(std::time(0));
-    // MooseRandom::seed(std::time(0) + _it_counter);
+    MooseRandom::seed(std::time(0) + run);
 
-    // get a new neighbor and compute energy
-    createNeigborReal(_current_real_solution, neighbor_real_solution);
-    createNeigborInt(_current_int_solution, neighbor_int_solution);
+    Real temp_current = _temp_max; // Current temperature is set to maximum one.
 
-    // Check if neighbor is in Tabu list
-    if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_solution) != tabu_list.end())
+    // Tabu list
+    const int max_tabu_size = 100; // maximum size of the Tabu list
+    std::deque<std::vector<int>> tabu_list;
+
+    // Solution cache
+    std::unordered_map<std::vector<int>, Real, vector_hash> solution_cache;
+
+    neighbor_real_solution = init_real_solution;
+    best_real_solution = init_real_solution;
+
+    // Initialize solutions
+    if (run == 0)
     {
-      // Neighbor is in Tabu list, skip this iteration
-      continue;
-    }
-
-    Real neigh_objective;
-
-    auto it = solution_cache.find(neighbor_int_solution);
-    if (it != solution_cache.end())
-    {
-      // If the solution is in the cache, use the cached objective value
-      neigh_objective = it->second;
+      neighbor_int_solution = init_int_solution;
+      best_int_solution = init_int_solution;
     }
     else
     {
-      // Otherwise, compute the objective value and add it to the cache
-      objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
-      solution_cache[neighbor_int_solution] = neigh_objective;
+      neighbor_int_solution = best_solutions.front().second;
+      best_int_solution = best_solutions.front().second;
+      current_objective =
+          best_solutions.front().first;   // Update the current objective with the objective value
+                                          // from the best solution of the previous runs
+      _min_objective = current_objective; // Minimum objective is e_best in the fortran code
     }
 
-    // objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+    // Keeping track of the accepted solutions!
+    // This initializes with 3 pairs, each having a maximum possible objective value and an empty
+    // vector of integers
+    std::vector<std::pair<Real, std::vector<int>>> solutions(
+        3, std::make_pair(std::numeric_limits<Real>::max(), std::vector<int>()));
 
-    std::cout << "Here is the neighbour objective value:  " << neigh_objective << " !\n\n\n";
-    std::cout << "Here is the current objective value:  " << current_objective << " !\n\n\n";
-
-    // Copy the current solution
-    std::vector<int> current_int_solution_copy = _current_int_solution;
-
-    // acceptance check: lower objective always accepted;
-    // acceptance check: lower temps always accepted;
-    // higher objective sometimes accepted
-    Real temp_r = MooseRandom::rand();
-    if (temp_r <= acceptProbability(current_objective, neigh_objective, temp_current))
+    // simulated annealing loop
+    while (_it_counter < _max_its && std::abs(temp_current) > _temp_min)
     {
-      // if we accept then it always counts as a new step
-      ++_it_counter;
-      _current_real_solution = neighbor_real_solution;
-      _current_int_solution = neighbor_int_solution;
-      current_objective = neigh_objective;
 
-      // Add the current solution to the Tabu list
-      tabu_list.push_back(_current_int_solution);
+      // Sets the seed for the random number generator
+      // std::srand(std::time(0));
+      // MooseRandom::seed(std::time(0) + _it_counter);
 
-      // If the Tabu list is too big, remove the oldest element
-      if (tabu_list.size() > max_tabu_size)
+      // get a new neighbor and compute energy
+      createNeigborReal(_current_real_solution, neighbor_real_solution);
+      createNeigborInt(_current_int_solution, neighbor_int_solution);
+
+      // Check if neighbor is in Tabu list
+      if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_solution) != tabu_list.end())
       {
-        tabu_list.pop_front();
+        // Neighbor is in Tabu list, skip this iteration
+        continue;
       }
 
-      std::cout << "IN THIS STEP, WE ACCEPTED THE SOLUTION!"
-                << "\n\n\n";
-      std::cout << "The current Objective value is: " << current_objective << "!\n";
-      std::cout << "The neighbor Objective value is: " << neigh_objective << "!\n";
-    }
-    else
-    {
-      // otherwise, it has a 50% chance to count as a new step to finish the problem
-      // this is especially important for combinatorial problems
-      Real temp_rr = MooseRandom::rand();
-      if (temp_rr <= 0.25)
+      Real neigh_objective;
+
+      auto it = solution_cache.find(neighbor_int_solution);
+      if (it != solution_cache.end())
+      {
+        // If the solution is in the cache, use the cached objective value
+        neigh_objective = it->second;
+      }
+      else
+      {
+        // Otherwise, compute the objective value and add it to the cache
+        objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+        solution_cache[neighbor_int_solution] = neigh_objective;
+      }
+
+      // std::cout << "Here is the neighbour objective value:  " << neigh_objective << " !\n\n\n";
+      // std::cout << "Here is the current objective value:  " << current_objective << " !\n\n\n";
+
+      // Copy the current solution
+      std::vector<int> current_int_solution_copy = _current_int_solution;
+
+      // acceptance check: lower objective always accepted;
+      // acceptance check: lower temps always accepted;
+      // higher objective sometimes accepted
+      Real temp_r = MooseRandom::rand();
+      if (temp_r <= acceptProbability(current_objective, neigh_objective, temp_current))
+      {
+        // if we accept then it always counts as a new step
         ++_it_counter;
+        _current_real_solution = neighbor_real_solution;
+        _current_int_solution = neighbor_int_solution;
+        current_objective = neigh_objective;
 
-      std::cout << "IN THIS STEP, WE DID NOT ACCEPT!"
-                << "\n\n\n";
-    }
+        // Add the current solution to the Tabu list
+        tabu_list.push_back(_current_int_solution);
 
-    // cool the temperature
-    temp_current = coolingSchedule(_it_counter);
+        // If the Tabu list is too big, remove the oldest element
+        if (tabu_list.size() > max_tabu_size)
+        {
+          tabu_list.pop_front();
+        }
 
-    // if this is the best energy, it's our new best value
-    if (current_objective < _min_objective)
-    {
-      _min_objective = current_objective;
-      best_real_solution = _current_real_solution;
-      // best_int_solution = _current_int_solution;
-      best_int_solution = current_int_solution_copy;
-
-      // Each time you find a better solution, add it to the vector
-      solutions.push_back(std::make_pair(_min_objective, best_int_solution));
-
-      // // Find the pair with the worst objective value
-      // // Here we are using the iterators functionality in C++
-      auto worst_it = std::max_element(solutions.begin(), solutions.end());
-
-      // // If the current objective is better than the worst stored one, replace it
-      if (current_objective < worst_it->first)
+        // std::cout << "IN THIS STEP, WE ACCEPTED THE SOLUTION!"
+        //           << "\n\n\n";
+        // std::cout << "The current Objective value is: " << current_objective << "!\n";
+        // std::cout << "The neighbor Objective value is: " << neigh_objective << "!\n";
+      }
+      else
       {
-        *worst_it = std::make_pair(_min_objective, best_int_solution);
+        // otherwise, it has a 10% chance to count as a new step to finish the problem
+        // this is especially important for combinatorial problems
+        Real temp_rr = MooseRandom::rand();
+        if (temp_rr <= 0.1)
+          ++_it_counter;
+
+        // std::cout << "IN THIS STEP, WE DID NOT ACCEPT!"
+        // << "\n\n\n";
       }
 
-      // all_accepted_solutions.push_back(std::make_pair(_min_objective, best_int_solution));
+      // cool the temperature
+      temp_current = coolingSchedule(_it_counter);
+
+      // if this is the best energy, it's our new best value
+      if (current_objective < _min_objective)
+      {
+        _min_objective = current_objective;
+        best_real_solution = _current_real_solution;
+        // best_int_solution = _current_int_solution;
+        best_int_solution = current_int_solution_copy;
+
+        // // Each time you find a better solution, add it to the vector
+        solutions.push_back(std::make_pair(_min_objective, best_int_solution));
+
+        // // Find the pair with the worst objective value
+        // // Here we are using the iterators functionality in C++
+        auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+        // // If the current objective is better than the worst stored one, replace it
+        if (current_objective < worst_it->first)
+        {
+          *worst_it = std::make_pair(_min_objective, best_int_solution);
+        }
+      }
+
+      // perform non-monotonic adjustment if applicable
+      if (!_monotonic_cooling)
+        temp_current *= (1.0 + (current_objective - _min_objective) / current_objective);
+
+      // rewind to best value if reset is enabled
+      if (std::abs(temp_current) <= _res_var)
+      {
+        _res_var *= 0.5;
+        current_objective = _min_objective;
+        _current_real_solution = best_real_solution;
+        _current_int_solution = best_int_solution;
+      }
     }
 
-    // perform non-monotonic adjustment if applicable
-    if (!_monotonic_cooling)
-      temp_current *= (1.0 + (current_objective - _min_objective) / current_objective);
+    // select the best state we ended up finding
+    current_objective = _min_objective;
+    _current_real_solution = best_real_solution;
+    _current_int_solution = best_int_solution;
 
-    // rewind to best value if reset is enabled
-    if (std::abs(temp_current) <= _res_var)
+    // Add the ultimate best solution to the vector
+    solutions.push_back(std::make_pair(current_objective, _current_int_solution));
+
+    // // Find the pair with the worst objective value
+    // // Here we are using the iterators functionality in C++
+    auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+    // // If the current objective is better than the worst stored one, replace it
+    if (current_objective < worst_it->first)
     {
-      _res_var *= 0.5;
-      current_objective = _min_objective;
-      _current_real_solution = best_real_solution;
-      _current_int_solution = best_int_solution;
+      *worst_it = std::make_pair(current_objective, _current_int_solution);
     }
+
+    // Now sort the vector
+    std::sort(solutions.begin(), solutions.end());
+
+    std::pair<Real, std::vector<int>> best_pair_one_run = solutions[0];
+
+    // best_solutions.push_back(std::make_pair(_min_objective, _current_int_solution));
+    best_solutions.push_back(best_pair_one_run);
+    // After each run, sort the best_solutions vector in ascending order of the objective function
+    // value
+    std::sort(best_solutions.begin(), best_solutions.end());
+
+    // std::sort(all_accepted_solutions.begin(), all_accepted_solutions.end());
+
+    // Insert the best 3 solutions into the solutions vector
+    // for (std::size_t i = 0; i < 3 && i < all_accepted_solutions.size(); i++)
+    // {
+    //   solutions[i] = all_accepted_solutions[i];
+    // }
   }
 
-  // select the best state we ended up finding
-  current_objective = _min_objective;
-  _current_real_solution = best_real_solution;
-  _current_int_solution = best_int_solution;
+  // std::pair<Real, std::vector<int>> best_pair = solutions[0];
+  std::pair<Real, std::vector<int>> best_pair = best_solutions[0];
 
-  // Add the ultimate best solution to the vector
-  solutions.push_back(std::make_pair(current_objective, _current_int_solution));
-
-  // // Find the pair with the worst objective value
-  // // Here we are using the iterators functionality in C++
-  auto worst_it = std::max_element(solutions.begin(), solutions.end());
-
-  // // If the current objective is better than the worst stored one, replace it
-  if (current_objective < worst_it->first)
-  {
-    *worst_it = std::make_pair(current_objective, _current_int_solution);
-  }
-
-  // Now sort the vector
-  // std::sort(solutions.begin(), solutions.end());
-  // std::sort(all_accepted_solutions.begin(), all_accepted_solutions.end());
-
-  // Insert the best 3 solutions into the solutions vector
-  // for (std::size_t i = 0; i < 3 && i < all_accepted_solutions.size(); i++)
+  // // Print the best solution and its objective value
+  // std::cout << "Best objective value: " << best_pair.first << "\n";
+  // std::cout << "Associated solution: ";
+  // for (int value : best_pair.second)
   // {
-  //   solutions[i] = all_accepted_solutions[i];
+  //   std::cout << value << " ";
   // }
+  // std::cout << "\n";
 
-  // The best solution is the first one after sorting
-  std::sort(solutions.begin(), solutions.end());
-  std::pair<Real, std::vector<int>> best_pair = solutions[0];
-
-  // Print the best solution and its objective value
-  std::cout << "Best objective value: " << best_pair.first << "\n";
-  std::cout << "Associated solution: ";
-  for (int value : best_pair.second)
+  std::cout << "The best solutions for all runs are as follows: \n";
+  for (const auto & pair : best_solutions)
   {
-    std::cout << value << " ";
+    std::cout << "Objective value: " << pair.first << ", Solution: ";
+    for (const auto & val : pair.second)
+    {
+      std::cout << val << " ";
+    }
+    std::cout << "\n";
+  }
+
+  std::cout << "The overall best solution is:\n";
+  std::cout << "Objective value: " << best_pair.first << ", Solution: ";
+  for (const auto & val : best_pair.second)
+  {
+    std::cout << val << " ";
   }
   std::cout << "\n";
 }
@@ -279,7 +335,7 @@ SimulatedAnnealingAlgorithm::coolingSchedule(unsigned int step) const
 
     default:
       ::mooseError("Cooling option not yet implemented! Please choose from the follwoing options: "
-                   "LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd");
+                   "LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd, trial");
   }
 
   return 1;
@@ -349,7 +405,7 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
                                               std::vector<int> & int_neigh) const
 {
   // Logging the size of the integer solution
-  std::cout << "Size of the integer solution: " << _int_size << std::endl;
+  // std::cout << "Size of the integer solution: " << _int_size << std::endl;
 
   // // SEEMS TO BE WORKING!!
   if (_int_size == 0)

@@ -66,7 +66,17 @@ protected:
                                        const std::vector<int> & iparams,
                                        void * ctx);
 
-  void updateTheApp() ;
+  void updateTheApp();
+
+  void print_table(MooseEnum custom_optimizer_type,
+                   //  std::string objective_function,
+                   int iteration,
+                   double objective_value,
+                   std::string optimized_mesh,
+                   std::string solution_accepted,
+                   std::string tabu_list_used,
+                   std::string cache_used,
+                   bool is_first);
 
   //
   //

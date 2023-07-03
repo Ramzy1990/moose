@@ -865,8 +865,11 @@ DiscreteOptimizationReporter::setObjectiveInformation(const Real & objective_inf
                                                       const dof_id_type & iteration)
 {
   // Logging
-  std::cout << "Setting objective information with objective_information = "
-            << objective_information << " and iteration = " << iteration << std::endl;
+  if (iteration == 1)
+  {
+    std::cout << "Setting objective information with objective_information = "
+              << objective_information << " and iteration = " << iteration << std::endl;
+  }
 
   // Set the objective information for this iteration
   _objective_result = objective_information;

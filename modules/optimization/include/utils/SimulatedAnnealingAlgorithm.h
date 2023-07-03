@@ -114,16 +114,4 @@ protected:
   std::vector<Real> _parameter_lower_limit;
   std::vector<Real> _parameter_upper_limit;
   ///@}
-
-private:
-  // Hash function to convert a solution into a single value
-  std::size_t solutionHash(const std::vector<int> & solution)
-  {
-    size_t seed = solution.size();
-    for (auto & i : solution)
-    {
-      seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
-    return seed;
-  }
 };

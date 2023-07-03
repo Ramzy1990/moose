@@ -42,9 +42,17 @@ public:
   void setSeed(unsigned int seed);
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
   std::vector<int> & intSolution() { return _current_int_solution; }
+  Real & objective() { return _objective_value; }
+  bool & tabu() { return _tabu_used; }
+  bool & cache() { return _cache_used; }
+  bool & solution() { return _solution_accepted; }
+
   ///@}
 
   std::vector<int> _current_int_solution;
+
+  /// the best (aka min) objective seen so far
+  Real _objective_value;
 
 protected:
   void (*objectiveFunction)(Real & objective,
@@ -58,6 +66,15 @@ protected:
 
   /// iteration counter
   unsigned int _it_counter;
+
+  /// Tabu list used
+  bool _tabu_used;
+
+  /// cache used
+  bool _cache_used;
+
+  /// solution accepted
+  bool _solution_accepted;
 
   /// a random seed in case randomization is used for optimization algorithm
   unsigned int _random_seed;

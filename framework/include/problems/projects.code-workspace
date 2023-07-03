@@ -249,7 +249,8 @@
       "CustomOptimize.C": "cpp",
       "LevelSetOlssonTerminator.C": "cpp",
       "ExternalPETScProblem.C": "cpp",
-      "IterationInfo.C": "cpp"
+      "IterationInfo.C": "cpp",
+      "main.C": "cpp"
     }
   }
 }

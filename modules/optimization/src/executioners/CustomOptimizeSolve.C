@@ -76,7 +76,7 @@ CustomOptimizeSolve::solve()
   SimulatedAnnealingAlgorithm * sa_alg =
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
 
-  sa_alg->maxIt() = 2000;
+  sa_alg->maxIt() = 25;
 
   sa_alg->setInitialSolution({}, iparams);
 
@@ -120,8 +120,8 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
   objective = solver->getDiscreteOptimizationReporter()
                   .getObjectiveInformation(); // call actual objective function here
 
-  // Some outputs to show what we have!
-  std::cout << iparams[0] << " " << iparams[1] << " " << objective << "\n\n\n";
+  // solver->print_table(solver->_opt_alg_type, solver->_opt_alg);
+  // std::cout << iparams[0] << " " << iparams[1] << " " << objective << "\n\n\n";
 }
 
 void
@@ -138,4 +138,51 @@ CustomOptimizeSolve::updateTheApp()
     mooseError("Forward solve multiapp failed!");
   if (_solve_on.contains(OptimizationAppTypes::EXEC_FORWARD))
     _inner_solve->solve();
+}
+
+void
+CustomOptimizeSolve::print_table(MooseEnum custom_optimizer_type,
+                                 //  std::string objective_function,
+                                 int iteration,
+                                 Real objective_value,
+                                 std::string optimized_mesh,
+                                 std::string solution_accepted,
+                                 std::string tabu_list_used,
+                                 std::string cache_used,
+                                 bool is_first = false)
+{
+  int w = 20; // width of each column
+  std::string cell_boundary_line = "+" + std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+                                   std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+                                   std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+                                   std::string(w, '-') + "+" + std::string(w, '-') + "+";
+
+  if (is_first)
+  {
+    std::cout << cell_boundary_line << "\n";
+    std::cout << "|" << std::left << std::setw(w - 1)
+              << " Optimizer Type"
+              // << "|" << std::setw(w - 1) << " Objective Function"
+              << "|" << std::setw(w - 1) << " Iteration"
+              << "|" << std::setw(w - 1) << " Objective Value"
+              << "|" << std::setw(w - 1) << " Optimized Mesh"
+              << "|" << std::setw(w - 1) << " Solution Accepted?"
+              << "|" << std::setw(w - 1) << " Tabu List Used?"
+              << "|" << std::setw(w - 1) << " Cache Used"
+              << "|"
+              << "\n";
+    std::cout << cell_boundary_line << "\n";
+  }
+
+  std::cout << "|" << std::left << std::setw(w - 1) << " " + custom_optimizer_type
+            << "|"
+            // << std::setw(w - 1) << " " + objective_function << "|" << std::setw(w - 1)
+            << " " + std::to_string(iteration) << "|" << std::setw(w - 1)
+            << " " + std::to_string(objective_value) << "|" << std::setw(w - 1)
+            << " " + optimized_mesh << "|" << std::setw(w - 1) << " " + solution_accepted << "|"
+            << std::setw(w - 1) << " " + tabu_list_used << "|" << std::setw(w - 1)
+            << " " + cache_used << "|"
+            << "\n";
+
+  std::cout << cell_boundary_line << "\n";
 }

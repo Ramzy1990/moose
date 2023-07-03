@@ -24,20 +24,6 @@ registerMooseObject("MooseApp", DiscreteOptimizationTransfer);
 //*************************
 // Helper Functions if Any
 //*************************
-// std::vector<VectorPostprocessorName>
-// getVectorNamesHelper(const std::string & prefix, const std::vector<PostprocessorName> & pp_names)
-// {
-//   std::vector<VectorPostprocessorName> vec_names;
-//   vec_names.reserve(pp_names.size());
-//   for (const auto & pp_name : pp_names)
-//   {
-//     if (!prefix.empty())
-//       vec_names.push_back(prefix + ":" + pp_name);
-//     else
-//       vec_names.push_back(pp_name);
-//   }
-//   return vec_names;
-// }
 
 //*************************
 // Adding Input Parameters
@@ -66,6 +52,11 @@ DiscreteOptimizationTransfer::validParams()
       "function is the one you would like to transfer its value to the optimizer.  Note: This is a "
       "post processor name from your MultiApp's input file!");
 
+  // Debugging if on or off
+  params.addParam<bool>("debug",
+                        "The debug variable if on or off. If on, then we print several "
+                        "messages during the transfer.");
+
   // Set and suppress the 'execute_on' flag.
   params.set<ExecFlagEnum>("execute_on") = {/*EXEC_INITIAL,*/ EXEC_TIMESTEP_BEGIN};
   params.suppressParameter<ExecFlagEnum>("execute_on");
@@ -83,6 +74,8 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
   // These variables are read only for the FROM_MULTIAPP
   // if (getFromMultiApp())
   // {
+
+  _debug_on = isParamValid("debug") ? getParam<bool>("debug") : 0;
 
   // This variable in the from_multiapp will be used to get the value associated with it to the
   // objective function value by using the getPostprocessorValueByName
@@ -155,6 +148,10 @@ DiscreteOptimizationTransfer::execute()
   // Print the messages once for the very first iteration:
   if (_it_transfer == 1 && hasToMultiApp())
   {
+
+    // if (_debug_on)
+    // {
+
     std::cout << std::endl
               << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
               << std::endl;
@@ -165,6 +162,7 @@ DiscreteOptimizationTransfer::execute()
                  "TO_MULTIAPP logical branch to start the optimization process! Buckle up!..."
               << std::endl
               << std::endl;
+    // }
   }
 
   // _current_direction variable is found inside the MultiAppTransfer class.
@@ -174,11 +172,13 @@ DiscreteOptimizationTransfer::execute()
     {
       _it_transfer_to += 1;
 
-      std::cout << "\n*** You are currently in the TO_MULTIAPP branch! ***\n\n"
-                << "The transfer iterations are as follow: \n"
-                << "Total Iterations: " << _it_transfer << '\n'
-                << "Total TO_MULTIAPP Iterations: " << _it_transfer_to << "\n\n";
-
+      if (_debug_on)
+      {
+        std::cout << "\n*** You are currently in the TO_MULTIAPP branch! ***\n\n"
+                  << "The transfer iterations are as follow: \n"
+                  << "Total Iterations: " << _it_transfer << '\n'
+                  << "Total TO_MULTIAPP Iterations: " << _it_transfer_to << "\n\n";
+      }
       if (_it_transfer_to == 1) // First invocation
       {
         std::cout
@@ -191,12 +191,18 @@ DiscreteOptimizationTransfer::execute()
       {
         handleSubsequentToInvocations(to_mesh, _it_transfer_to);
 
-        std::cout << "*** Finished the current handling of the TO_MULTIAPP branch! ***\n\n";
+        if (_debug_on)
+        {
+
+          std::cout << "*** Finished the current handling of the TO_MULTIAPP branch! ***\n\n";
+        }
       }
+      if (_debug_on)
+      {
 
-      std::cout << "*** Great! See you on the other side after the MultiApp solve! 👋 ***\n\n\n"
-                << std::endl;
-
+        std::cout << "*** Great! See you on the other side after the MultiApp solve! 👋 ***\n\n\n"
+                  << std::endl;
+      }
       break;
     }
 
@@ -204,27 +210,39 @@ DiscreteOptimizationTransfer::execute()
     {
       _it_transfer_from += 1;
 
-      std::cout << "\n\n\n*** You are currently in the FROM_MULTIAPP branch! ***\n\n"
-                << "The transfer iterations are as follow: \n"
-                << "Total Iterations: " << _it_transfer << '\n'
-                << "Total FROM_MULTIAPP Iterations: " << _it_transfer_from << "\n\n";
+      if (_debug_on)
+      {
 
+        std::cout << "\n\n\n*** You are currently in the FROM_MULTIAPP branch! ***\n\n"
+                  << "The transfer iterations are as follow: \n"
+                  << "Total Iterations: " << _it_transfer << '\n'
+                  << "Total FROM_MULTIAPP Iterations: " << _it_transfer_from << "\n\n";
+      }
       if (_it_transfer_from == 1) // First invocation
       {
         handleFirstFromInvocation(from_mesh, _it_transfer_from);
+        if (_debug_on)
+        {
 
-        std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
+          std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
+        }
       }
       else // Subsequent invocations
       {
         handleSubsequentFromInvocations(_it_transfer_from);
+        if (_debug_on)
+        {
 
-        std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
+          std::cout << "\n*** Finished the current handling of the FROM_MULTIAPP branch! ***\n\n";
+        }
       }
+      if (_debug_on)
+      {
 
-      std::cout << "*** Great! See you on the other side then with a new global iteration! 👋 "
-                   "***\n\n\n\n\n\n\n\n\n\n"
-                << std::endl;
+        std::cout << "*** Great! See you on the other side then with a new global iteration! 👋 "
+                     "***\n\n\n\n\n\n\n\n\n\n"
+                  << std::endl;
+      }
       break;
     }
   }
@@ -243,30 +261,39 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
     mooseError("The size of the _to_problem is more than one! "
                "Please check the current discrete transfer capabilities.");
   }
+  if (_debug_on)
+  {
 
-  std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n"
-            << "*** Receiving the domain's mesh elements and subdomains ids ***\n"
-            << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
+    std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n"
+              << "*** Receiving the domain's mesh elements and subdomains ids ***\n"
+              << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
 
-  std::cout << "Starting to receive the domain's previous mesh content ...\n";
-
+    std::cout << "Starting to receive the domain's previous mesh content ...\n";
+  }
   auto mesh_params = _reporter->getMeshParameters();
   _allowed_parameter_values = std::get<0>(mesh_params);
   _initial_pairs_to_optimize = std::get<1>(mesh_params);
   _pairs_to_optimize = std::get<2>(mesh_params);
 
-  std::cout << "Domain's mesh content was received successfully for iteration: " << iteration
-            << "! ...\n";
+  if (_debug_on)
+  {
 
-  std::cout << "Updating the domain's mesh elements-IDs and subdomains-IDs and reassigning the "
-            << "mesh ...\n\n";
+    std::cout << "Domain's mesh content was received successfully for iteration: " << iteration
+              << "! ...\n";
 
+    std::cout << "Updating the domain's mesh elements-IDs and subdomains-IDs and reassigning the "
+              << "mesh ...\n\n";
+  }
   assignMesh(_pairs_to_optimize, to_mesh);
 
-  std::cout << "*** New mesh to pass to the MultiApp ***\n";
+  if (_debug_on)
+  {
 
-  // Print mesh elements to check
-  printMeshElements(to_mesh);
+    std::cout << "*** New mesh to pass to the MultiApp ***\n";
+
+    // Print mesh elements to check
+    printMeshElements(to_mesh);
+  }
 }
 
 void
@@ -307,16 +334,18 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
   /// 📝 @TODO: Check if new materials are added.
   /// 📝 @TODO: Allow other materials to be present in the mesh even if not
   // optimized for from start, by adding them to the allowed material function.
+  if (_debug_on)
+  {
+    std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***"
+              << "\n*** Post processing of the mesh in the FROM_MULTIAPP branch ***"
+              << "\n*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
 
-  std::cout << "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***"
-            << "\n*** Post processing of the mesh in the FROM_MULTIAPP branch ***"
-            << "\n*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
-
-  // std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
-  //           << "Optimization Reporter for the objective function computation ***\n";
-  std::cout << "Storing Data to a file ... \n";
-  _reporter->printCurrentDomain(iteration);
-  std::cout << "Data is written and stored to a file successfully! ...\n\n";
+    // std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
+    //           << "Optimization Reporter for the objective function computation ***\n";
+    std::cout << "Storing Data to a file ... \n";
+    _reporter->printCurrentDomain(iteration);
+    std::cout << "Data is written and stored to a file successfully! ...\n\n";
+  }
 
   // Set the objective function value in the reporter
   objectiveFunctionPP(_objective_name, iteration);
@@ -343,7 +372,10 @@ DiscreteOptimizationTransfer::assignMesh(
   // Chaning the mesh and updating it
   mesh.meshChanged();
 
-  std::cout << "*** Mesh Updated Successfully! ***\n\n";
+  if (_debug_on)
+  {
+    std::cout << "*** Mesh Updated Successfully! ***\n\n";
+  }
 }
 
 void
@@ -352,8 +384,11 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
 {
 
   // Logging
-  std::cout << "Starting objectiveFunctionPP with objective_name = " << objective_name
-            << " and iteration = " << iteration << "\n";
+  if (_debug_on == 1 || iteration == 1)
+  {
+    std::cout << "Starting objectiveFunctionPP with objective_name = " << objective_name
+              << " and iteration = " << iteration << "\n";
+  }
 
   /// 📝 @TODO: Allow several apps as found in "SamplerPostprocessorTransfer::executeFromMultiapp()"
   // Retrieve the FEProblemBase instance
@@ -364,13 +399,18 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
   objective_information = app_problem.getPostprocessorValueByName(objective_name);
 
   // Logging
-  std::cout << "Got objective result 🎯 = " << objective_information << "\n";
-
+  if (_debug_on == 1 || iteration == 1)
+  {
+    std::cout << "Got objective result 🎯 = " << objective_information << "\n";
+  }
   // Set the value in the reporter allowing for the optimizer to get it
   _reporter->setObjectiveInformation(objective_information, iteration);
 
   // Logging
-  std::cout << "Finished setting objective information for iteration 🧮: " << iteration << "\n\n";
+  if (_debug_on == 1 || iteration == 1)
+  {
+    std::cout << "Finished setting objective information for iteration 🧮: " << iteration << "\n\n";
+  }
 }
 
 // void

@@ -97,14 +97,16 @@
     type = DiscreteOptimizationTransfer
     to_multi_app = forward
     user_object = 'discrete_reporter'
-    objective_name = 'max_temperature'
+    debug = 1
+    objective_name = 'cost_function'
   []
   [fromforward]
     # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransfer
     from_multi_app = forward
     user_object = 'discrete_reporter'
-    objective_name = 'max_temperature'
+    debug = 1
+    objective_name = 'cost_function'
   []
 []
 
