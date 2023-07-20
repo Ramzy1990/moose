@@ -38,6 +38,7 @@
 
 [Executioner]
   type = CustomOptimize
+  # type = gardensnake-opt
   # nl_max_its = 50
   reporter_user_object = discrete_reporter
   solve_on = 'FORWARD'
@@ -67,6 +68,7 @@
   [forward]
     type = FullSolveMultiApp
     input_files = simple_heat_cool.i
+    # input_files = eigen_test.i
     # input_files = 'simple_heat_cool.i'
     execute_on = 'TIMESTEP_BEGIN'
     # execute_on = 'FORWARD'
@@ -82,6 +84,10 @@
   console = true
   # exodus = true
   csv = true
+  # [console]
+  # type = Console
+  # max_rows = 1
+  # []
 []
 
 # [UserObjects]
@@ -97,16 +103,18 @@
     type = DiscreteOptimizationTransfer
     to_multi_app = forward
     user_object = 'discrete_reporter'
-    debug = 1
+    debug = 0
     objective_name = 'cost_function'
+    # objective_name = 'max_eigenvalue'
   []
   [fromforward]
     # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransfer
     from_multi_app = forward
     user_object = 'discrete_reporter'
-    debug = 1
+    debug = 0
     objective_name = 'cost_function'
+    # objective_name = 'max_eigenvalue'
   []
 []
 

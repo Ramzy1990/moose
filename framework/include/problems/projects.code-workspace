@@ -250,7 +250,23 @@
       "LevelSetOlssonTerminator.C": "cpp",
       "ExternalPETScProblem.C": "cpp",
       "IterationInfo.C": "cpp",
-      "main.C": "cpp"
+      "main.C": "cpp",
+      "MutableCoefficientsInterface.C": "cpp",
+      "PatchSidesetGenerator.C": "cpp",
+      "ParameterStudyAction.C": "cpp",
+      "Eigenvalue.C": "cpp",
+      "executioners_Unity.C": "cpp",
+      "Steady.C": "cpp",
+      "Transient.C": "cpp",
+      "NavierStokesApp.C": "cpp",
+      "MiscApp.C": "cpp",
+      "ExampleApp.C": "cpp",
+      "BabblerTestApp.C": "cpp",
+      "BabblerApp.C": "cpp",
+      "INSBase.C": "cpp",
+      "DiscreteNucleationMarker.C": "cpp",
+      "ElementLengthAux.C": "cpp",
+      "AverageElementSize.C": "cpp"
     }
   }
 }

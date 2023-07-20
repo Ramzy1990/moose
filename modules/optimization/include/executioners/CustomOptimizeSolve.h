@@ -68,15 +68,14 @@ protected:
 
   void updateTheApp();
 
-  void print_table(MooseEnum custom_optimizer_type,
+  void print_table(std::string custom_optimizer_type,
                    //  std::string objective_function,
-                   int iteration,
-                   double objective_value,
-                   std::string optimized_mesh,
-                   std::string solution_accepted,
-                   std::string tabu_list_used,
-                   std::string cache_used,
-                   bool is_first);
+                   const unsigned int iteration,
+                   const PostprocessorName objective_name,
+                   const Real objective_value,
+                   bool solution_accepted,
+                   bool tabu_list_used,
+                   bool cache_used);
 
   //
   //

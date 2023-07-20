@@ -33,6 +33,7 @@ source = 10
 [Mesh]
   [cmg]
     type = CartesianMeshGenerator
+    # elem_type = Tri3
     dim = 2
     dx = '1 1 1 1 1'
     dy = '1 1 1 1 1'
@@ -163,7 +164,8 @@ source = 10
 []
 
 [Executioner]
-  type = Steady
+  type = steady
+  # type = Transient
   nl_abs_tol = 1e-8
 []
 
@@ -171,4 +173,9 @@ source = 10
   print_linear_residuals = false
   exodus = true
   csv = true
+  # [console]
+  # type = Console
+  # print_mesh_changed_info = true
+  # system_info = 'framework mesh aux nonlinear execution'
+  # []
 []

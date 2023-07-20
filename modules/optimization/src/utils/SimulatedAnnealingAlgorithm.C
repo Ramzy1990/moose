@@ -140,19 +140,23 @@ SimulatedAnnealingAlgorithm::solve()
       createNeigborInt(_current_int_solution, neighbor_int_solution);
 
       // Check if neighbor is in Tabu list
+      _tabu_used = false;
       if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_solution) != tabu_list.end())
       {
         // Neighbor is in Tabu list, skip this iteration
+        _tabu_used = true;
         continue;
       }
 
       Real neigh_objective;
 
+      _cache_used = false;
       auto it = solution_cache.find(neighbor_int_solution);
       if (it != solution_cache.end())
       {
         // If the solution is in the cache, use the cached objective value
         neigh_objective = it->second;
+        _cache_used = true;
       }
       else
       {
@@ -170,6 +174,7 @@ SimulatedAnnealingAlgorithm::solve()
       // acceptance check: lower objective always accepted;
       // acceptance check: lower temps always accepted;
       // higher objective sometimes accepted
+      _solution_accepted = false;
       Real temp_r = MooseRandom::rand();
       if (temp_r <= acceptProbability(current_objective, neigh_objective, temp_current))
       {
@@ -178,7 +183,7 @@ SimulatedAnnealingAlgorithm::solve()
         _current_real_solution = neighbor_real_solution;
         _current_int_solution = neighbor_int_solution;
         current_objective = neigh_objective;
-
+        _solution_accepted = true;
         // Add the current solution to the Tabu list
         tabu_list.push_back(_current_int_solution);
 

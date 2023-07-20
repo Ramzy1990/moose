@@ -37,9 +37,10 @@ public:
   virtual void solve() = 0;
 
   ///@{ public interface
-  unsigned int & maxIt() { return _max_its; }
   void setInitialSolution(const std::vector<Real> & real_sol, const std::vector<int> & int_sol);
   void setSeed(unsigned int seed);
+  unsigned int & maxIt() { return _max_its; }
+  unsigned int & counterIteration() { return _it_counter; }
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
   std::vector<int> & intSolution() { return _current_int_solution; }
   Real & objective() { return _objective_value; }

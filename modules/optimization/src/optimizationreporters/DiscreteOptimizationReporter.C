@@ -861,7 +861,8 @@ DiscreteOptimizationReporter::costFunction(
 }
 
 void
-DiscreteOptimizationReporter::setObjectiveInformation(const Real & objective_information,
+DiscreteOptimizationReporter::setObjectiveInformation(const PostprocessorName & objective_name,
+                                                      const Real & objective_information,
                                                       const dof_id_type & iteration)
 {
   // Logging
@@ -873,12 +874,19 @@ DiscreteOptimizationReporter::setObjectiveInformation(const Real & objective_inf
 
   // Set the objective information for this iteration
   _objective_result = objective_information;
+  _objective_name = objective_name;
 }
 
 Real
-DiscreteOptimizationReporter::getObjectiveInformation() const
+DiscreteOptimizationReporter::getObjectiveResult() const
 {
   return _objective_result;
+}
+
+PostprocessorName
+DiscreteOptimizationReporter::getObjectiveName() const
+{
+  return _objective_name;
 }
 
 void

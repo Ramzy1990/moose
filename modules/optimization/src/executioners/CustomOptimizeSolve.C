@@ -118,10 +118,35 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
   // We get the objective value! this is from the rpeorter and it have been set during the transfers
   // execution
   objective = solver->getDiscreteOptimizationReporter()
-                  .getObjectiveInformation(); // call actual objective function here
+                  .getObjectiveResult(); // call actual objective function here
 
-  // solver->print_table(solver->_opt_alg_type, solver->_opt_alg);
-  // std::cout << iparams[0] << " " << iparams[1] << " " << objective << "\n\n\n";
+  // We get the objective name if we need to use it
+  PostprocessorName objective_name;
+  objective_name = solver->getDiscreteOptimizationReporter()
+                       .getObjectiveName(); // call actual objective function here
+
+  // current iteration
+  auto iteration = solver->_opt_alg->counterIteration();
+
+  // current objective value
+  auto objective_value = objective;
+
+  // if solution is accepted, or tabu list is used, or cache is used
+  auto solution_accepted = solver->_opt_alg->tabu();
+  auto tabu_list_used = solver->_opt_alg->cache();
+  auto cache_used = solver->_opt_alg->solution();
+
+  // get the optimizer name
+  std::string optimizer_name = solver->_opt_alg_type.getRawNames();
+
+  // print the table that uses the previous information
+  solver->print_table(optimizer_name,
+                      iteration,
+                      objective_name,
+                      objective_value,
+                      solution_accepted,
+                      tabu_list_used,
+                      cache_used);
 }
 
 void
@@ -141,48 +166,94 @@ CustomOptimizeSolve::updateTheApp()
 }
 
 void
-CustomOptimizeSolve::print_table(MooseEnum custom_optimizer_type,
-                                 //  std::string objective_function,
-                                 int iteration,
-                                 Real objective_value,
-                                 std::string optimized_mesh,
-                                 std::string solution_accepted,
-                                 std::string tabu_list_used,
-                                 std::string cache_used,
-                                 bool is_first = false)
+CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
+                                 const unsigned int iteration,
+                                 const PostprocessorName objective_name,
+                                 const Real objective_value,
+                                 bool solution_accepted,
+                                 bool tabu_list_used,
+                                 bool cache_used)
 {
-  int w = 20; // width of each column
-  std::string cell_boundary_line = "+" + std::string(w, '-') + "+" + std::string(w, '-') + "+" +
-                                   std::string(w, '-') + "+" + std::string(w, '-') + "+" +
-                                   std::string(w, '-') + "+" + std::string(w, '-') + "+" +
-                                   std::string(w, '-') + "+" + std::string(w, '-') + "+";
+  // // int w = 20; // width of each column
+  // // Calculate the width of each column dynamically
+  // int w = std::max(
+  //     std::max(std::to_string(custom_optimizer_type).length(), objective_name.length()),
+  //     std::max(std::to_string(iteration).length(), std::to_string(objective_value).length()));
+  // w += 5; // add some buffer
 
-  if (is_first)
+  // std::string cell_boundary_line = "+" + std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+  //                                  std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+  //                                  std::string(w, '-') + "+" + std::string(w, '-') + "+" +
+  //                                  std::string(w, '-') + "+";
+
+  // std::cout << cell_boundary_line << "\n";
+  // std::cout << "|" << std::left << std::setw(w - 1) << " Optimizer Type"
+  //           << "|" << std::setw(w - 1) << " Objective Function"
+  //           << "|" << std::setw(w - 1) << " Iteration"
+  //           << "|" << std::setw(w - 1) << " Objective Value"
+  //           << "|" << std::setw(w - 1) << " Solution Accepted?"
+  //           << "|" << std::setw(w - 1) << " Tabu List Used?"
+  //           << "|" << std::setw(w - 1) << " Cache Used?"
+  //           << "|"
+  //           << "\n";
+  // std::cout << cell_boundary_line << "\n";
+
+  // std::cout << "|" << std::left << std::setw(w - 1) << " " + custom_optimizer_type << "|"
+  //           << std::setw(w - 1) << " " + objective_name << "|" << std::setw(w - 1)
+  //           << " " + std::to_string(iteration) << "|" << std::setw(w - 1)
+  //           << " " + std::to_string(objective_value) << "|" << std::setw(w - 1)
+  //           << std::string(" ") + (solution_accepted ? "Yes" : "No") << "|" << std::setw(w - 1)
+  //           << std::string(" ") + (tabu_list_used ? "Yes" : "No") << "|" << std::setw(w - 1)
+  //           << std::string(" ") + (cache_used ? "Yes" : "No") << "|"
+  //           << "\n";
+
+  // std::cout << cell_boundary_line << "\n";
+
+  std::vector<std::string> headers = {"Optimizer Type",
+                                      "Objective Function",
+                                      "Iteration",
+                                      "Objective Value",
+                                      "Solution Accepted?",
+                                      "Tabu List Used?",
+                                      "Cache Used?"};
+
+  std::vector<std::string> row = {custom_optimizer_type,
+                                  objective_name,
+                                  std::to_string(iteration),
+                                  std::to_string(objective_value),
+                                  solution_accepted ? "Yes" : "No",
+                                  tabu_list_used ? "Yes" : "No",
+                                  cache_used ? "Yes" : "No"};
+
+  std::vector<int> widths;
+  for (int i = 0; i < headers.size(); ++i)
   {
-    std::cout << cell_boundary_line << "\n";
-    std::cout << "|" << std::left << std::setw(w - 1)
-              << " Optimizer Type"
-              // << "|" << std::setw(w - 1) << " Objective Function"
-              << "|" << std::setw(w - 1) << " Iteration"
-              << "|" << std::setw(w - 1) << " Objective Value"
-              << "|" << std::setw(w - 1) << " Optimized Mesh"
-              << "|" << std::setw(w - 1) << " Solution Accepted?"
-              << "|" << std::setw(w - 1) << " Tabu List Used?"
-              << "|" << std::setw(w - 1) << " Cache Used"
-              << "|"
-              << "\n";
-    std::cout << cell_boundary_line << "\n";
+    int header_width = headers[i].length();
+    int row_width = row[i].length();
+    widths.push_back(std::max(header_width, row_width));
   }
 
-  std::cout << "|" << std::left << std::setw(w - 1) << " " + custom_optimizer_type
-            << "|"
-            // << std::setw(w - 1) << " " + objective_function << "|" << std::setw(w - 1)
-            << " " + std::to_string(iteration) << "|" << std::setw(w - 1)
-            << " " + std::to_string(objective_value) << "|" << std::setw(w - 1)
-            << " " + optimized_mesh << "|" << std::setw(w - 1) << " " + solution_accepted << "|"
-            << std::setw(w - 1) << " " + tabu_list_used << "|" << std::setw(w - 1)
-            << " " + cache_used << "|"
-            << "\n";
+  auto print_line = [&]()
+  {
+    for (int i = 0; i < headers.size(); ++i)
+    {
+      std::cout << "+-" << std::setw(widths[i]) << std::setfill('-') << "-" << std::setfill(' ');
+    }
+    std::cout << "+\n";
+  };
 
-  std::cout << cell_boundary_line << "\n";
+  auto print_row = [&](const std::vector<std::string> & data)
+  {
+    for (int i = 0; i < data.size(); ++i)
+    {
+      std::cout << "| " << std::left << std::setw(widths[i]) << data[i] << " ";
+    }
+    std::cout << "|\n";
+  };
+
+  print_line();
+  print_row(headers);
+  print_line();
+  print_row(row);
+  print_line();
 }

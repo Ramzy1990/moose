@@ -81,12 +81,19 @@ public:
    * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
    * Transfer class.
    */
-  void setObjectiveInformation(const Real & objective_result, const dof_id_type & iteration);
+  void setObjectiveInformation(const PostprocessorName & objective_name,
+                               const Real & objective_result,
+                               const dof_id_type & iteration);
 
   /**
    * Function to get the constraints comparison results from the reporter.
    */
-  Real getObjectiveInformation() const;
+  Real getObjectiveResult() const;
+
+  /**
+   * Function to get the objective function name from the reporter.
+   */
+  PostprocessorName getObjectiveName() const;
 
   /**
    * Function to printout the domain mesh and information to a file
@@ -312,6 +319,9 @@ protected:
 
   /// @brief The objective infromation as we got it from the discrete transfer, and to pass it to the optimizer
   Real _objective_result;
+
+  /// @brief The objective name as we got it from the discrete transfer, and to pass it to the optimizer
+  PostprocessorName _objective_name;
 
   /// pairing between subdomains_ids and their names
   /// use getSubdomainNames in a function with ->first and ->second

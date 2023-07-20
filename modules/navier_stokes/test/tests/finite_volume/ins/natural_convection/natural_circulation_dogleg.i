@@ -2,7 +2,7 @@
 height = 2.2
 density = 1.2
 gravity = 10
-head = ${fparse height * density * gravity}
+head = '${fparse height * density * gravity}'
 
 [Mesh]
   [mesh]

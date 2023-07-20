@@ -404,7 +404,7 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
     std::cout << "Got objective result 🎯 = " << objective_information << "\n";
   }
   // Set the value in the reporter allowing for the optimizer to get it
-  _reporter->setObjectiveInformation(objective_information, iteration);
+  _reporter->setObjectiveInformation(objective_name, objective_information, iteration);
 
   // Logging
   if (_debug_on == 1 || iteration == 1)
