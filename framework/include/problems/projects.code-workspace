@@ -266,7 +266,20 @@
       "INSBase.C": "cpp",
       "DiscreteNucleationMarker.C": "cpp",
       "ElementLengthAux.C": "cpp",
-      "AverageElementSize.C": "cpp"
+      "AverageElementSize.C": "cpp",
+      "MultiAppTransfer.C": "cpp",
+      "StochasticReporter.C": "cpp",
+      "optional": "cpp",
+      "ranges": "cpp",
+      "cinttypes": "cpp",
+      "MultiAppPostprocessorTransfer.C": "cpp",
+      "MultiAppConservativeTransfer.C": "cpp",
+      "FEProblem.C": "cpp",
+      "MultiAppDofCopyTransfer.C": "cpp",
+      "MooseApp.C": "cpp",
+      "LevelSetReinitializationMultiApp.C": "cpp",
+      "MultiAppNearestNodeTransfer.C": "cpp",
+      "reportertransferinterface.h": "c"
     }
   }
 }

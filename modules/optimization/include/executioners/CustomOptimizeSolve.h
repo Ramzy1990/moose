@@ -71,6 +71,7 @@ protected:
   void print_table(std::string custom_optimizer_type,
                    //  std::string objective_function,
                    const unsigned int iteration,
+                   const int run_iteration,
                    const PostprocessorName objective_name,
                    const Real objective_value,
                    bool solution_accepted,

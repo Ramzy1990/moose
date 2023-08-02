@@ -7,24 +7,26 @@ source = 10
 # [Mesh]
 #   [cmg]
 #     type = CartesianMeshGenerator
-#     # elem_type = Tri3
 #     dim = 2
-#     dx = '2 2 2 2 2 2 2 2 2 2'
-#     dy = '2 2 2 2 2 2 2 2 2 2'
-#     ix = '2 2 2 2 2 2 2 2 2 2'
-#     iy = '2 2 2 2 2 2 2 2 2 2'
+#     dx = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+#     dy = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
 #     subdomain_id = '
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 2 1 1 1 1 1
-# 1 1 1 1 2 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1
-#                   '
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 2 1 1 1 1 1 2 1 1 1 1 1 2 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#                    '
 #   []
 # []
 
@@ -37,8 +39,9 @@ source = 10
     dy = '1 1 1 1 1'
     subdomain_id = '
 
-2 1 1 1 1
-1 1 1 2 1
+
+1 1 1 1 2
+1 2 1 1 1
 1 1 1 1 1
 1 1 1 1 1
 2 1 1 1 2
@@ -142,68 +145,23 @@ source = 10
     variable = source_var
     block = 1
   []
-  # [total_source_1]
-  #   type = Receiver
+
+  # [max_temperature]
+  #   type = ElementExtremeValue
+  #   value_type = max
+  #   variable = temperature
   # []
-  [max_temperature]
-    type = ElementExtremeValue
-    value_type = max
-    variable = temperature
-  []
 
   # [cost_function]
   #   type = ParsedPostprocessor
-  #   pp_names = 'total_source_1 max_temperature'
-  #   function = '-1*(total_source_1 * if(max_temperature < 360, 1, 0.01))'
+  #   pp_names = 'total_source max_temperature'
+  #   function = '-1*(total_source * if(max_temperature < 360, 1, 0.01))'
   #   # function = '-(total_source - (max_temperature / 2))'
   #   # function = 'max_temperature/total_source'
   #   #   # function = '1/(total_source * if(max_temperature > 405, 0.001, if(max_temperature < 395, 2, 1 - (max_temperature - 400) / 5 + 0.001)))'
   # []
 
-  [cost_function]
-    type = ParsedPostprocessor
-    pp_names = 'total_source max_temperature'
-    function = '-1*(total_source * if(max_temperature < 360, 1, 0.01))'
-    # function = '-(total_source - (max_temperature / 2))'
-    # function = 'max_temperature/total_source'
-    #   # function = '1/(total_source * if(max_temperature > 405, 0.001, if(max_temperature < 395, 2, 1 - (max_temperature - 400) / 5 + 0.001)))'
-  []
-
 []
-
-# [MultiApps]
-#   [forward1]
-#     type = FullSolveMultiApp
-#     input_files = sub_simple_heat_cool.i
-#     clone_parent_mesh = true
-#     # input_files = eigen_test.i
-#     execute_on = 'TIMESTEP_BEGIN'
-#     # execute_on = 'FORWARD'
-#     #reset_apps = '0 0'
-#     #reset_time = '1 2'
-#     #execute_on = TIMESTEP_END
-#     # execute_on = 'INITIAL TIMESTEP_BEGIN'
-#   []
-# []
-
-# [Transfers]
-
-#   # [mesh_transfer]
-#   #   type = MultiAppMeshTransfer
-#   #   to_multi_app = forward1
-#   #   # from_multi_app = forward1
-#   #   execute_on = 'TIMESTEP_BEGIN'
-#   # []
-
-#   [pp_transfer]
-#     type = MultiAppPostprocessorTransfer
-#     from_multi_app = forward1
-#     reduction_type = maximum
-#     from_postprocessor = total_source
-#     to_postprocessor = total_source_1
-#   []
-
-# []
 
 [Executioner]
   type = Steady

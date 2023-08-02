@@ -11,6 +11,8 @@
 #include <limits>
 
 // The vector_hash struct
+// Taken from: https://stackoverflow.com/questions/20511347/a-good-hash-function-for-a-vector
+// Used to hash the solutions cache with a map!
 struct vector_hash
 {
   template <class T1>
@@ -84,7 +86,7 @@ SimulatedAnnealingAlgorithm::solve()
   for (int run = 0; run < num_runs; ++run)
   {
     // initialization code for each run...
-
+    _it_run = run;
     // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
     _it_counter = 0;
 
@@ -137,7 +139,7 @@ SimulatedAnnealingAlgorithm::solve()
 
       // get a new neighbor and compute energy
       createNeigborReal(_current_real_solution, neighbor_real_solution);
-      createNeigborInt(_current_int_solution, neighbor_int_solution);
+      createNeigborInt(_current_int_solution, neighbor_int_solution, _execlude_domain);
 
       // Check if neighbor is in Tabu list
       _tabu_used = false;
@@ -407,127 +409,158 @@ SimulatedAnnealingAlgorithm::createNeigborReal(const std::vector<Real> & real_so
 
 void
 SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
-                                              std::vector<int> & int_neigh) const
+                                              std::vector<int> & int_neigh,
+                                              const std::vector<int> & exclude_values) const
 {
-  // Logging the size of the integer solution
-  // std::cout << "Size of the integer solution: " << _int_size << std::endl;
+  // One and two values
+  // if (_int_size == 0)
+  // {
+  //   int_neigh = {};
+  //   return;
+  // }
+  // unsigned int index = MooseRandom::randl() % _int_size;
+  // int_neigh = int_sol;
+  // // Flip the value at the chosen index (change 1 to 2 or vice versa)
+  // if (int_neigh[index] == 1)
+  // {
+  //   int_neigh[index] = 2;
+  // }
+  // else
+  // {
+  //   int_neigh[index] = 1;
+  // }
 
-  // // SEEMS TO BE WORKING!!
+  // // Check to make sure the domain contains at least one type of each material
+  // bool hasOne = false, hasTwo = false;
+  // for (unsigned int i = 0; i < _int_size; ++i)
+  // {
+  //   if (int_neigh[i] == 1)
+  //   {
+  //     hasOne = true;
+  //   }
+  //   else if (int_neigh[i] == 2)
+  //   {
+  //     hasTwo = true;
+  //   }
+
+  //   // If both materials are found, break the loop early
+  //   if (hasOne && hasTwo)
+  //     break;
+  // }
+
+  // // If either material is missing, insert it at a random position
+  // if (!hasOne || !hasTwo)
+  // {
+  //   int_neigh[MooseRandom::randl() % _int_size] = !hasOne ? 1 : 2;
+  // }
+
+  ///////////////////////////////////////////////////////////
+  //// Many vlaues but flipping just one element at a time///
+  ///////////////////////////////////////////////////////////
   if (_int_size == 0)
   {
     int_neigh = {};
     return;
   }
-  unsigned int index = MooseRandom::randl() % _int_size;
+
+  unsigned int index;
   int_neigh = int_sol;
-  // Flip the value at the chosen index (change 1 to 2 or vice versa)
-  if (int_neigh[index] == 1)
+  // Get the min and max values from int_sol
+  int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+  int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+  // Find a random index whose value is not in exclude_values
+  do
   {
-    int_neigh[index] = 2;
-  }
-  else
+    index = MooseRandom::randl() % _int_size;
+  } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+           exclude_values.end());
+
+  // Generate a new random value different from the current one and not in exclude_values
+  int new_val;
+  do
   {
-    int_neigh[index] = 1;
+    // Adjust the modulus operation to be the size of our desired range (max_value - min_value + 1)
+    // Add the minimum value, min_value, to shift this range up from starting at 0 to starting at
+    // our minimum value.
+    new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+  } while (new_val == int_neigh[index] ||
+           std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+               exclude_values.end());
+
+  int_neigh[index] = new_val;
+
+  // Check if all possible values are in the new solution
+  std::vector<bool> hasValue(max_value - min_value + 1, false);
+  for (unsigned int i = 0; i < _int_size; ++i)
+  {
+    hasValue[int_neigh[i] - min_value] = true;
   }
 
+  // If any value is missing (and not in exclude_values), insert it at a random position
+  for (int i = 0; i <= max_value - min_value; ++i)
+  {
+    if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
+                            exclude_values.end())
+    {
+      int random_index;
+      // Find a random index whose value is not in exclude_values
+      do
+      {
+        random_index = MooseRandom::randl() % _int_size;
+      } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index]) !=
+               exclude_values.end());
+
+      int_neigh[random_index] = i + min_value;
+      // Assuming the distribution is uniform, we do not need to re-check after inserting
+      break;
+    }
+  }
+
+  ///////////////////////////////////////////////////////////
+  ///////// Many vlaues but flipping a lot at a time ////////
+  ///////////////////////////////////////////////////////////
   // if (_int_size == 0)
   // {
   //   int_neigh = {};
   //   return;
   // }
 
-  // // set neighbor to the current state
-  // int_neigh = int_sol;
-
-  // // Define the number of mutations
-  // unsigned int num_mutations = 7; // Feel free to adjust this value
-
-  // for (unsigned int i = 0; i < num_mutations; ++i)
+  // Real flip_ratio = 0.50; // Adjust this to the desired flip ratio
+  // unsigned int num_flips = static_cast<unsigned int>(_int_size * flip_ratio);
+  // if (num_flips > _int_size)
   // {
-  //   // Choose a random index
-  //   unsigned int index = MooseRandom::randl() % _int_size;
-
-  //   // Increment the value at the chosen index, wrap around to 1 if it's 2
-  //   if (int_neigh[index] == 1)
-  //   {
-  //     int_neigh[index] = 2;
-  //   }
-  //   else
-  //   {
-  //     int_neigh[index] = 1;
-  //   }
+  //   num_flips = _int_size; // ensure we do not try to flip more elements than we have
   // }
 
-  // Check to make sure the domain contains at least one type of each material
-  bool hasOne = false, hasTwo = false;
-  for (unsigned int i = 0; i < _int_size; ++i)
-  {
-    if (int_neigh[i] == 1)
-    {
-      hasOne = true;
-    }
-    else if (int_neigh[i] == 2)
-    {
-      hasTwo = true;
-    }
+  // // Get the min and max values from int_sol
+  // subdomain_id_type min_value = *std::min_element(int_sol.begin(), int_sol.end());
+  // subdomain_id_type max_value = *std::max_element(int_sol.begin(), int_sol.end());
+  // int_neigh = int_sol; // copy the solution into the neighbor
 
-    // If both materials are found, break the loop early
-    if (hasOne && hasTwo)
-      break;
-  }
-
-  // If either material is missing, insert it at a random position
-  if (!hasOne || !hasTwo)
-  {
-    int_neigh[MooseRandom::randl() % _int_size] = !hasOne ? 1 : 2;
-  }
-
-  // int diff = 0;
-  // while (diff < 1)
+  // for (unsigned int flip = 0; flip < num_flips; ++flip)
   // {
-  //   for (unsigned int j = 0; j < _num_swaps; ++j)
+  //   unsigned int index;
+  //   // Find a random index whose value is not in exclude_values
+  //   do
   //   {
-  //     auto j1 = MooseRandom::randl() % _int_size;
-  //     auto j2 = MooseRandom::randl() % _int_size;
+  //     index = MooseRandom::randl() % _int_size;
+  //   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+  //            exclude_values.end());
 
-  //     // Logging the indices chosen for swapping
-  //     std::cout << "Indices chosen for swapping: " << j1 << ", " << j2 << std::endl;
-
-  //     mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
-  //     mooseAssert(j2 < _int_size, "The index needs to be smaller than integer size");
-
-  //     int_neigh[j1] = int_sol[j2];
-  //     int_neigh[j2] = int_sol[j1];
-  //   }
-
-  //   for (unsigned int j = 0; j < _num_reassignments; ++j)
+  //   // Generate a new random value different from the current one and not in exclude_values
+  //   subdomain_id_type new_val;
+  //   do
   //   {
-  //     if (_valid_options.size() == 0)
-  //     {
-  //       mooseError("The number of reassignments is > 0, but no valid options for the "
-  //                  "integer/categorical parameters was provided.");
-  //     }
-  //     auto j1 = MooseRandom::randl() % _int_size;
-  //     auto j2 = MooseRandom::randl() % _valid_options.size();
+  //     // Adjust the modulus operation to be the size of our desired range (max_value - min_value +
+  //     // 1) Add the minimum value, min_value, to shift this range up from starting at 0 to starting
+  //     // at our minimum value.
+  //     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+  //   } while (new_val == int_neigh[index] ||
+  //            std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+  //                exclude_values.end());
 
-  //     // Logging the indices chosen for reassignment
-  //     std::cout << "Indices chosen for reassignment: " << j1 << ", " << j2 << std::endl;
-
-  //     mooseAssert(j1 < _int_size, "The index needs to be smaller than integer size");
-  //     mooseAssert(j2 < _valid_options.size(),
-  //                 "The index needs to be smaller than valid options size");
-
-  //     int_neigh[j1] = _valid_options[j2];
-  //   }
-
-  //   diff = 0;
-  //   for (unsigned int j = 0; j < _int_size; ++j)
-  //   {
-  //     diff += std::abs(int_neigh[j] - int_sol[j]);
-  //   }
-
-  //   // Logging the computed difference
-  //   std::cout << "Computed difference: " << diff << std::endl;
+  //   int_neigh[index] = new_val; // assign the new value
   // }
 }
 

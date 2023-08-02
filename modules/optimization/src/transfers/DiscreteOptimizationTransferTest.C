@@ -177,8 +177,9 @@ DiscreteOptimizationTransferTest::execute()
 
       auto mesh_params = _reporter->getMeshParameters();
       _transfer_allowed_parameter_values = std::get<0>(mesh_params);
-      _transfer_initial_pairs_to_optimize = std::get<1>(mesh_params);
-      _transfer_pairs_to_optimize = std::get<2>(mesh_params);
+      _transfer_excluded_parameter_values = std::get<1>(mesh_params);
+      _transfer_initial_pairs_to_optimize = std::get<2>(mesh_params);
+      _transfer_pairs_to_optimize = std::get<3>(mesh_params);
 
       std::cout << std::endl
                 << "Domain's mesh content was received successfully! ... " << std::endl

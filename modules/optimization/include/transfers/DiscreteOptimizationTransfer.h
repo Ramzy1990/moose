@@ -70,7 +70,9 @@ protected:
    * @param[in] to_mesh: the current mesh to use
    * @param[in] iteration: the current iteration
    */
-  void handleSubsequentToInvocations(MooseMesh & to_mesh, dof_id_type & iteration);
+  void handleSubsequentToInvocations(MooseMesh & to_mesh,
+                                     std::vector<MooseMesh *> & to_meshes,
+                                     dof_id_type & iteration);
 
   /**
    * Function to handle the first FROM_MULTIAPP use.
@@ -92,7 +94,7 @@ protected:
    * @param[in] mesh: the current mesh to update
    */
   void assignMesh(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
-                  MooseMesh & mesh);
+                  std::vector<MooseMesh *> & meshes);
 
   /**
    * Function to assign the objective function value from the objective function name, and to set it
@@ -176,6 +178,9 @@ protected:
 
   /// @brief allowed subdomains ids in our mesh.
   std::vector<subdomain_id_type> _allowed_parameter_values;
+
+  /// @brief excluded subdomains ids in our mesh.
+  std::vector<subdomain_id_type> _excluded_parameter_values;
 
   /// @brief variables describing our mesh.
   /// Mapping between elements and subdomains.

@@ -85,6 +85,9 @@ protected:
   /// @brief allowed subdomains ids in our mesh.
   std::vector<subdomain_id_type> _transfer_allowed_parameter_values;
 
+  /// @brief excluded subdomains ids in our mesh.
+  std::vector<subdomain_id_type> _transfer_excluded_parameter_values;
+
   /// @brief variables describing our mesh.
   /// Mapping between elements and subdomains.
   std::map<dof_id_type, subdomain_id_type> _transfer_initial_pairs_to_optimize;

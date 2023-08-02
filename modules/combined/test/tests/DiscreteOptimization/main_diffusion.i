@@ -25,7 +25,8 @@
     assign_type = 'auto'
     solver_type = 'random_3'
     number_of_elements = 12
-    allowed_mateirals = '1 2'
+    allowed_mateirals = '0 1 2 3'
+    excluded_materials = '2 3'
     outputs = "none"
     # pp = objective
     # execute_on = "ALWAYS"
@@ -38,10 +39,10 @@
 
 [Executioner]
   type = CustomOptimize
-  # type = gardensnake-opt
-  # nl_max_its = 50
   reporter_user_object = discrete_reporter
   solve_on = 'FORWARD'
+  # type = gardensnake-opt
+  # nl_max_its = 50
   # execute_on = 'TIMESTEP_END'
   # num_steps = 500
   # dt = 0.1
@@ -67,9 +68,10 @@
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    input_files = simple_heat_cool.i
+    # input_files = diffusion_reaction.i
+    input_files = diffusion_reaction2.i
+    # input_files = simple_heat_cool.i
     # input_files = eigen_test.i
-    # input_files = 'simple_heat_cool.i'
     execute_on = 'TIMESTEP_BEGIN'
     # execute_on = 'FORWARD'
     #reset_apps = '0 0'
@@ -79,25 +81,7 @@
   []
 []
 
-[Outputs]
-  print_linear_residuals = false
-  console = true
-  # exodus = true
-  csv = true
-  # [console]
-  # type = Console
-  # max_rows = 1
-  # []
-[]
-
-# [UserObjects]
-#   [discrete_reporter_object]
-#     type = DiscreteOptimizationReporter
-#   []
-# []
-
 [Transfers]
-  #active = ''
   [toforward]
     # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransfer
@@ -117,4 +101,21 @@
     # objective_name = 'max_eigenvalue'
   []
 []
+
+[Outputs]
+  print_linear_residuals = false
+  console = true
+  # exodus = true
+  csv = true
+  # [console]
+  # type = Console
+  # max_rows = 1
+  # []
+[]
+
+# [UserObjects]
+#   [discrete_reporter_object]
+#     type = DiscreteOptimizationReporter
+#   []
+# []
 

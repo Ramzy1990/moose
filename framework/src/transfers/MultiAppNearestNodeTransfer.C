@@ -274,8 +274,8 @@ MultiAppNearestNodeTransfer::execute()
               }   // for i_from
             }     // for i_proc
             offset++;
-          } // point
-        }   // for elem
+          }       // point
+        }         // for elem
 
         // Verify that we found at least one candidate bounding
         // box for each local element with dofs for the current

@@ -37,10 +37,13 @@ public:
   virtual void solve() = 0;
 
   ///@{ public interface
-  void setInitialSolution(const std::vector<Real> & real_sol, const std::vector<int> & int_sol);
+  void setInitialSolution(const std::vector<Real> & real_sol,
+                          const std::vector<int> & int_sol,
+                          const std::vector<int> & execlude_domain);
   void setSeed(unsigned int seed);
   unsigned int & maxIt() { return _max_its; }
   unsigned int & counterIteration() { return _it_counter; }
+  int & counterRun() { return _it_run; }
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
   std::vector<int> & intSolution() { return _current_int_solution; }
   Real & objective() { return _objective_value; }
@@ -51,6 +54,7 @@ public:
   ///@}
 
   std::vector<int> _current_int_solution;
+  std::vector<int> _execlude_domain;
 
   /// the best (aka min) objective seen so far
   Real _objective_value;
@@ -67,6 +71,9 @@ protected:
 
   /// iteration counter
   unsigned int _it_counter;
+
+  /// iteration of multiruns
+  int _it_run;
 
   /// Tabu list used
   bool _tabu_used;

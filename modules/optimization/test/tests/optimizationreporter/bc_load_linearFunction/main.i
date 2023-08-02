@@ -23,7 +23,7 @@
   num_values = '2'
   measurement_file = 'measurementData.csv'
   file_xcoord = 'coordx'
-  file_ycoord ='y'
+  file_ycoord = 'y'
   file_zcoord = 'z'
   file_value = 'measured_value'
   # contents of measurementData.csv

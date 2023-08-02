@@ -73,7 +73,9 @@ public:
    * @param[inout] iparams: the integer parameters vector that will be optimized.
    * @param[inout] rparams: the real parameters vector that will be optimized.
    */
-  void getMeshDomain(std::vector<int> & iparams, std::vector<Real> & rparams);
+  void getMeshDomain(std::vector<int> & iparams,
+                     std::vector<Real> & rparams,
+                     std::vector<int> & exec_params);
 
   /**
    * Function to set the objective function value in the reporter.
@@ -119,6 +121,7 @@ public:
    * Functions to get the mesh pairs to optimize and the allowed material to optimize for
    */
   std::tuple<std::vector<subdomain_id_type> &,
+             std::vector<subdomain_id_type> &,
              std::map<dof_id_type, subdomain_id_type> &,
              std::map<dof_id_type, subdomain_id_type> &>
   getMeshParameters();
@@ -296,8 +299,11 @@ protected:
   /// Total number of cells. The 64-bit "dof_id_type" is much larger than the 16-bit "subdomain_id_type".
   dof_id_type _total_cells;
 
-  /// Allowed values for my region_ID (e.g., materials possible to use {a,b,c}).
+  /// Allowed values for my region_ID (e.g., materials possible to use {0,1,2}).
   std::vector<subdomain_id_type> _allowed_parameter_values;
+
+  /// excluded values for my region_ID (e.g., materials possible to use {0,1,2}).
+  std::vector<subdomain_id_type> _excluded_parameter_values;
 
   /// Initial or previous elements. E.g., {0, 1, 1000, 500, etc...}
   std::vector<dof_id_type> _initial_elements_to_optimize;

@@ -7,6 +7,8 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+/// 📝 @TODO: Add a value for the cost function after which the solution that satisfies it will stop. If left blank, then do not stop.
+
 //**********************
 // Include Header Files
 //**********************
@@ -60,6 +62,11 @@ DiscreteOptimizationReporter::validParams()
       "allowed_mateirals",
       "Allowed values for the subdomain_ID (e.g., materials possible to use {0,1,2}).");
 
+  /// Allowed values for my cell_subdomain_ID (e.g., materials possible to use {f,m,v}).
+  params.addParam<std::vector<subdomain_id_type>>(
+      "excluded_materials",
+      "excluded values for the subdomain_ID (e.g., materials not possible to use {0,1,2}).");
+
   return params;
 }
 
@@ -98,6 +105,11 @@ DiscreteOptimizationReporter::DiscreteOptimizationReporter(const InputParameters
     _allowed_parameter_values = getParam<std::vector<subdomain_id_type>>("allowed_mateirals");
   else
     _allowed_parameter_values = {0, 1};
+
+  if (isParamValid("excluded_materials"))
+    _excluded_parameter_values = getParam<std::vector<subdomain_id_type>>("excluded_materials");
+  else
+    _excluded_parameter_values = {10000, 10001};
 
   //********************
   // Checking Data Read
@@ -242,6 +254,7 @@ DiscreteOptimizationReporter::isMaterialAllowed(const MooseMesh & domain_mesh)
   {
     std::cout << "***Discrete Optimization Reporter: SubApp Mode***" << std::endl;
 
+    /// 📝 @TODO: make allowed materials stand for the excluded materials.
     // This could be better if it is checking for materials names.
 
     // elements owned by the processor (processor tag on it): active_local_element_ptr_range()
@@ -955,28 +968,47 @@ DiscreteOptimizationReporter::setMeshDomain(const std::vector<int> & optimized_v
 }
 
 void
-DiscreteOptimizationReporter::getMeshDomain(std::vector<int> & iparams, std::vector<Real> & rparams)
+DiscreteOptimizationReporter::getMeshDomain(std::vector<int> & iparams,
+                                            std::vector<Real> & rparams,
+                                            std::vector<int> & exec_params)
 {
   std::vector<subdomain_id_type> originalVector = mapToValuesVector(_pairs_to_optimize);
   iparams.clear(); // Clear the original vector
   iparams.reserve(originalVector.size());
 
+  exec_params.clear(); // Clear the original vector
+  exec_params.reserve(_excluded_parameter_values.size());
+
   for (subdomain_id_type val : originalVector)
+  {
+
+    // This may potentially lose information if the subdomain_id_type is larger than what an int can
+    // hold!! Not to mention it is unsigned while int is signed!
+    /// 📝 @TODO: make sure the type is set to subdomain_ID in the optimizer or use integer here instead of subdomain_id
+    iparams.push_back(static_cast<int>(val));
+  }
+
+  for (subdomain_id_type val : _excluded_parameter_values)
   {
     // This may potentially lose information if the subdomain_id_type is larger than what an int can
     // hold!! Not to mention it is unsigned while int is signed!
-    iparams.push_back(static_cast<int>(val));
+    /// 📝 @TODO: make sure the type is set to subdomain_ID in the optimizer or use integer here instead of subdomain_id
+    exec_params.push_back(static_cast<int>(val));
   }
 
   rparams = {};
 }
 
 std::tuple<std::vector<subdomain_id_type> &,
+           std::vector<subdomain_id_type> &,
            std::map<dof_id_type, subdomain_id_type> &,
            std::map<dof_id_type, subdomain_id_type> &>
 DiscreteOptimizationReporter::getMeshParameters()
 {
-  return std::tie(_allowed_parameter_values, _initial_pairs_to_optimize, _pairs_to_optimize);
+  return std::tie(_allowed_parameter_values,
+                  _excluded_parameter_values,
+                  _initial_pairs_to_optimize,
+                  _pairs_to_optimize);
 }
 
 void

@@ -113,6 +113,10 @@ DiscreteOptimizationTransfer::initialSetup()
   // const dof_id_type n = getFromMultiApp()->numGlobalApps();
   // for (MooseIndex(n) i = 0; i < n; i++)
   // {
+
+  // No need to check the other sub-apps. We will only check the first one for the objective
+  // function name. Checking other subapps do not make sense and will only cause the user to write
+  // the objective function name in all subapps!
   if (getMultiApp()->hasLocalApp(0))
   {
 
@@ -136,8 +140,27 @@ DiscreteOptimizationTransfer::execute()
 
   // getting the mesh
   // probably will need the _to_problems mesh only in release
-  MooseMesh & to_mesh = _to_problems[0]->mesh();
-  MooseMesh & from_mesh = _from_problems[0]->mesh();
+  // const dof_id_type n = getFromMultiApp()->numGlobalApps(); // Maybe the number of subapps do not
+  // coincide with the number of _to_problems
+
+  // Single sub-app!
+  // MooseMesh & to_mesh = _to_problems[0]->mesh();
+  // MooseMesh & from_mesh = _from_problems[0]->mesh();
+
+  // Multi sub-apps!
+  std::vector<MooseMesh *> to_meshes(_to_problems.size());
+  std::vector<MooseMesh *> from_meshes(_from_problems.size());
+
+  // std::cout << "*** Number of subApps ***" << std::endl << _to_problems.size() << std::endl;
+
+  for (unsigned int i = 0; i < _to_problems.size(); i++)
+  {
+    to_meshes[i] = &_to_problems[i]->mesh();
+    from_meshes[i] = &_from_problems[i]->mesh();
+  }
+
+  MooseMesh & to_mesh = *to_meshes[0];
+  MooseMesh & from_mesh = *from_meshes[0];
 
   // general iteration
   _it_transfer += 1;
@@ -189,7 +212,7 @@ DiscreteOptimizationTransfer::execute()
       }
       else // Subsequent invocations
       {
-        handleSubsequentToInvocations(to_mesh, _it_transfer_to);
+        handleSubsequentToInvocations(to_mesh, to_meshes, _it_transfer_to);
 
         if (_debug_on)
         {
@@ -250,17 +273,18 @@ DiscreteOptimizationTransfer::execute()
 
 void
 DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
+                                                            std::vector<MooseMesh *> & to_meshes,
                                                             dof_id_type & iteration)
 {
 
   /// 📝 @TODO: Allow for multiphysics problems optimization! I think one can say
   // several to_problem meshes.
 
-  if (_to_problems.size() > 1)
-  {
-    mooseError("The size of the _to_problem is more than one! "
-               "Please check the current discrete transfer capabilities.");
-  }
+  // if (_to_problems.size() > 1)
+  // {
+  //   mooseError("The size of the _to_problem is more than one! "
+  //              "Please check the current discrete transfer capabilities.");
+  // }
   if (_debug_on)
   {
 
@@ -272,8 +296,9 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
   }
   auto mesh_params = _reporter->getMeshParameters();
   _allowed_parameter_values = std::get<0>(mesh_params);
-  _initial_pairs_to_optimize = std::get<1>(mesh_params);
-  _pairs_to_optimize = std::get<2>(mesh_params);
+  _excluded_parameter_values = std::get<1>(mesh_params);
+  _initial_pairs_to_optimize = std::get<2>(mesh_params);
+  _pairs_to_optimize = std::get<3>(mesh_params);
 
   if (_debug_on)
   {
@@ -284,7 +309,7 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
     std::cout << "Updating the domain's mesh elements-IDs and subdomains-IDs and reassigning the "
               << "mesh ...\n\n";
   }
-  assignMesh(_pairs_to_optimize, to_mesh);
+  assignMesh(_pairs_to_optimize, to_meshes);
 
   if (_debug_on)
   {
@@ -358,19 +383,23 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
 
 void
 DiscreteOptimizationTransfer::assignMesh(
-    const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize, MooseMesh & mesh)
+    const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
+    std::vector<MooseMesh *> & meshes)
 {
-  // elements owned by the processor (processor tag on it):
-  // active_local_element_ptr_range()
-  for (auto & elem : mesh.getMesh().active_local_element_ptr_range())
+  for (MooseMesh * mesh : meshes)
   {
-    auto p = pairs_to_optimize.find(elem->id());
-    if (p != pairs_to_optimize.end())
-      elem->subdomain_id() = p->second;
-  }
+    // elements owned by the processor (processor tag on it):
+    // active_local_element_ptr_range()
+    for (auto & elem : mesh->getMesh().active_local_element_ptr_range())
+    {
+      auto p = pairs_to_optimize.find(elem->id());
+      if (p != pairs_to_optimize.end())
+        elem->subdomain_id() = p->second;
+    }
 
-  // Chaning the mesh and updating it
-  mesh.meshChanged();
+    // Changing the mesh and updating it
+    mesh->meshChanged();
+  }
 
   if (_debug_on)
   {

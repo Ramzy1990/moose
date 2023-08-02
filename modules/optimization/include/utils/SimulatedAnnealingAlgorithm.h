@@ -62,7 +62,10 @@ protected:
   void createNeigborReal(const std::vector<Real> & real_sol, std::vector<Real> & real_neigh) const;
 
   /// creates neighbor states from current_states for the continuous params
-  void createNeigborInt(const std::vector<int> & int_sol, std::vector<int> & int_neigh) const;
+  // void createNeigborInt(const std::vector<int> & int_sol, std::vector<int> & int_neigh) const;
+  void createNeigborInt(const std::vector<int> & int_sol,
+                        std::vector<int> & int_neigh,
+                        const std::vector<int> & exclude_values) const;
 
   /// computes the probability with which a neigbor objective value will be accepted given current objective value and temperature
   Real acceptProbability(Real curr_obj, Real neigh_obj, Real curr_temp) const;

@@ -20,10 +20,12 @@ CustomOptimizationAlgorithm::CustomOptimizationAlgorithm()
 
 void
 CustomOptimizationAlgorithm::setInitialSolution(const std::vector<Real> & real_sol,
-                                                const std::vector<int> & int_sol)
+                                                const std::vector<int> & int_sol,
+                                                const std::vector<int> & execlude_domain)
 {
   _current_real_solution = real_sol;
   _current_int_solution = int_sol;
+  _execlude_domain = execlude_domain;
   _real_size = _current_real_solution.size();
   _int_size = _current_int_solution.size();
   _size = _real_size + _int_size;
