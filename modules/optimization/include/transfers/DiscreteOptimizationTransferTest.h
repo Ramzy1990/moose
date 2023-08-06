@@ -13,7 +13,7 @@
 #include "MultiAppTransfer.h"
 
 // Forward Declarations If Any
-class DiscreteOptimizationReporter;
+class DiscreteOptimizationReporterTest;
 
 // Oh well, let us see in the meeting today then.
 // Speaking of postprocessing, is the user able to assign a postprocessor object from the objects
@@ -63,7 +63,7 @@ protected:
   /// the reporter by the "." operator.
   // const DiscreteOptimizationReporter * const _reporter;
   // DiscreteOptimizationReporter & _reporter;
-  DiscreteOptimizationReporter * _reporter;
+  DiscreteOptimizationReporterTest * _reporter;
 
   /// @brief mesh from the _to_problems
   // MooseMesh & _to_mesh;
