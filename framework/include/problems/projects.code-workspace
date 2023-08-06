@@ -279,7 +279,11 @@
       "MooseApp.C": "cpp",
       "LevelSetReinitializationMultiApp.C": "cpp",
       "MultiAppNearestNodeTransfer.C": "cpp",
-      "reportertransferinterface.h": "c"
+      "reportertransferinterface.h": "c",
+      "Density.C": "cpp",
+      "CoupledConvectionReactionSub.C": "cpp",
+      "LangmuirMaterial.C": "cpp",
+      "SquirrelApp.C": "cpp"
     }
   }
 }

@@ -16,9 +16,11 @@
 class DiscreteOptimizationReporter;
 
 /**
- * A class that transfers the mesh from and to the MultiApp system. It is executed on
- * Initial once, and then beginning at each time step.
- * This class uses the DiscreteOptimizationReporter as the user object.
+ * A class that transfers the subdomain IDs from and to the MultiApp system and the optimizer,
+ * allowing updating the mesh after some optimized configuration from the optimizer. It is executed
+ * on Initial once, and then beginning at each optimization step. This class uses the
+ * DiscreteOptimizationReporter as the user object. It allows transfering infromation from/to the
+ * discrete reporter.
  */
 class DiscreteOptimizationTransfer : public MultiAppTransfer
 {
@@ -41,33 +43,30 @@ public:
   // getVectorNamesHelper(const std::string & prefix, const std::vector<PostprocessorName> &
   // pp_names);
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
   //************************
   // Variables Declarations
   //************************
-  // Nothin to see here
+  // No variables to declare
 
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
+  /*******************************************************************************************************************************/
+  /*******************************************************************************************************************************/
+  /*******************************************************************************************************************************/
 
 protected:
   //************************
   // Functions Declarations
   //************************
 
+  /**
+   * Functions for ordinary execution of the transfer.
+   */
   virtual void execute() override;
   virtual void initialSetup() override;
 
   /**
    * Function to handle the subsequent TO_MULTIAPP use.
    * @param[in] to_mesh: the current mesh to use
+   * @param[in] to_meshes: the current meshes to use if problem have multiple meshes/problems
    * @param[in] iteration: the current iteration
    */
   void handleSubsequentToInvocations(MooseMesh & to_mesh,
@@ -76,7 +75,7 @@ protected:
 
   /**
    * Function to handle the first FROM_MULTIAPP use.
-   * @param[in] from_mesh: the current mesh to use
+   * @param[in] from_mesh: the current from mesh to use
    * @param[in] iteration: the current iteration
    */
   void handleFirstFromInvocation(MooseMesh & from_mesh, dof_id_type & iteration);
@@ -91,7 +90,7 @@ protected:
   /**
    * Function to assign the mesh and update it depending on the optimized map.
    * @param[in] pairs_to_optimize: The optimized pairs
-   * @param[in] mesh: the current mesh to update
+   * @param[in] meshes: the current meshes to update
    */
   void assignMesh(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize,
                   std::vector<MooseMesh *> & meshes);
@@ -142,19 +141,14 @@ protected:
   //  */
   // void printMap(const std::map<PostprocessorName, PostprocessorValue> & map);
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  /*******************************************************************************************************************************/
+
   //************************
   // Variables Declarations
   //************************
 
-  /// @brief Object of the reporter class we are using. I think this will allow us to access the different variables and functions in
-  /// the reporter by the "." operator.
+  /// @brief Object of the reporter class we are using. This will allow us to access the different variables and functions in
+  /// the reporter by the "." or the "->" operators (depedning o nthe object type).
   // const DiscreteOptimizationReporter * const _reporter;
   // DiscreteOptimizationReporter & _reporter;
   DiscreteOptimizationReporter * _reporter;
@@ -176,16 +170,13 @@ protected:
   dof_id_type _it_transfer_from;
   dof_id_type _it_transfer;
 
-  /// @brief allowed subdomains ids in our mesh.
-  std::vector<subdomain_id_type> _allowed_parameter_values;
-
-  /// @brief excluded subdomains ids in our mesh.
-  std::vector<subdomain_id_type> _excluded_parameter_values;
-
   /// @brief variables describing our mesh.
   /// Mapping between elements and subdomains.
-  std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
   std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
+
+  /// @brief variables describing our mesh.
+  /// Mapping between elements and their neighbors.
+  std::map<dof_id_type, std::vector<dof_id_type>> _neighbor_id;
 
   /// @brief variables that hold the name and value of our objective function.
   PostprocessorName _objective_name;
@@ -193,24 +184,20 @@ protected:
   /// @brief variable for printing debugging messages
   bool _debug_on;
 
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
-  //****************************************************************************************************************************//
+  /*******************************************************************************************************************************/
+  /*******************************************************************************************************************************/
+  /*******************************************************************************************************************************/
 
 private:
   //************************
   // Functions Declarations
   //************************
-  // Nothin to see here
+  // No functions to declare
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  /*******************************************************************************************************************************/
+
   //************************
   // Variables Declarations
   //************************
+  // No variables to declare
 };

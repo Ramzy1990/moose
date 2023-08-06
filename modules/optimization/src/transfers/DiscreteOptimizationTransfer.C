@@ -24,23 +24,25 @@ registerMooseObject("MooseApp", DiscreteOptimizationTransfer);
 //*************************
 // Helper Functions if Any
 //*************************
+// No helper methods to use
 
-//*************************
-// Adding Input Parameters
-//*************************
+//*******************************
+// Adding validParameters method
+//*******************************
 InputParameters
 DiscreteOptimizationTransfer::validParams()
 {
   InputParameters params = MultiAppTransfer::validParams();
 
   // Class description
-  params.addClassDescription(
-      "This class transfer the mesh and related information from and to the multiapp system");
+  params.addClassDescription("This class transfers the configuration from the optimizer to the "
+                             "multiapp system and updates the mesh.");
 
   // DiscreteOptimizationReporter user object
   params.addRequiredParam<UserObjectName>(
       "user_object",
-      "The UserObject you want to transfer values from.  Note: This might be a UserObject from "
+      "The UserObject, the reporter, you want to transfer values from and to. Note: This might be "
+      "a UserObject from "
       "your MultiApp's input file!");
 
   // postprocessor cost function user object
@@ -52,9 +54,10 @@ DiscreteOptimizationTransfer::validParams()
       "function is the one you would like to transfer its value to the optimizer.  Note: This is a "
       "post processor name from your MultiApp's input file!");
 
-  // Debugging if on or off
+  // Turning debugging on or off
   params.addParam<bool>("debug",
-                        "The debug variable if on or off. If on, then we print several "
+                        "The debug variable to print more information during the transfer. If on, "
+                        "then we print several "
                         "messages during the transfer.");
 
   // Set and suppress the 'execute_on' flag.
@@ -75,12 +78,13 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
   // if (getFromMultiApp())
   // {
 
+  // Debug variable, defaults to off
   _debug_on = isParamValid("debug") ? getParam<bool>("debug") : 0;
 
   // This variable in the from_multiapp will be used to get the value associated with it to the
   // objective function value by using the getPostprocessorValueByName
-  _objective_name =
-      isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name") : "objective";
+  _objective_name = isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name")
+                                                   : "cost_function";
   // }
 }
 
@@ -91,7 +95,11 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
 void
 DiscreteOptimizationTransfer::initialSetup()
 {
-  MultiAppTransfer::initialSetup();
+  // TIME_SECTION("DiscreteOptimizationTransfer::initialSetup()",
+  //  2,
+  //  "Initial setup for performing transfer with a user object");
+
+  MultiAppTransfer::initialSetup(); // Using the initial setup of the MultiAppTransfer class
 
   // Getting the user object
   auto & uo = _fe_problem.getUserObject<UserObject>(getParam<UserObjectName>("user_object"));
@@ -99,13 +107,12 @@ DiscreteOptimizationTransfer::initialSetup()
   if (!_reporter)
     paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
 
-  // _skip = true;
   _it_transfer = 0;
   _it_transfer_to = 0;
   _it_transfer_from = 0;
 
-  // getting the app information including the mesh and such
-  // Not needed, included in the multiapptransfer initial setup
+  // getting the app information including the mesh and such:
+  // Not needed, included in the multiapptransfer initial setup!
   // getAppInfo();
 
   // Now checking the if the constraints names provided have equivalent names in the subapps
@@ -115,8 +122,8 @@ DiscreteOptimizationTransfer::initialSetup()
   // {
 
   // No need to check the other sub-apps. We will only check the first one for the objective
-  // function name. Checking other subapps do not make sense and will only cause the user to write
-  // the objective function name in all subapps!
+  // function name. Checking other subapps do not make sense and will only cause the user to
+  // write the objective function name in all subapps!
   if (getMultiApp()->hasLocalApp(0))
   {
 
@@ -140,8 +147,8 @@ DiscreteOptimizationTransfer::execute()
 
   // getting the mesh
   // probably will need the _to_problems mesh only in release
-  // const dof_id_type n = getFromMultiApp()->numGlobalApps(); // Maybe the number of subapps do not
-  // coincide with the number of _to_problems
+  // const dof_id_type n = getFromMultiApp()->numGlobalApps(); // Maybe the number of subapps do
+  // not coincide with the number of _to_problems
 
   // Single sub-app!
   // MooseMesh & to_mesh = _to_problems[0]->mesh();
@@ -172,9 +179,6 @@ DiscreteOptimizationTransfer::execute()
   if (_it_transfer == 1 && hasToMultiApp())
   {
 
-    // if (_debug_on)
-    // {
-
     std::cout << std::endl
               << "*** Welcome to the Discrete Shape Optimization Transfer! ***" << std::endl
               << std::endl;
@@ -185,7 +189,6 @@ DiscreteOptimizationTransfer::execute()
                  "TO_MULTIAPP logical branch to start the optimization process! Buckle up!..."
               << std::endl
               << std::endl;
-    // }
   }
 
   // _current_direction variable is found inside the MultiAppTransfer class.
@@ -204,10 +207,11 @@ DiscreteOptimizationTransfer::execute()
       }
       if (_it_transfer_to == 1) // First invocation
       {
-        std::cout
-            << "*** This marks as the first invoking of the TO_MULTIAPP branch ***\n\n"
-            << "Nothing major will happen in the very first invoking of the TO_MULTIAPP branch...\n"
-            << "Returning to the MULTIAPP system to continue the optimization process...\n\n\n\n";
+        std::cout << "*** This marks as the first invokation of the TO_MULTIAPP branch ***\n\n"
+                  << "Nothing major will happen in the very first invoking of the TO_MULTIAPP "
+                     "branch...\n"
+                  << "Returning to the MULTIAPP system to continue the optimization "
+                     "process...\n\n\n\n";
         return;
       }
       else // Subsequent invocations
@@ -262,7 +266,7 @@ DiscreteOptimizationTransfer::execute()
       if (_debug_on)
       {
 
-        std::cout << "*** Great! See you on the other side then with a new global iteration! 👋 "
+        std::cout << "*** Great! See you on the other side with a new global iteration! 👋 "
                      "***\n\n\n\n\n\n\n\n\n\n"
                   << std::endl;
       }
@@ -277,14 +281,6 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
                                                             dof_id_type & iteration)
 {
 
-  /// 📝 @TODO: Allow for multiphysics problems optimization! I think one can say
-  // several to_problem meshes.
-
-  // if (_to_problems.size() > 1)
-  // {
-  //   mooseError("The size of the _to_problem is more than one! "
-  //              "Please check the current discrete transfer capabilities.");
-  // }
   if (_debug_on)
   {
 
@@ -295,9 +291,9 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
     std::cout << "Starting to receive the domain's previous mesh content ...\n";
   }
   auto mesh_params = _reporter->getMeshParameters();
-  _allowed_parameter_values = std::get<0>(mesh_params);
-  _excluded_parameter_values = std::get<1>(mesh_params);
-  _initial_pairs_to_optimize = std::get<2>(mesh_params);
+  // _allowed_parameter_values = std::get<0>(mesh_params); // Not needed
+  // _excluded_parameter_values = std::get<1>(mesh_params); // Not needed
+  // _initial_pairs_to_optimize = std::get<2>(mesh_params); // Not needed
   _pairs_to_optimize = std::get<3>(mesh_params);
 
   if (_debug_on)
@@ -309,6 +305,7 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
     std::cout << "Updating the domain's mesh elements-IDs and subdomains-IDs and reassigning the "
               << "mesh ...\n\n";
   }
+
   assignMesh(_pairs_to_optimize, to_meshes);
 
   if (_debug_on)
@@ -347,7 +344,8 @@ DiscreteOptimizationTransfer::handleFirstFromInvocation(MooseMesh & from_mesh,
   objectiveFunctionPP(_objective_name, iteration);
   std::cout << "Objective function acquired successfully! ...\n\n";
   // // Set the objective function components comparison results in the reporter
-  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators,
+  // iteration);
 
   // // Call the domainConstraints function to set the domain's mesh constraints in the reporter
   // domainConstraints(_domain_constraints);
@@ -365,8 +363,6 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
               << "\n*** Post processing of the mesh in the FROM_MULTIAPP branch ***"
               << "\n*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n\n";
 
-    // std::cout << "*** Obtaining the postprocessing parameters needed by the Discrete "
-    //           << "Optimization Reporter for the objective function computation ***\n";
     std::cout << "Storing Data to a file ... \n";
     _reporter->printCurrentDomain(iteration);
     std::cout << "Data is written and stored to a file successfully! ...\n\n";
@@ -376,7 +372,8 @@ DiscreteOptimizationTransfer::handleSubsequentFromInvocations(dof_id_type & iter
   objectiveFunctionPP(_objective_name, iteration);
 
   // Set the objective function components comparison results in the reporter
-  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators, iteration);
+  // buildAndComparePP(_constraints_names, _constraints_values, _inequality_operators,
+  // iteration);
 
   // No need to call the domainConstraints function
 }
@@ -419,8 +416,6 @@ DiscreteOptimizationTransfer::objectiveFunctionPP(const PostprocessorName & obje
               << " and iteration = " << iteration << "\n";
   }
 
-  /// 📝 @TODO: Allow several apps as found in "SamplerPostprocessorTransfer::executeFromMultiapp()"
-  // Retrieve the FEProblemBase instance
   FEProblemBase & app_problem = getFromMultiApp()->appProblemBase(0);
 
   // Get the value of the objective function 🎯
@@ -540,9 +535,9 @@ DiscreteOptimizationTransfer::processAndVerifyMesh(MooseMesh & mesh)
                "optimization\n";
   _reporter->isMaterialAllowed(mesh);
 
-  std::cout << "Acquiring the first-mesh domain elements and subdomain IDs\n";
+  std::cout << "Acquiring the original configuration's domain elements and subdomain IDs\n";
   _reporter->setInitialCondition(mesh);
 
   std::cout << "Successful acquisition of the domain! The Discrete Optimization reporter now has "
-               "the initial mesh information!\n\n";
+               "the initial configuration information!\n\n";
 }
