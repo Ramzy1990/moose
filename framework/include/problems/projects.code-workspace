@@ -283,7 +283,8 @@
       "Density.C": "cpp",
       "CoupledConvectionReactionSub.C": "cpp",
       "LangmuirMaterial.C": "cpp",
-      "SquirrelApp.C": "cpp"
+      "SquirrelApp.C": "cpp",
+      "DiscreteOptimizationReporterTest.C": "cpp"
     }
   }
 }

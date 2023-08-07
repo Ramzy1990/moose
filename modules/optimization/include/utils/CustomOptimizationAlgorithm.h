@@ -39,7 +39,9 @@ public:
   ///@{ public interface
   void setInitialSolution(const std::vector<Real> & real_sol,
                           const std::vector<int> & int_sol,
-                          const std::vector<int> & execlude_domain);
+                          const std::vector<int> & execlude_domain,
+                          const std::map<int, std::vector<int>> & elem_neighbors);
+
   void setSeed(unsigned int seed);
   unsigned int & maxIt() { return _max_its; }
   unsigned int & counterIteration() { return _it_counter; }
@@ -55,6 +57,7 @@ public:
 
   std::vector<int> _current_int_solution;
   std::vector<int> _execlude_domain;
+  std::map<int, std::vector<int>> _elem_neighbors;
 
   /// the best (aka min) objective seen so far
   Real _objective_value;

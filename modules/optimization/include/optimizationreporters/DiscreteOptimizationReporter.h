@@ -58,51 +58,64 @@ public:
    * @param[inout] iparams: the integer parameters vector that will be optimized.
    * @param[inout] rparams: the real parameters vector that will be optimized.
    * @param[inout] exec_params: the integer parameters vector that will be execluded.
+   * @param[inout] elem_neighbors: the integer parameters map that holds the neighbors information.
    */
   void getMeshDomain(std::vector<int> & iparams,
                      std::vector<Real> & rparams,
-                     std::vector<int> & exec_params);
+                     std::vector<int> & exec_params,
+                     std::map<int, std::vector<int>> & elem_neighbors);
 
   /**
    * Function to set the objective function value in the reporter.
-   * @param[in] objective_name: name of the objective function 🎯 for the optimizer to get
-   * @param[in] objective_result: the value of the objective function 🎯 for the optimizer  to get
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
+   * @param[in] objective_name: name of the objective function 🎯 for the
+   * optimizer to get
+   * @param[in] objective_result: the value of the objective function 🎯 for the
+   * optimizer  to get
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of
+   * the discrete Transfer class.
    */
   void setObjectiveInformation(const PostprocessorName & objective_name,
                                const Real & objective_result,
                                const dof_id_type & iteration);
 
   /**
-   * Function to get the constraints comparison results from the reporter in the optimizer.
+   * Function to get the constraints comparison results from the reporter in the
+   * optimizer.
    */
   Real getObjectiveResult() const;
 
   /**
-   * Function to get the objective function name from the reporter in the optimizer.
+   * Function to get the objective function name from the reporter in the
+   * optimizer.
    */
   PostprocessorName getObjectiveName() const;
 
   /**
    * Function to printout the domain mesh and information to a file
-   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of the discrete
-   * Transfer class.
+   * @param[in] iteration: the current iteration in the FROM_MULTIAPP branch of
+   * the discrete Transfer class.
    */
   void printCurrentDomain(const dof_id_type & iteration);
 
   /**
-   * Functions to get the mesh pairs to optimize and the allowed material to optimize for
+   * Function to get the mesh pairs in the transfer and the allowed material to
+   * optimize for
    */
   std::tuple<std::vector<subdomain_id_type> &,
              std::vector<subdomain_id_type> &,
-             std::map<dof_id_type, subdomain_id_type> &,
              std::map<dof_id_type, subdomain_id_type> &>
   getMeshParameters();
 
   /**
-   * Template to convert a vector to a map (to the values part of a map). So basically, the
-   * retturned map will have its values part (second) updated with the vector content.
+   * Function to get the neighbors of an element using elements of the mesh.
+   * @param[in] domain_mesh: the domain's mesh
+   */
+  void getNeighborsFromMesh(const MooseMesh & domain_mesh);
+
+  /**
+   * Template to convert a vector to a map (to the values part of a map). So
+   * basically, the retturned map will have its values part (second) updated with
+   * the vector content.
    * @param[in] keysMap: The map from which the keys will be used.
    * @param[in] values: The values vector to be assigned to the passed map
    */
@@ -123,15 +136,6 @@ public:
     }
 
     return resultMap;
-
-    // std::map<K, V> resultMap;
-    // std::size_t i = 0;
-    // for (const auto& kv : keysMap) {
-    //     resultMap[kv.first] = values[i];
-    //     ++i;
-    // }
-
-    // return resultMap;
   }
 
   /**
@@ -139,7 +143,6 @@ public:
    * retturned vector will have the input map values part (second).
    * @param[in] inputMap: The map from which the values will be exctracted.
    */
-
   template <typename K, typename V>
   std::vector<V> mapToValuesVector(const std::map<K, V> & inputMap)
   {
@@ -159,9 +162,10 @@ public:
 
   /**
    * Function to print the domain's mesh.
-   * @todo add the capability to have different Elements IDs instead of assuming them constant.
-   * @param[in] pairs_to_optimize: the current map that has the element and the subdomain ids pairs
-   * to print.
+   * @todo add the capability to have different Elements IDs instead of assuming
+   * them constant.
+   * @param[in] pairs_to_optimize: the current map that has the element and the
+   * subdomain ids pairs to print.
    */
   void printMap(const std::map<dof_id_type, subdomain_id_type> & pairs_to_optimize);
 
@@ -192,8 +196,8 @@ protected:
   // bool isNewMaterialsInMesh(const MooseMesh & domain_mesh);
 
   /**
-   * Function to get the optimization domain of the problem using the elements of the mesh
-   * and their subdomain_ids.
+   * Function to get the optimization domain of the problem using the elements of
+   * the mesh and their subdomain_ids.
    * @param[in] domain_mesh: the domain's mesh
    */
   void getOptimizationDomain(const MooseMesh & domain_mesh);
@@ -204,23 +208,17 @@ protected:
   // Variables Declarations
   //************************
 
-  /// Allowed values for my region_ID (e.g., materials possible to use {0,1,2}).
+  /// @brief Allowed values for my region_ID (e.g., materials possible to use {0,1,2}).
   std::vector<subdomain_id_type> _allowed_parameter_values;
 
-  /// excluded values for my region_ID (e.g., materials possible to use {0,1,2}).
+  /// @brief excluded values for my region_ID (e.g., materials possible to use {0,1,2}).
   std::vector<subdomain_id_type> _excluded_parameter_values;
 
-  /// Initial or previous elements. E.g., {0, 1, 1000, 500, etc...}
-  std::vector<dof_id_type> _initial_elements_to_optimize;
-
-  /// Initial or previous Subdomain ID. E.g., {0, 1, 2, 3, etc...}
-  std::vector<subdomain_id_type> _initial_subdomains_to_optimize;
-
-  /// Initial or previous pairs. E.g., {{0,1}, {0,2}, etc...}
-  std::map<dof_id_type, subdomain_id_type> _initial_pairs_to_optimize;
-
-  /// mapping between elements and subdomains. /// the current elem->subdomain assignment
+  /// @brief mapping between elements and subdomains. /// the current elem->subdomain assignment
   std::map<dof_id_type, subdomain_id_type> _pairs_to_optimize;
+
+  /// @brief mapping between the element and its neighbors.
+  std::map<dof_id_type, std::vector<dof_id_type>> _elem_neighbors;
 
   /// @brief The objective infromation as we got it from the discrete transfer, and to pass it to the optimizer
   Real _objective_result;

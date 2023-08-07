@@ -72,14 +72,15 @@ CustomOptimizeSolve::solve()
   std::vector<int> iparams;
   std::vector<Real> rparams;
   std::vector<int> exec_params;
-  _reporter->getMeshDomain(iparams, rparams, exec_params);
+  std::map<int, std::vector<int>> elem_neighbors;
+  _reporter->getMeshDomain(iparams, rparams, exec_params, elem_neighbors);
   // _obj_function->setInitialCondition(iparams, rparams);
   SimulatedAnnealingAlgorithm * sa_alg =
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
 
   sa_alg->maxIt() = 25;
 
-  sa_alg->setInitialSolution({}, iparams, exec_params);
+  sa_alg->setInitialSolution({}, iparams, exec_params, elem_neighbors);
 
   sa_alg->solve();
 

@@ -294,7 +294,7 @@ DiscreteOptimizationTransfer::handleSubsequentToInvocations(MooseMesh & to_mesh,
   // _allowed_parameter_values = std::get<0>(mesh_params); // Not needed
   // _excluded_parameter_values = std::get<1>(mesh_params); // Not needed
   // _initial_pairs_to_optimize = std::get<2>(mesh_params); // Not needed
-  _pairs_to_optimize = std::get<3>(mesh_params);
+  _pairs_to_optimize = std::get<2>(mesh_params);
 
   if (_debug_on)
   {

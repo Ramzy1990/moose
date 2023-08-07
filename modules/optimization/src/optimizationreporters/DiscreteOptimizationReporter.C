@@ -119,7 +119,7 @@ DiscreteOptimizationReporter::getOptimizationDomain(const MooseMesh & domain_mes
   // bool is_multi_apps = _fe_problem.hasMultiApps();
 
   // Clear previous assignments for pairs_to_optimize
-  _pairs_to_optimize.clear();
+  _pairs_to_optimize.clear(); // No need to do this, as this is called just one time.
 
   for (auto & elem : domain_mesh.getMesh().active_local_element_ptr_range())
   {
@@ -139,9 +139,11 @@ DiscreteOptimizationReporter::setInitialCondition(const MooseMesh & domain_mesh)
   {
     std::cout << "*** Discrete Optimization Reporter: SubApp Mode ***" << std::endl;
 
+    // Get the initial mesh elements configuration
     getOptimizationDomain(domain_mesh);
 
-    _initial_pairs_to_optimize = _pairs_to_optimize;
+    // Get the initial negihbors for each element
+    getNeighborsFromMesh(domain_mesh);
 
     std::cout << "After initialization, the domain pairs to optimize are:\n";
     printMap(_pairs_to_optimize);
@@ -245,7 +247,8 @@ DiscreteOptimizationReporter::setMeshDomain(const std::vector<int> & optimized_v
 void
 DiscreteOptimizationReporter::getMeshDomain(std::vector<int> & iparams,
                                             std::vector<Real> & rparams,
-                                            std::vector<int> & exec_params)
+                                            std::vector<int> & exec_params,
+                                            std::map<int, std::vector<int>> & elem_neighbors)
 {
   std::vector<subdomain_id_type> originalVector = mapToValuesVector(_pairs_to_optimize);
   iparams.clear(); // Clear the original vector
@@ -271,19 +274,54 @@ DiscreteOptimizationReporter::getMeshDomain(std::vector<int> & iparams,
     exec_params.push_back(static_cast<int>(val));
   }
 
+  // rparams
   rparams = {};
+
+  // Assign _elem_neighbors to elem_neighbors and cast into integers
+  for (const auto & pair : _elem_neighbors)
+  {
+    elem_neighbors[static_cast<int>(pair.first)] =
+        // Implicitly converting each uint64_t element to int; can lead to truncation or overflow
+        std::vector<int>(pair.second.begin(), pair.second.end());
+  }
 }
 
 std::tuple<std::vector<subdomain_id_type> &,
            std::vector<subdomain_id_type> &,
-           std::map<dof_id_type, subdomain_id_type> &,
            std::map<dof_id_type, subdomain_id_type> &>
 DiscreteOptimizationReporter::getMeshParameters()
 {
-  return std::tie(_allowed_parameter_values,
-                  _excluded_parameter_values,
-                  _initial_pairs_to_optimize,
-                  _pairs_to_optimize);
+  return std::tie(_allowed_parameter_values, _excluded_parameter_values, _pairs_to_optimize);
+}
+
+void
+DiscreteOptimizationReporter::getNeighborsFromMesh(const MooseMesh & domain_mesh)
+{
+
+  // Clear previous assignments for elem_neighbors
+  _elem_neighbors.clear(); // No need to do this, as this is called just one time, but just in case!
+  /// 📝 @TODO: Upgrade the method to multi-called method in case of changable elements IDs.
+
+  for (const auto & elem : domain_mesh.getMesh().active_element_ptr_range())
+  {
+
+    // Map key - value components
+    dof_id_type current_elem_id = elem->id();
+    std::vector<dof_id_type> current_elem_neighbors;
+
+    // Internal for loop for the element's neighbors on each side
+    for (unsigned int side = 0; side < elem->n_sides(); ++side)
+    {
+      const Elem * neighbor = elem->neighbor_ptr(side);
+      if (neighbor != nullptr)
+      {
+        // This is cleared everytime we call the method, no need to clear it.
+        current_elem_neighbors.push_back(neighbor->id());
+      }
+    }
+
+    _elem_neighbors[current_elem_id] = current_elem_neighbors;
+  }
 }
 
 void

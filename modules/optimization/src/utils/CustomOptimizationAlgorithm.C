@@ -19,13 +19,16 @@ CustomOptimizationAlgorithm::CustomOptimizationAlgorithm()
 }
 
 void
-CustomOptimizationAlgorithm::setInitialSolution(const std::vector<Real> & real_sol,
-                                                const std::vector<int> & int_sol,
-                                                const std::vector<int> & execlude_domain)
+CustomOptimizationAlgorithm::setInitialSolution(
+    const std::vector<Real> & real_sol,
+    const std::vector<int> & int_sol,
+    const std::vector<int> & execlude_domain,
+    const std::map<int, std::vector<int>> & elem_neighbors)
 {
   _current_real_solution = real_sol;
   _current_int_solution = int_sol;
   _execlude_domain = execlude_domain;
+  _elem_neighbors = elem_neighbors;
   _real_size = _current_real_solution.size();
   _int_size = _current_int_solution.size();
   _size = _real_size + _int_size;
