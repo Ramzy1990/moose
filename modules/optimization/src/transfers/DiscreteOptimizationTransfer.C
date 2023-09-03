@@ -27,7 +27,7 @@ registerMooseObject("MooseApp", DiscreteOptimizationTransfer);
 // No helper methods to use
 
 //*******************************
-// Adding validParameters method
+// Adding validParams method
 //*******************************
 InputParameters
 DiscreteOptimizationTransfer::validParams()
@@ -82,7 +82,7 @@ DiscreteOptimizationTransfer::DiscreteOptimizationTransfer(const InputParameters
   _debug_on = isParamValid("debug") ? getParam<bool>("debug") : 0;
 
   // This variable in the from_multiapp will be used to get the value associated with it to the
-  // objective function value by using the getPostprocessorValueByName
+  // objective function value by using the getPostprocessorValueByName method
   _objective_name = isParamValid("objective_name") ? getParam<PostprocessorName>("objective_name")
                                                    : "cost_function";
   // }

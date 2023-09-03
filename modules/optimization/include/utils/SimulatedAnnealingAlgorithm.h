@@ -73,6 +73,31 @@ protected:
   /// random direction on the unit sphere
   void randomDirection(unsigned int size, std::vector<Real> & direction) const;
 
+  std::vector<int> getNeighbors(const std::map<int, std::vector<int>> & neighborsMap,
+                                const int target_elem_id) const;
+
+  unsigned int countEnclaves(const std::vector<int> & int_vec,
+                             int value,
+                             const std::map<int, std::vector<int>> & neighborsMap) const;
+
+  bool canFlip(const std::vector<int> & int_vec,
+               unsigned int index,
+               unsigned int new_value,
+               const std::map<int, std::vector<int>> & neighborsMap) const;
+
+  int chooseBoundaryElement(const std::map<int, std::vector<int>> & neighborsMap,
+                            const std::vector<int> & int_sol) const;
+
+  bool isClusterRegular(const std::vector<int> & solution, int value) const;
+
+  bool isValid(const std::vector<std::vector<int>> & grid) const;
+
+  bool checkConstraints(const std::vector<int> & int_vec,
+                        const std::map<int, std::vector<int>> & neighborsMap) const;
+  double computeBoundingBoxDensity(const std::vector<int> & int_vec,
+                                   int cellType,
+                                   unsigned int dimension) const;
+  double computeBoundingBoxDensity2D(const std::vector<int> & int_vec, int cellType) const;
   /// state size of the integer space
   unsigned int _int_state_size;
 

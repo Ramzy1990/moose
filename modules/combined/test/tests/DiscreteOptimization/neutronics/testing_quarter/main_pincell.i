@@ -61,7 +61,7 @@
   [forward]
     type = FullSolveMultiApp
     # input_files = pin_cell.i
-    input_files = pin_cell_sym.i
+    input_files = pin_cell_quarter.i
     # input_files = diffusion_reaction.i
     # input_files = diffusion_reaction2.i
     # input_files = simple_heat_cool.i

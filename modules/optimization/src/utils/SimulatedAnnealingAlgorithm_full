@@ -30,11 +30,12 @@ struct vector_hash
 
 SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
   : CustomOptimizationAlgorithm(),
-    _alpha(1e-2),
+    _alpha(1e-2), // used in cooling function calculation
     _temp_max(100.0),
-    _temp_min(0.001),
+    _temp_min(0.01),
     _min_objective(std::numeric_limits<Real>::max()),
-    _cooling(trial), /*    LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd */
+    _cooling(
+        QuadAdd), /*    LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd */
     _monotonic_cooling(false), /* Whether cooling is monotonic or not */
     _res_var(1), /*the initial temperature to start resetting the current state to the best found
                        state when this temperature is reached. This temperature is halved every-time
@@ -64,7 +65,7 @@ SimulatedAnnealingAlgorithm::solve()
     mooseError("The problem has a non-zero number of categorical parameters, but the number of "
                "swaps and number of reassignments for neighbor generation are both 0.");
 
-  int num_runs = 300;                                            // number of runs to perform
+  int num_runs = 500;                                            // number of runs to perform
   std::vector<std::pair<Real, std::vector<int>>> best_solutions; // Store best solutions of each
 
   // set initial neighbor & best states
@@ -408,323 +409,6 @@ SimulatedAnnealingAlgorithm::createNeigborReal(const std::vector<Real> & real_so
   }
 }
 
-// void
-// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
-//                                               std::vector<int> & int_neigh,
-//                                               const std::vector<int> & exclude_values) const
-// {
-//   ///////////////////////////////////////////////////////////
-//   //// Many vlaues but flipping just one element at a time///
-//   ///////////////////////////////////////////////////////////
-//   if (_int_size == 0)
-//   {
-//     int_neigh = {};
-//     return;
-//   }
-
-//   unsigned int index;
-//   int_neigh = int_sol;
-//   // Get the min and max values from int_sol
-//   int min_value = *std::min_element(int_sol.begin(), int_sol.end());
-//   int max_value = *std::max_element(int_sol.begin(), int_sol.end());
-
-//   // Find a random index whose value is not in exclude_values
-//   do
-//   {
-//     index = MooseRandom::randl() % _int_size;
-//   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
-//            exclude_values.end());
-
-//   int new_val;
-
-//   const int MAX_FAILED_ATTEMPTS = 100; // Adjust as necessary
-//   int failedAttempts = 0;
-
-//   // Loop until a valid new_val is found or we hit too many failed attempts
-//   do
-//   {
-//     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
-//     if (new_val == int_neigh[index] ||
-//         std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end()
-//         || !canFlip(int_neigh, index, new_val, _elem_neighbors))
-//     {
-//       failedAttempts++;
-//     }
-//     else
-//     {
-//       // Reset the failedAttempts counter if we find a valid new_val
-//       failedAttempts = 0;
-//     }
-//   } while (
-//       (new_val == int_neigh[index] ||
-//        std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end()
-//        || !canFlip(int_neigh, index, new_val, _elem_neighbors)) &&
-//       failedAttempts < MAX_FAILED_ATTEMPTS);
-
-//   // If we've reached the maximum number of failed attempts, we could either revert or proceed as is
-//   if (failedAttempts >= MAX_FAILED_ATTEMPTS)
-//   {
-//     // Choose a strategy here. Either:
-//     // 1. Revert to the original solution (by copying int_sol into int_neigh)
-//     int_neigh = int_sol;
-//     // 2. Or, proceed with the last generated solution, even if it's not ideal.
-//     // (No extra code needed for this, just move on.)
-//   }
-//   else
-//   {
-//     // We found a valid new_val within our attempts, so apply the flip
-//     int_neigh[index] = new_val;
-
-//     // Validate the 1s are contiguous
-//     if (countEnclaves(int_neigh, 1, _elem_neighbors) > 1)
-//     {
-//       // Decide how you want to handle this case. For instance, revert back to the original
-//       // solution.
-//       int_neigh = int_sol;
-//     }
-//   }
-
-//   // int_neigh[index] = new_val;
-
-//   // Check if all possible values are in the new solution
-//   std::vector<bool> hasValue(max_value - min_value + 1, false);
-//   for (unsigned int i = 0; i < _int_size; ++i)
-//   {
-//     hasValue[int_neigh[i] - min_value] = true;
-//   }
-
-//   // If any value is missing (and not in exclude_values), insert it at a random position
-//   for (int i = 0; i <= max_value - min_value; ++i)
-//   {
-//     if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
-//                             exclude_values.end())
-//     {
-//       int random_index;
-//       // Find a random index whose value is not in exclude_values and satisfies constraints
-//       do
-//       {
-//         random_index = MooseRandom::randl() % _int_size;
-//       } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index])
-//       !=
-//                    exclude_values.end() ||
-//                !canFlip(int_neigh, random_index, i + min_value, _elem_neighbors));
-
-//       int_neigh[random_index] = i + min_value;
-//       break;
-//     }
-//   }
-// }
-
-// void
-// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
-//                                               std::vector<int> & int_neigh,
-//                                               const std::vector<int> & exclude_values) const
-// {
-//   int_neigh = int_sol; // Start with a copy of the current solution
-
-//   // Create lists of indices for 0s and 1s
-//   std::vector<unsigned int> indices_0;
-//   std::vector<unsigned int> indices_1;
-//   unsigned int gridSize = static_cast<unsigned int>(sqrt(int_sol.size()));
-
-//   for (unsigned int i = 0; i < int_sol.size(); ++i)
-//   {
-//     if (int_sol[i] == 0)
-//     {
-//       indices_0.push_back(i);
-//     }
-//     else
-//     {
-//       indices_1.push_back(i);
-//     }
-//   }
-
-//   // Ensure there are cells of both types to flip
-//   if (indices_0.empty() || indices_1.empty())
-//   {
-//     return;
-//   }
-
-//   const unsigned int MAX_ATTEMPTS = 100; // Limit the number of flip attempts
-//   unsigned int attempts = 0;
-
-//   const unsigned int MAX_CANFLIP_CALLS = 100; // Limit the number of calls to canFlip
-//   unsigned int canFlipCalls = 0;
-
-//   while (attempts < MAX_ATTEMPTS)
-//   {
-//     unsigned int index1 = (int_sol[MooseRandom::randl() % int_sol.size()] == 0)
-//                               ? indices_0[MooseRandom::randl() % indices_0.size()]
-//                               : indices_1[MooseRandom::randl() % indices_1.size()];
-
-//     unsigned int index2 = (int_sol[index1] == 0)
-//                               ? indices_1[MooseRandom::randl() % indices_1.size()]
-//                               : indices_0[MooseRandom::randl() % indices_0.size()];
-
-//     // if (int_neigh[index1] == 1)
-//     // {
-//     //   int fuelNeighbors = 0;
-//     //   for (int neighbor : getNeighbors(_elem_neighbors, index1))
-//     //   {
-//     //     if (int_neigh[neighbor] == 1)
-//     //       fuelNeighbors++;
-//     //   }
-//     //   if (fuelNeighbors == 4)
-//     //   {
-//     //     // This flip would create a hole. Avoid it.
-//     //     continue;
-//     //   }
-//     // }
-
-//     // Flip the values at the chosen indices
-//     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
-//     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
-
-//     // // Inside createNeigborInt after a flip
-//     // std::pair<int, int> topLeft = {gridSize, gridSize};
-//     // std::pair<int, int> bottomRight = {0, 0};
-//     // int fuelCount = 0;
-//     // for (unsigned int i = 0; i < gridSize; ++i)
-//     // {
-//     //   for (unsigned int j = 0; j < gridSize; ++j)
-//     //   {
-//     //     if (int_neigh[i * gridSize + j] == 1)
-//     //     {
-//     //       topLeft.first = std::min(topLeft.first, (int)i);
-//     //       topLeft.second = std::min(topLeft.second, (int)j);
-//     //       bottomRight.first = std::max(bottomRight.first, (int)i);
-//     //       bottomRight.second = std::max(bottomRight.second, (int)j);
-//     //       fuelCount++;
-//     //     }
-//     //   }
-//     // }
-//     // int boundingBoxArea =
-//     //     (bottomRight.first - topLeft.first + 1) * (bottomRight.second - topLeft.second + 1);
-//     // if ((float)fuelCount / boundingBoxArea < 0.93)
-//     // {
-//     //   int_neigh[index1] = int_sol[index1];
-//     //   int_neigh[index2] = int_sol[index2];
-//     // }
-
-//     // Check if the new configuration improves the bounding box density for each cell type
-//     bool improvedDensity = true;
-//     for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
-//     {
-//       double currentDensity = computeBoundingBoxDensity2D(int_sol, cellType);
-//       double newDensity = computeBoundingBoxDensity2D(int_neigh, cellType);
-
-//       if (newDensity < currentDensity)
-//       {
-//         improvedDensity = false;
-//         break;
-//       }
-//     }
-
-//     // Inside createNeigborInt after a flip
-//     // std::pair<int, int> topLeft = {gridSize, gridSize};
-//     // std::pair<int, int> bottomRight = {0, 0};
-//     // int fuelCount = 0;
-//     // for (unsigned int i = 0; i < gridSize; ++i)
-//     // {
-//     //   for (unsigned int j = 0; j < gridSize; ++j)
-//     //   {
-//     //     if (int_neigh[i * gridSize + j] == 1)
-//     //     {
-//     //       topLeft.first = std::min(topLeft.first, (int)i);
-//     //       topLeft.second = std::min(topLeft.second, (int)j);
-//     //       bottomRight.first = std::max(bottomRight.first, (int)i);
-//     //       bottomRight.second = std::max(bottomRight.second, (int)j);
-//     //       fuelCount++;
-//     //     }
-//     //   }
-//     // }
-//     // int boundingBoxArea =
-//     //     (bottomRight.first - topLeft.first + 1) * (bottomRight.second - topLeft.second + 1);
-
-//     // Check if the top-left corner of the grid is a 0
-//     // bool cornerIsZero = (int_neigh[0] == 0);
-//     // bool cornerIsZero = (int_neigh[(gridSize - 1) * gridSize] == 0); // Bottom-left cell
-
-//     // // Check if the fuel touches the top and left sides
-//     // bool fuelTouchesTop = false;
-//     // bool fuelTouchesLeft = false;
-//     // for (unsigned int i = 0; i < gridSize; ++i)
-//     // {
-//     //   if (int_neigh[i] == 1) // Check the top side
-//     //   {
-//     //     fuelTouchesTop = true;
-//     //   }
-//     //   if (int_neigh[i * gridSize] == 1) // Check the left side
-//     //   {
-//     //     fuelTouchesLeft = true;
-//     //   }
-//     // }
-
-//     // Check if the fuel touches the bottom and right sides
-//     // bool fuelTouchesBottom = false;
-//     // bool fuelTouchesRight = false;
-//     // for (unsigned int i = 0; i < gridSize; ++i)
-//     // {
-//     //   if (int_neigh[(gridSize - 1) * gridSize + i] == 1) // Check the bottom side
-//     //   {
-//     //     fuelTouchesBottom = true;
-//     //   }
-//     //   if (int_neigh[i * gridSize + (gridSize - 1)] == 1) // Check the right side
-//     //   {
-//     //     fuelTouchesRight = true;
-//     //   }
-//     // }
-
-//     bool fuelTouchesBottom = false;
-//     bool fuelTouchesLeft = false;
-//     for (unsigned int i = 0; i < gridSize; ++i)
-//     {
-//       if (int_neigh[(gridSize - 1) * gridSize + i] == 1) // Check the bottom side
-//       {
-//         fuelTouchesBottom = true;
-//       }
-//       if (int_neigh[i * gridSize] == 1) // Check the left side
-//       {
-//         fuelTouchesLeft = true;
-//       }
-//     }
-
-//     // if (!improvedDensity || !cornerIsZero || !fuelTouchesBottom || !fuelTouchesLeft)
-//     if (!improvedDensity || !fuelTouchesBottom || !fuelTouchesLeft)
-//     {
-//       // If the density is not improved, revert the changes
-//       int_neigh[index1] = int_sol[index1];
-//       int_neigh[index2] = int_sol[index2];
-//     }
-
-//     // if ((float)fuelCount / boundingBoxArea < 0.90 || !cornerIsZero || !fuelTouchesTop ||
-//     //     !fuelTouchesLeft)
-//     // {
-//     //   int_neigh[index1] = int_sol[index1];
-//     //   int_neigh[index2] = int_sol[index2];
-//     // }
-
-//     // Check if the new configuration is valid
-//     if (canFlip(int_sol, index1, index2, _elem_neighbors))
-//     {
-//       break; // Exit the loop if a valid configuration is found
-//     }
-//     else
-//     {
-//       // If not valid, revert the changes and try again
-//       int_neigh[index1] = int_sol[index1];
-//       int_neigh[index2] = int_sol[index2];
-//       attempts++;
-
-//       canFlipCalls++;
-//       if (canFlipCalls >= MAX_CANFLIP_CALLS)
-//       {
-//         break; // Exit the loop if we've called canFlip too many times
-//       }
-//     }
-//   }
-// }
-
 void
 SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
                                               std::vector<int> & int_neigh,
@@ -735,28 +419,8 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
   // Create lists of indices for 0s and 1s
   std::vector<unsigned int> indices_0;
   std::vector<unsigned int> indices_1;
-
-  // unsigned int gridSize;
-  // double root = sqrt(int_sol.size());
-  // if (root == static_cast<int>(root)) // Check if it's a perfect square (2D)
-  // {
-  //   gridSize = static_cast<unsigned int>(root);
-  // }
-  // else // Otherwise, it's 3D
-  // {
-  //   gridSize = static_cast<unsigned int>(cbrt(int_sol.size()));
-  // }
-
-  // 1. Determine Dimensionality
-  unsigned int dimension = 2; // default to 2D
   unsigned int gridSize = static_cast<unsigned int>(sqrt(int_sol.size()));
-  unsigned int cubeSize = static_cast<unsigned int>(cbrt(int_sol.size()));
 
-  if (gridSize * gridSize != int_sol.size() && cubeSize * cubeSize * cubeSize == int_sol.size())
-  {
-    dimension = 3;
-  }
-  dimension = 2; // default to 2D
   for (unsigned int i = 0; i < int_sol.size(); ++i)
   {
     if (int_sol[i] == 0)
@@ -795,11 +459,19 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
 
+    // Another way:
+    // unsigned int index1 = indices_0[rand() % indices_0.size()];
+    // unsigned int index2 = indices_1[rand() % indices_1.size()];
+    // // Flip the values at the chosen indices
+    // int_neigh[index1] = 1;
+    // int_neigh[index2] = 0;
+
+    // Check if the new configuration improves the bounding box density for each cell type
     bool improvedDensity = true;
     for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
     {
-      double currentDensity = computeBoundingBoxDensity(int_sol, cellType, dimension);
-      double newDensity = computeBoundingBoxDensity(int_neigh, cellType, dimension);
+      double currentDensity = computeBoundingBoxDensity(int_sol, cellType);
+      double newDensity = computeBoundingBoxDensity(int_neigh, cellType);
 
       if (newDensity < currentDensity)
       {
@@ -808,17 +480,13 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
       }
     }
 
-    // if (!improvedDensity || !touchesRequiredSides)
     if (!improvedDensity)
     {
-      // If the density is not improved or if the fuel doesn't touch the required sides/faces,
-      // revert the changes
+      // If the density is not improved, revert the changes
       int_neigh[index1] = int_sol[index1];
       int_neigh[index2] = int_sol[index2];
     }
-
-    // Check if the new configuration is valid
-    if (canFlip(int_sol, index1, index2, _elem_neighbors))
+    else if (canFlip(int_sol, index1, index2, _elem_neighbors))
     {
       break; // Exit the loop if a valid configuration is found
     }
@@ -1174,8 +842,7 @@ SimulatedAnnealingAlgorithm::countEnclaves(
 // SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_vec,
 //                                      unsigned int index1,
 //                                      unsigned int index2,
-//                                      const std::map<int, std::vector<int>> & neighborsMap)
-//                                      const
+//                                      const std::map<int, std::vector<int>> & neighborsMap) const
 // {
 //   // std::cout << "Entering canFlip" << std::endl;
 
@@ -1647,384 +1314,34 @@ bool
 SimulatedAnnealingAlgorithm::checkConstraints(
     const std::vector<int> & int_vec, const std::map<int, std::vector<int>> & neighborsMap) const
 {
-  unsigned int dimension = 2; // default to 2D
-  unsigned int sideLength = static_cast<unsigned int>(sqrt(int_vec.size()));
-  unsigned int gridSize = static_cast<unsigned int>(sqrt(int_vec.size()));
-  unsigned int cubeSize = static_cast<unsigned int>(cbrt(int_vec.size()));
+  unsigned int gridSize = std::sqrt(int_vec.size());
 
-  sideLength = 10;
-
-  if (sideLength * sideLength != int_vec.size() && cubeSize * cubeSize * cubeSize == int_vec.size())
+  // Constraint 2: Ensure 0s are touching the boundaries and no 1s near boundaries
+  for (unsigned int i = 0; i < gridSize; ++i)
   {
-    dimension = 3;
-  }
-
-  // auto idx3D = [&](unsigned int x, unsigned int y, unsigned int z)
-  // { return z * sideLength * sideLength + y * sideLength + x; };
-
-  auto idx3D = [&](unsigned int x, unsigned int y, unsigned int z) -> unsigned int
-  { return (sideLength - 1 - z) * sideLength * sideLength + y * sideLength + x; };
-
-  dimension = 2; // default to 2D
-  // // Check if the bottom-right corner has a 0s region
-  // if (int_vec[(gridSize - 1) * gridSize + (gridSize - 1)] != 0)
-  // {
-  //   return false; // Constraint not met
-  // }
-
-  // // Check if the bottom boundary has fuel touching
-  // for (unsigned int j = 0; j < gridSize; ++j)
-  // {
-  //   if (int_vec[(gridSize - 1) * gridSize + j] != 1)
-  //   {
-  //     return false; // Constraint not met
-  //   }
-  // }
-
-  // // Check if the right boundary has fuel touching
-  // for (unsigned int i = 0; i < gridSize; ++i)
-  // {
-  //   if (int_vec[i * gridSize + (gridSize - 1)] != 1)
-  //   {
-  //     return false; // Constraint not met
-  //   }
-  // }
-
-  // // Ensure the top boundary doesn't have any fuel touching
-  // for (unsigned int j = 0; j < gridSize; ++j)
-  // {
-  //   if (int_vec[j] == 1)
-  //   {
-  //     return false; // Constraint not met
-  //   }
-  // }
-
-  // // Ensure the left boundary doesn't have any fuel touching
-  // for (unsigned int i = 0; i < gridSize; ++i)
-  // {
-  //   if (int_vec[i * gridSize] == 1)
-  //   {
-  //     return false; // Constraint not met
-  //   }
-  // }
-  if (dimension == 2)
-  {
-    // bool zerosAtBottomLeft = (int_vec[(gridSize - 1) * gridSize] == 0);
-    // if (!zerosAtBottomLeft)
-    //   return false;
-
-    bool fuelTouchesBottom = false;
-    bool fuelTouchesLeft = false;
-    for (unsigned int i = 0; i < gridSize; ++i)
-    {
-      if (int_vec[(gridSize - 1) * gridSize + i] == 1)
-        fuelTouchesBottom = true;
-      if (int_vec[i * gridSize] == 1)
-        fuelTouchesLeft = true;
-    }
-    if (!fuelTouchesBottom || !fuelTouchesLeft)
-      return false;
-
-    bool fuelTouchesTop = false;
-    bool fuelTouchesRight = false;
-    for (unsigned int i = 0; i < gridSize; ++i)
-    {
-      if (int_vec[i] == 1)
-        fuelTouchesTop = true;
-      if (int_vec[i * gridSize + (gridSize - 1)] == 1)
-        fuelTouchesRight = true;
-    }
-    if (fuelTouchesTop || fuelTouchesRight)
+    if (int_vec[i] == 1 || int_vec[i * gridSize] == 1 ||
+        int_vec[i * gridSize + (gridSize - 1)] == 1 || int_vec[(gridSize - 1) * gridSize + i] == 1)
       return false;
   }
 
-  else if (dimension == 3)
-  {
+  // Constraint 3: All regions should be contiguous
+  std::vector<int> visited(int_vec.size(), 0);
+  unsigned int regions0 = countEnclaves(int_vec, 0, neighborsMap);
+  unsigned int regions1 = countEnclaves(int_vec, 1, neighborsMap);
 
-    bool zerosAtBottomLeft = true;
+  // Constraint 1: There should be 2 regions of 0s and 1 region of 1s
+  if (regions0 != 2 || regions1 != 1)
+    return false;
 
-    for (unsigned int z = 0; z < sideLength; ++z)
-    {
-      if (int_vec[idx3D(0, sideLength - 1, z)] !=
-          0) // (0, sideLength - 1) denotes the bottom-left in each layer
-      {
-        zerosAtBottomLeft = false;
-        break;
-      }
-    }
-
-    if (!zerosAtBottomLeft)
-      return false;
-
-    bool westFaceTouched = false;
-    bool southFaceTouched = false;
-
-    // West Face
-    for (unsigned int z = 0; z < sideLength; ++z)
-    {
-      for (unsigned int y = 0; y < sideLength; ++y)
-      {
-        if (int_vec[idx3D(0, y, z)] == 1)
-        {
-          westFaceTouched = true;
-          break; // Move to the next layer
-        }
-      }
-      if (westFaceTouched)
-        break; // Exit the outer loop if constraint met
-    }
-
-    // South Face (touching 1s)
-    for (unsigned int z = 0; z < sideLength; ++z)
-    {
-      for (unsigned int x = 0; x < sideLength; ++x)
-      {
-        if (int_vec[idx3D(x, sideLength - 1, z)] == 1)
-        {
-          southFaceTouched = true;
-          break; // Move to the next layer
-        }
-      }
-      if (southFaceTouched)
-        break; // Exit the outer loop if constraint met
-    }
-
-    // Top Face (all 0s)
-    for (unsigned int z = 0; z < sideLength; ++z)
-    {
-      for (unsigned int x = 0; x < sideLength; ++x)
-      {
-        if (int_vec[idx3D(x, 0, z)] != 0)
-        {
-          return false; // Constraint not met
-        }
-      }
-    }
-
-    // Right Face
-    for (unsigned int z = 0; z < sideLength; ++z)
-    {
-      for (unsigned int y = 0; y < sideLength; ++y)
-      {
-        if (int_vec[idx3D(sideLength - 1, y, z)] != 0)
-        {
-          return false; // Constraint not met
-        }
-      }
-    }
-
-    // After all constraints are checked
-    return westFaceTouched && southFaceTouched;
-  }
-
-  // 3. Check that the main fuel enclave is continuous
-  // Using BFS for this purpose
-  std::vector<bool> visited(int_vec.size(), false);
-  std::queue<int> queue;
-  int startFuelIndex =
-      std::find(int_vec.begin(), int_vec.end(), 1) - int_vec.begin(); // Find the first fuel cell
-  queue.push(startFuelIndex);
-  visited[startFuelIndex] = true;
-
-  while (!queue.empty())
-  {
-    int current = queue.front();
-    queue.pop();
-    for (int neighbor : neighborsMap.at(current))
-    {
-      if (int_vec[neighbor] == 1 && !visited[neighbor])
-      {
-        queue.push(neighbor);
-        visited[neighbor] = true;
-      }
-    }
-  }
-
-  // If any fuel cell is not visited, then the enclave is not continuous
-  for (unsigned int i = 0; i < int_vec.size(); ++i)
-  {
-    if (int_vec[i] == 1 && !visited[i])
-      return false;
-  }
+  // Constraint 4: The two regions of 0s should not be connected is inherently satisfied
+  // by the fact that there are two separate regions of 0s.
 
   return true;
 }
 
-// bool
-// SimulatedAnnealingAlgorithm::checkConstraints(
-//     const std::vector<int> & int_vec, const std::map<int, std::vector<int>> & neighborsMap)
-//     const
-// {
-//   // Assuming the grid is a square for simplicity
-//   unsigned int gridSize = std::sqrt(int_vec.size());
-
-//   // // Check if the bottom-right corner has a 0s region
-//   // if (int_vec[(gridSize - 1) * gridSize + (gridSize - 1)] != 0)
-//   // {
-//   //   return false; // Constraint not met
-//   // }
-
-//   // // Check if the bottom boundary has fuel touching
-//   // for (unsigned int j = 0; j < gridSize; ++j)
-//   // {
-//   //   if (int_vec[(gridSize - 1) * gridSize + j] != 1)
-//   //   {
-//   //     return false; // Constraint not met
-//   //   }
-//   // }
-
-//   // // Check if the right boundary has fuel touching
-//   // for (unsigned int i = 0; i < gridSize; ++i)
-//   // {
-//   //   if (int_vec[i * gridSize + (gridSize - 1)] != 1)
-//   //   {
-//   //     return false; // Constraint not met
-//   //   }
-//   // }
-
-//   // // Ensure the top boundary doesn't have any fuel touching
-//   // for (unsigned int j = 0; j < gridSize; ++j)
-//   // {
-//   //   if (int_vec[j] == 1)
-//   //   {
-//   //     return false; // Constraint not met
-//   //   }
-//   // }
-
-//   // // Ensure the left boundary doesn't have any fuel touching
-//   // for (unsigned int i = 0; i < gridSize; ++i)
-//   // {
-//   //   if (int_vec[i * gridSize] == 1)
-//   //   {
-//   //     return false; // Constraint not met
-//   //   }
-//   // }
-
-//   bool zerosAtBottomLeft = (int_vec[(gridSize - 1) * gridSize] == 0);
-//   if (!zerosAtBottomLeft)
-//     return false;
-
-//   bool fuelTouchesBottom = false;
-//   bool fuelTouchesLeft = false;
-//   for (unsigned int i = 0; i < gridSize; ++i)
-//   {
-//     if (int_vec[(gridSize - 1) * gridSize + i] == 1)
-//       fuelTouchesBottom = true;
-//     if (int_vec[i * gridSize] == 1)
-//       fuelTouchesLeft = true;
-//   }
-//   if (!fuelTouchesBottom || !fuelTouchesLeft)
-//     return false;
-
-//   bool fuelTouchesTop = false;
-//   bool fuelTouchesRight = false;
-//   for (unsigned int i = 0; i < gridSize; ++i)
-//   {
-//     if (int_vec[i] == 1)
-//       fuelTouchesTop = true;
-//     if (int_vec[i * gridSize + (gridSize - 1)] == 1)
-//       fuelTouchesRight = true;
-//   }
-//   if (fuelTouchesTop || fuelTouchesRight)
-//     return false;
-
-//   // 3. Check that the main fuel enclave is continuous
-//   // Using BFS for this purpose
-//   std::vector<bool> visited(int_vec.size(), false);
-//   std::queue<int> queue;
-//   int startFuelIndex =
-//       std::find(int_vec.begin(), int_vec.end(), 1) - int_vec.begin(); // Find the first fuel
-//       cell
-//   queue.push(startFuelIndex);
-//   visited[startFuelIndex] = true;
-
-//   while (!queue.empty())
-//   {
-//     int current = queue.front();
-//     queue.pop();
-//     for (int neighbor : neighborsMap.at(current))
-//     {
-//       if (int_vec[neighbor] == 1 && !visited[neighbor])
-//       {
-//         queue.push(neighbor);
-//         visited[neighbor] = true;
-//       }
-//     }
-//   }
-
-//   // If any fuel cell is not visited, then the enclave is not continuous
-//   for (unsigned int i = 0; i < int_vec.size(); ++i)
-//   {
-//     if (int_vec[i] == 1 && !visited[i])
-//       return false;
-//   }
-
-//   return true;
-// }
 double
 SimulatedAnnealingAlgorithm::computeBoundingBoxDensity(const std::vector<int> & int_vec,
-                                                       int cellType,
-                                                       unsigned int dimension) const
-{
-  unsigned int gridSize = static_cast<unsigned int>(pow(int_vec.size(), 1.0 / dimension));
-
-  unsigned int min_i = gridSize, max_i = 0;
-  unsigned int min_j = gridSize, max_j = 0;
-  unsigned int min_k = gridSize, max_k = 0; // For 3D
-  unsigned int cellCount = 0;
-
-  for (unsigned int i = 0; i < gridSize; ++i)
-  {
-    for (unsigned int j = 0; j < gridSize; ++j)
-    {
-      for (unsigned int k = 0; k < (dimension == 3 ? gridSize : 1); ++k) // Loop only once for 2D
-      {
-        unsigned int index;
-        if (dimension == 2)
-        {
-          index = i * gridSize + j;
-        }
-        else // 3D
-        {
-          index = i * gridSize * gridSize + j * gridSize + k;
-        }
-
-        if (int_vec[index] == cellType)
-        {
-          min_i = std::min(min_i, i);
-          max_i = std::max(max_i, i);
-          min_j = std::min(min_j, j);
-          max_j = std::max(max_j, j);
-          if (dimension == 3)
-          {
-            min_k = std::min(min_k, k);
-            max_k = std::max(max_k, k);
-          }
-          cellCount++;
-        }
-      }
-    }
-  }
-
-  unsigned int boundingBoxVolume;
-  if (dimension == 2)
-  {
-    boundingBoxVolume = (max_i - min_i + 1) * (max_j - min_j + 1);
-  }
-  else // 3D
-  {
-    boundingBoxVolume = (max_i - min_i + 1) * (max_j - min_j + 1) * (max_k - min_k + 1);
-  }
-
-  if (boundingBoxVolume == 0)
-    return 0; // Avoid division by zero
-
-  return static_cast<double>(cellCount) / boundingBoxVolume;
-}
-
-double
-SimulatedAnnealingAlgorithm::computeBoundingBoxDensity2D(const std::vector<int> & int_vec,
-                                                         int cellType) const
+                                                       int cellType) const
 {
 
   unsigned int gridSize = static_cast<unsigned int>(sqrt(int_vec.size()));

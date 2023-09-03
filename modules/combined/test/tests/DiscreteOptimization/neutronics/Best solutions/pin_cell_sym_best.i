@@ -54,9 +54,9 @@ global_temperature = 600
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
@@ -69,40 +69,97 @@ global_temperature = 600
 #   []
 # []
 
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
 [Mesh]
   #   file = pin_cell_mesh.e
   [cmg]
     type = CartesianMeshGenerator
     # elem_type = Tri3
     dim = 2
-    dx = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
-    dy = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    dx = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
+    dy = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
     #     ix = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
     #     iy = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
     subdomain_id = '
 
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 0 1 1 1 1 1 1 0 0
+1 0 1 1 1 1 1 1 0 0
+0 1 0 1 1 1 1 1 0 0
+0 0 1 1 1 1 1 1 0 0'
+
   []
 []
+
+#  -1.001692e+00
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
+# 1 1 0 1 1 1 1 1 0 0
+# 0 0 0 1 1 1 1 1 0 0
+
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
+# 1 1 0 0 1 1 1 1 0 0
+# 1 1 0 1 1 1 1 1 0 0
+# 0 0 0 1 1 1 1 1 0 0
+
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 0 1 1 1 1 1 1 0 0
+# 1 0 1 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 0 0
+
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
+# 1 0 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 0 0
+# 0 1 1 1 1 1 1 1 0 0
 
 [Problem]
   type = FEProblem
@@ -139,12 +196,15 @@ global_temperature = 600
 []
 
 [Executioner]
-  type = NonlinearEigen
+  # type = NonlinearEigen
+  type = InversePowerMethod
   nl_abs_tol = 1e-6
+  # free_power_iterations = 10
+  Chebyshev_acceleration_on = false
   bx_norm = 'bnorm'
   k0 = 1.0
   l_max_its = 100
-
+  # line_search = none
   solve_type = 'PJFNK'
   petsc_options_iname = '-pc_type'
   petsc_options_value = 'lu'
@@ -205,24 +265,50 @@ global_temperature = 600
     use_displaced_mesh = false
   []
 
-  [hydraulic_diameter_fuel]
+  [perimeter_fuel]
     type = RegionInterfaceAreaPostprocessor
     primary_block_names = '1'
     paired_block_names = '0'
+    execute_on = timestep_end
+  []
+
+  # [area_all]
+  #   type = RegionInterfaceAreaPostprocessor
+  # []
+
+  [area_all_moderator]
+    type = VolumePostprocessor
+    block = '0'
+    execute_on = timestep_end
+  []
+
+  [area_all_fuel]
+    type = VolumePostprocessor
+    block = '1'
+    execute_on = timestep_end
   []
 
   [area_all]
-    type = RegionInterfaceAreaPostprocessor
+    type = VolumePostprocessor
+    block = '0 1'
+    execute_on = timestep_end
   []
 
   [hydraulic_diameter]
     type = ParsedPostprocessor
-    pp_names = 'hydraulic_diameter_fuel area_all'
+    # pp_names = 'perimeter_fuel area_all_fuel area_all_moderator'
+    pp_names = 'perimeter_fuel area_all'
     # function = '-1*(bnorm * if(max_temperature < 360, 1, 0.01))'
-    function = '4*area_all/ hydraulic_diameter_fuel'
+    # function = '(area_all_fuel+area_all_moderator)/ perimeter_fuel'
+
+    # This is how it should be after testing the individual input file with different
+    # confgurations including water in the middle or tetris shape around the middle and seeing how cost function is behaving.
+    function = 'area_all/ perimeter_fuel'
+
+    # function = 'perimeter_fuel/area_all'
     # function = '-(total_source - (max_temperature / 2))'
     # function = 'max_temperature/total_source'
-    execute_on = linear
+    execute_on = timestep_end
   []
 
   # [cost_function]
@@ -237,69 +323,71 @@ global_temperature = 600
   [cost_function]
     type = ParsedPostprocessor
     # pp_names = 'bnorm'
-    pp_names = 'bnorm hydraulic_diameter_fuel'
+    pp_names = 'bnorm hydraulic_diameter'
     # function = '-1 * ( bnorm )'
-    function = '( 1/(bnorm) + ( 0.0000000001 * ( 1/(hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel) ) ) )'
+    # function = '( 1/(bnorm) + ( 0.0000000001 * ( 1/(hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel) ) ) )'
+    # function = '-1 * bnorm + 0.0001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter '
+    function = '-bnorm - hydraulic_diameter*hydraulic_diameter*hydraulic_diameter*hydraulic_diameter'
     # function = '-(total_source - (max_temperature / 2))'
     # function = 'max_temperature/total_source'
-    execute_on = linear
+    execute_on = timestep_end
   []
 
 []
 
 # [BCs]
 
+#   [top]
+#     type = NeumannBC
+#     variable = group1
+#     boundary = top
+#     value = 0
+#   []
+
 #   [left]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group1
 #     boundary = left
 #     value = 0
 #   []
 
 #   [bottom]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group1
 #     boundary = bottom
 #     value = 0
 #   []
 
-#   [top]
-#     type = DirichletBC
-#     variable = group1
-#     boundary = top
-#     value = 0
-#   []
-
 #   [right]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group1
 #     boundary = right
 #     value = 0
 #   []
 
 #   [left_group2]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group2
 #     boundary = left
 #     value = 0
 #   []
 
-#   [bottom_group2]
-#     type = DirichletBC
-#     variable = group2
-#     boundary = bottom
-#     value = 0
-#   []
-
 #   [top_group2]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group2
 #     boundary = top
 #     value = 0
 #   []
 
+#   [bottom_group2]
+#     type = NeumannBC
+#     variable = group2
+#     boundary = bottom
+#     value = 0
+#   []
+
 #   [right_group2]
-#     type = DirichletBC
+#     type = NeumannBC
 #     variable = group2
 #     boundary = right
 #     value = 0
