@@ -1,9 +1,10 @@
 # Making a Change to this package?
 # REMEMBER TO UPDATE the .yaml files for the following packages:
-#   template/ (must contain any python major.minor version this
-#              package is building. Usually the latest version.)
+#   moose-dev/*
+#
+# As well as any directions pertaining to modifying those files.
 {% set build = 0 %}
-{% set version = "2022.12.05" %}
+{% set version = "2023.08.17" %}
 
 package:
   name: moose-tools
@@ -20,14 +21,14 @@ requirements:
     - {{ moose_python }}
     - setuptools
   run:
-    - moose-test-tools
+    - {{ moose_test_tools }}
     - beautifulsoup4
     - livereload
     - pybtex
     - mock
     - pylatexenc
     - python
-    - clang-tools 12.0.1
+    - clang-tools
 
 test:
   commands:
@@ -44,9 +45,11 @@ about:
   license: LGPL 2.1
   summary: >
     This superficial module (moose-tools) acts as a top-level module designed to provide all
-    dependencies required in order to run the TestHarness, clang-format, and create MOOSE 
+    dependencies required in order to run the TestHarness, clang-format, and create MOOSE
     Documentation.
 
 extra:
   recipe-maintainers:
     - milljm
+    - cticenhour
+    - loganharbour

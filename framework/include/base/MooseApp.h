@@ -22,6 +22,7 @@
 #include "PerfGraphInterface.h"
 #include "TheWarehouse.h"
 #include "RankMap.h"
+#include "MeshGeneratorSystem.h"
 
 #include "libmesh/parallel_object.h"
 #include "libmesh/mesh_base.h"
@@ -40,11 +41,12 @@ class Executor;
 class NullExecutor;
 class Backup;
 class FEProblemBase;
-class MeshGenerator;
 class InputParameterWarehouse;
 class SystemInfo;
 class CommandLine;
 class RelationshipManager;
+class SolutionInvalidity;
+
 namespace libMesh
 {
 class ExodusII_IO;
@@ -136,6 +138,11 @@ public:
    */
   PerfGraph & perfGraph() { return _perf_graph; }
 
+  /**
+   * Get the SolutionInvalidity for this app
+   */
+  SolutionInvalidity & solutionInvalidity() { return _solution_invalidity; }
+
   ///@{
   /**
    * Retrieve a parameter for the object
@@ -224,11 +231,7 @@ public:
    * Override the selection of the output file base name.
    * Note: This method is supposed to be called by MultiApp only.
    */
-  void setOutputFileBase(const std::string & output_file_base)
-  {
-    _output_file_base = output_file_base;
-    _file_base_set_by_user = true;
-  }
+  void setOutputFileBase(const std::string & output_file_base);
 
   /**
    * Get the output file base name.
@@ -472,11 +475,6 @@ public:
    */
   bool isSplitMesh() const;
 
-  /**
-   * Whether or not we are running with pre-split (distributed mesh)
-   */
-  bool isUseSplit() const;
-
   ///@{
   /**
    * Return true if the recovery file base is set
@@ -578,7 +576,8 @@ public:
                               const std::string & library_name);
   void dynamicAppRegistration(const std::string & app_name,
                               std::string library_path,
-                              const std::string & library_name);
+                              const std::string & library_name,
+                              bool lib_load_deps);
   ///@}
 
   /**
@@ -595,9 +594,14 @@ public:
   std::string libNameToAppName(const std::string & library_name) const;
 
   /**
-   * Return the loaded library filenames in a std::set
+   * Return the paths of loaded libraries
    */
   std::set<std::string> getLoadedLibraryPaths() const;
+
+  /**
+   * Return the paths searched by MOOSE when loading libraries
+   */
+  std::set<std::string> getLibrarySearchPaths(const std::string & library_path_from_param) const;
 
   /**
    * Get the InputParameterWarehouse for MooseObjects
@@ -652,6 +656,11 @@ public:
   const RestartableDataMap & getRestartableDataMap(const RestartableDataMapName & name) const;
 
   /**
+   * @return Whether or not the restartable data has the given name registered.
+   */
+  bool hasRestartableDataMap(const RestartableDataMapName & name) const;
+
+  /**
    * Reserve a location for storing custom RestartableDataMap objects.
    *
    * This should be called in the constructor of an application.
@@ -661,6 +670,11 @@ public:
    *               given name is used to generate the suffix (MyMetaData -> _mymetadata)
    */
   void registerRestartableDataMapName(const RestartableDataMapName & name, std::string suffix = "");
+
+  /**
+   * @return The output name for the restartable data with name \p name
+   */
+  const std::string & getRestartableDataMapName(const RestartableDataMapName & name) const;
 
   /**
    * Return a reference to the recoverable data object
@@ -707,7 +721,7 @@ public:
   /**
    * Whether or not this app is the ultimate master app. (ie level == 0)
    */
-  bool isUltimateMaster() { return !_multiapp_level; }
+  bool isUltimateMaster() const { return !_multiapp_level; }
 
   /**
    * Returns a pointer to the master mesh
@@ -715,69 +729,87 @@ public:
   const MooseMesh * masterMesh() const { return _master_mesh; }
 
   /**
-   * Returns a pointer to the master mesh
+   * Returns a pointer to the master displaced mesh
    */
   const MooseMesh * masterDisplacedMesh() const { return _master_displaced_mesh; }
 
   /**
-   * Set final mesh generator name
+   * Gets the system that manages the MeshGenerators
    */
-  void setFinalMeshGeneratorName(const std::string & generator_name);
+  MeshGeneratorSystem & getMeshGeneratorSystem() { return _mesh_generator_system; }
 
   /**
    * Add a mesh generator that will act on the meshes in the system
+   *
+   * @param type The type of MeshGenerator
+   * @param name The name of the MeshGenerator
+   * @param params The params used to construct the MeshGenerator
+   *
+   * See MeshGeneratorSystem::addMeshGenerator()
    */
-  void addMeshGenerator(const std::string & generator_name,
+  void addMeshGenerator(const std::string & type,
                         const std::string & name,
-                        InputParameters parameters);
+                        const InputParameters & params)
+  {
+    _mesh_generator_system.addMeshGenerator(type, name, params);
+  }
 
   /**
-   * Get a mesh generator with its name
+   * @returns Whether or not a mesh generator exists with the name \p name.
    */
-  const MeshGenerator & getMeshGenerator(const std::string & name) const;
+  bool hasMeshGenerator(const MeshGeneratorName & name) const
+  {
+    return _mesh_generator_system.hasMeshGenerator(name);
+  }
 
   /**
-   * Get names of all mesh generators
-   * Note: This function should be called after all mesh generators are added with the
-   * 'add_mesh_generator' task. The returned value will be undefined and depends on the ordering
-   * that mesh generators are added by MOOSE if the function is called during the
-   * 'add_mesh_generator' task.
+   * @returns The MeshGenerator with the name \p name.
    */
-  std::vector<std::string> getMeshGeneratorNames() const;
+  const MeshGenerator & getMeshGenerator(const std::string & name) const
+  {
+    return _mesh_generator_system.getMeshGenerator(name);
+  }
 
   /**
-   * Get a refernce to a pointer that will be the output of the
-   * MeshGenerator named name
+   * @returns The final mesh generated by the mesh generator system
    */
-  std::unique_ptr<MeshBase> & getMeshGeneratorOutput(const std::string & name);
+  std::unique_ptr<MeshBase> getMeshGeneratorMesh()
+  {
+    return _mesh_generator_system.getSavedMesh(_mesh_generator_system.mainMeshGeneratorName());
+  }
+
+  /**
+   * @returns The names of all mesh generators
+   *
+   * See MeshGeneratorSystem::getMeshGeneratorNames()
+   */
+  std::vector<std::string> getMeshGeneratorNames() const
+  {
+    return _mesh_generator_system.getMeshGeneratorNames();
+  }
 
   /**
    * Append a mesh generator that will act on the final mesh generator in the system
-   * Note: This function must be called after add_mesh_generator task.
+   *
+   * @param type The type of MeshGenerator
+   * @param name The name of the MeshGenerator
+   * @param params The params used to construct the MeshGenerator
+   *
+   * See MeshGeneratorSystem::appendMeshGenerator()
    */
-  void appendMeshGenerator(const std::string & generator_name,
-                           const std::string & name,
-                           InputParameters parameters);
+  const MeshGenerator &
+  appendMeshGenerator(const std::string & type, const std::string & name, InputParameters params)
+  {
+    return _mesh_generator_system.appendMeshGenerator(type, name, params);
+  }
 
   /**
-   * Clear all mesh modifers
+   * Whether this app is constructing mesh generators
+   *
+   * This is virtual to allow MooseUnitApp to override it so that we can
+   * construct MeshGenerators in unit tests
    */
-  void clearMeshGenerators();
-
-  /**
-   * Execute and clear the Mesh Generators data structure
-   */
-  void executeMeshGenerators();
-
-  /**
-   * Whether this app is executing mesh generators
-   */
-  bool executingMeshGenerators() const { return _executing_mesh_generators; }
-
-  /**
-   * Get the generated mesh generated by executeMeshGenerators();
-   */
-  std::unique_ptr<MeshBase> getMeshGeneratorMesh(bool check_unique = true);
+  virtual bool constructingMeshGenerators() const;
 
   ///@{
   /**
@@ -948,7 +980,9 @@ protected:
    * Recursively loads libraries and dependencies in the proper order to fully register a
    * MOOSE application that may have several dependencies. REQUIRES: dynamic linking loader support.
    */
-  void loadLibraryAndDependencies(const std::string & library_filename, const Parameters & params);
+  void loadLibraryAndDependencies(const std::string & library_filename,
+                                  const Parameters & params,
+                                  bool load_dependencies = true);
 
   /// Constructor is protected so that this object is constructed through the AppFactory object
   MooseApp(InputParameters parameters);
@@ -1013,8 +1047,9 @@ protected:
   /// Syntax of the input file
   Syntax _syntax;
 
-  /// Input parameter storage structure (this is a raw pointer so the destruction time can be explicitly controlled)
-  InputParameterWarehouse * _input_parameter_warehouse;
+  /// Input parameter storage structure; unique_ptr so we can control
+  /// its destruction order
+  std::unique_ptr<InputParameterWarehouse> _input_parameter_warehouse;
 
   /// The Factory responsible for building Actions
   ActionFactory _action_factory;
@@ -1039,6 +1074,9 @@ protected:
 
   /// The PerfGraph object for this application (recoverable)
   PerfGraph & _perf_graph;
+
+  /// The SolutionInvalidity object for this application
+  SolutionInvalidity & _solution_invalidity;
 
   /// The RankMap is a useful object for determining how the processes are laid out on the physical hardware
   const RankMap _rank_map;
@@ -1143,8 +1181,15 @@ protected:
   /// this map when removing relationship managers/ghosting functors
   std::unordered_map<RelationshipManager *, std::shared_ptr<GhostingFunctor>> _undisp_to_disp_rms;
 
-  /// The library, registration method and the handle to the method
-  std::map<std::pair<std::string, std::string>, void *> _lib_handles;
+  struct DynamicLibraryInfo
+  {
+    void * library_handle;
+    std::string full_path;
+    std::unordered_set<std::string> entry_symbols;
+  };
+
+  /// The library archive (name only), registration method and the handle to the method
+  std::unordered_map<std::string, DynamicLibraryInfo> _lib_handles;
 
 private:
   ///@{
@@ -1194,11 +1239,6 @@ private:
   void setCheckUnusedFlag(bool warn_is_error = false);
 
   /**
-   * Create the ordered mesh generators from all mesh generators
-   */
-  void createMeshGeneratorOrder();
-
-  /**
    * @return whether we have created any clones for the provided template relationship manager and
    * mesh yet. This may be false for instance when we are in the initial add relationship manager
    * stage and haven't attempted attaching any relationship managers to the mesh or dof map yet
@@ -1234,6 +1274,14 @@ private:
    * are required to declare it).
    */
   PerfGraph & createRecoverablePerfGraph();
+
+  /**
+   * Creates a recoverable SolutionInvalidity.
+   *
+   * This is a separate method so that it can be used in the constructor (multiple calls
+   * are required to declare it).
+   */
+  SolutionInvalidity & createRecoverableSolutionInvalidity();
 
   /**
    * Prints a message showing the installable inputs for a given application (if
@@ -1287,36 +1335,26 @@ private:
   /// The displaced mesh from master app
   const MooseMesh * const _master_displaced_mesh;
 
-  /// Holds the mesh generators until they have completed, then this structure is cleared
-  std::map<std::string, std::shared_ptr<MeshGenerator>> _mesh_generators;
-
-  /// Holds the ordered mesh generators until they have completed, then this structure is cleared
-  std::vector<std::vector<std::shared_ptr<MeshGenerator>>> _ordered_generators;
-
-  /// Holds the output for each mesh generator - including duplicates needed downstream
-  std::map<std::string, std::list<std::unique_ptr<MeshBase>>> _mesh_generator_outputs;
-
-  /// The final mesh generator name to use
-  std::string _final_generator_name;
-
-  /// The final Mesh that is generated by the generators
-  std::list<std::unique_ptr<MeshBase> *> _final_generated_meshes;
+  /// The system that manages the MeshGenerators
+  MeshGeneratorSystem _mesh_generator_system;
 
   /// Cache for a Backup to use for restart / recovery
   std::shared_ptr<Backup> _cached_backup;
 
-  /// Execution flags for this App
-  const ExecFlagEnum & _execute_flags;
+  /**
+   * Execution flags for this App. Note: These are copied on purpose instead of maintaining a
+   * reference to the ExecFlagRegistry registry. In the Multiapp case, the registry may be
+   * augmented, changing the flags "known" to the application in the middle of executing the setup.
+   * This causes issues with the application having to process flags that aren't specifically
+   * registered.
+   */
+  const ExecFlagEnum _execute_flags;
+
+  /// Cache output buffer so the language server can turn it off then back on
+  std::streambuf * _output_buffer_cache;
 
   /// Whether to turn on automatic scaling by default
   const bool _automatic_automatic_scaling;
-
-  /// Whether the app is executing all mesh generators
-  bool _executing_mesh_generators;
-
-  /// Whether the mesh generator MeshBase has been popped off its storage container and is no
-  /// longer accessible
-  bool _popped_final_mesh_generator;
 
   /// CPU profiling
   bool _cpu_profiling = false;

@@ -19,6 +19,8 @@
 #include "libmesh/mesh_function.h"
 #include "libmesh/parallel_algebra.h" // for communicator send and receive stuff
 
+class Positions;
+
 /**
  * It is a general field transfer. It will do the following things
  * 1) From part of source domain to part of domain. Support subdomains/boundaries to
@@ -137,6 +139,14 @@ protected:
                     const PointLocatorBase * const pl,
                     const Point & pt) const;
 
+  /**
+   * Whether a point is closest to a position at the index specified than any other position
+   * @param pos_index the index of the position to consider in the positions vector
+   * @param pt the point
+   * @return whether the point is closest to this position than any other in the positions vector
+   */
+  bool closestToPosition(unsigned int pos_index, const Point & pt) const;
+
   /// Origin array/vector variable components
   const std::vector<unsigned int> _from_var_components;
 
@@ -151,6 +161,10 @@ protected:
   //       If both apps are the same rank, the closest app is used, the point has an invalid value
   //       If each app are on a different rank, the second closest return a valid value, it gets
   //       used
+
+  // Positions object to use to match target points and origin points as closest to the same
+  // Position
+  const Positions * _nearest_positions_obj;
 
   /// Whether the source app mesh must actually contain the points for them to be considered or whether
   /// the bounding box is enough. If false, we can interpolate between apps
@@ -306,15 +320,35 @@ private:
       InterpCaches & interp_caches,                   // for higher order elemental values
       InterpCaches & distance_caches);                // same but helps make origin point decisions
 
-  /// Remove potential value conflicts that did not materialize because another source was closer
-  void examineValueConflicts(
-      const VariableName var_name,
-      const DofobjectToInterpValVec & dofobject_to_valsvec,
-      const InterpCaches & distance_caches,
-      std::vector<std::tuple<unsigned int, dof_id_type, Point, Real>> conflicts_vec);
+  /**
+   * Remove potential value conflicts that did not materialize because another source was closer
+   * Several equidistant valid values were received, but they were not closest
+   * @param var_index the index of the variable of interest
+   * @param dofobject_to_valsvec a data structure mapping dofobjects to received values and
+   * distances (used for nodal-value-dof-only variables and constant monomials)
+   * @param distance_caches a cache holding the distances received (used for higher order elemental
+   * variables)
+   */
+  void examineReceivedValueConflicts(const unsigned int var_index,
+                                     const DofobjectToInterpValVec & dofobject_to_valsvec,
+                                     const InterpCaches & distance_caches);
+
+  /**
+   * Remove potential value conflicts that did not materialize because another source was closer
+   * Several equidistant valid values were found when computing values to send, but they were not
+   * closest, another value got selected
+   * @param var_index the index of the variable of interest
+   * @param dofobject_to_valsvec a data structure mapping dofobjects to received values and
+   * distances (used for nodal-value-dof-only variables and constant monomials)
+   * @param distance_caches a cache holding the distances received (used for higher order elemental
+   * variables)
+   */
+  void examineLocalValueConflicts(const unsigned int var_index,
+                                  const DofobjectToInterpValVec & dofobject_to_valsvec,
+                                  const InterpCaches & distance_caches);
 
   /// Report on conflicts between overlapping child apps, equidistant origin points etc
-  void outputValueConflicts(const VariableName var_name,
+  void outputValueConflicts(const unsigned int var_index,
                             const DofobjectToInterpValVec & dofobject_to_valsvec,
                             const InterpCaches & distance_caches);
 
@@ -414,24 +448,22 @@ public:
   void init_context(FEMContext &) {}
 
   Output eval_at_node(const FEMContext &,
-                      unsigned int libmesh_dbg_var(i),
+                      unsigned int /*variable_index*/,
                       unsigned int /*elem_dim*/,
                       const Node & n,
                       bool /*extra_hanging_dofs*/,
                       const Real /*time*/)
   {
-    libmesh_assert_not_equal_to(i, 0);
     _points_requested.push_back(n);
     return 0;
   }
 
   Output eval_at_point(const FEMContext &,
-                       unsigned int libmesh_dbg_var(i),
+                       unsigned int /*variable_index*/,
                        const Point & n,
                        const Real /*time*/,
                        bool /*skip_context_check*/)
   {
-    libmesh_assert_not_equal_to(i, 0);
     _points_requested.push_back(n);
     return 0;
   }

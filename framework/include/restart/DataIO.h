@@ -343,6 +343,8 @@ void dataStore(std::ostream & stream, Real & v, void * context);
 template <>
 void dataStore(std::ostream & stream, std::string & v, void * context);
 template <>
+void dataStore(std::ostream & stream, VariableName & v, void * context);
+template <>
 void dataStore(std::ostream & stream, bool & v, void * context);
 // Vectors of bools are special
 // https://en.wikipedia.org/w/index.php?title=Sequence_container_(C%2B%2B)&oldid=767869909#Specialization_for_bool
@@ -636,6 +638,8 @@ template <>
 void dataLoad(std::istream & stream, Real & v, void * /*context*/);
 template <>
 void dataLoad(std::istream & stream, std::string & v, void * /*context*/);
+template <>
+void dataLoad(std::istream & stream, VariableName & v, void * /*context*/);
 template <>
 void dataLoad(std::istream & stream, bool & v, void * /*context*/);
 // Vectors of bools are special
@@ -985,3 +989,56 @@ public:
 } // namespace libMesh
 
 #endif
+
+/**
+ * Stores the data \p v in a "skippable" sense. That is, when it is loaded,
+ * its data can be skipped through.
+ *
+ * The resulting data _must_ be loaded with dataLoadSkippable or dataLoadSkip.
+ */
+template <typename T>
+void dataStoreSkippable(std::ostream & stream, T & v, void * context);
+/**
+ * Loads a piece of "skippable" data. See dataStoreSkippable.
+ */
+template <typename T>
+void dataLoadSkippable(std::istream & stream, T & v, void * context);
+/**
+ * Skips a piece of "skippable" data. See dataStoreSkippable.
+ */
+void dataLoadSkip(std::istream & stream);
+
+template <typename T>
+inline void
+dataStoreSkippable(std::ostream & stream, T & v, void * context)
+{
+  std::stringstream data_stream;
+  dataStore(data_stream, v, context);
+
+  std::size_t data_stream_size = static_cast<std::size_t>(data_stream.tellp());
+  dataStore(stream, data_stream_size, nullptr);
+
+  dataStore(stream, data_stream, nullptr);
+}
+
+template <typename T>
+inline void
+dataLoadSkippable(std::istream & stream, T & v, void * context)
+{
+  std::size_t data_stream_size;
+  dataLoad(stream, data_stream_size, nullptr);
+
+  std::stringstream data_stream;
+  dataLoad(stream, data_stream, nullptr);
+
+  dataLoad(data_stream, v, context);
+}
+
+inline void
+dataLoadSkip(std::istream & stream)
+{
+  std::size_t data_stream_size;
+  dataLoad(stream, data_stream_size, nullptr);
+
+  stream.seekg(data_stream_size, std::ios::cur);
+}

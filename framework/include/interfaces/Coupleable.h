@@ -19,7 +19,9 @@
 
 #define usingCoupleableMembers                                                                     \
   using Coupleable::_zero;                                                                         \
-  using Coupleable::_grad_zero
+  using Coupleable::_grad_zero;                                                                    \
+  using Coupleable::_ad_zero;                                                                      \
+  using Coupleable::_ad_grad_zero
 
 // Forward declarations
 class MooseVariableScalar;
@@ -110,6 +112,16 @@ public:
     return _fe_coupleable_matrix_tags;
   }
 
+  /**
+   * returns a reference to the set of writable coupled variables
+   */
+  auto & getWritableCoupledVariables() const { return _writable_coupled_variables[_c_tid]; }
+
+  /**
+   * Checks whether the object has any writable coupled variables
+   */
+  bool hasWritableCoupledVariables() const { return !getWritableCoupledVariables().empty(); }
+
 protected:
   /**
    * A call-back function provided by the derived object for actions before coupling a variable
@@ -181,11 +193,18 @@ protected:
                                              unsigned int comp = 0) const;
 
   /**
-   * Returns the values for all of a coupled variable's components
+   * Returns the values for all of a coupled variable components
    * @param var_name Name of coupled variable
    * @return Vector of VariableValue pointers for each component of \p var_name
    */
   std::vector<const VariableValue *> coupledValues(const std::string & var_name) const;
+
+  /**
+   * Returns the values for all of a coupled vector variable's components
+   * @param var_name Name of coupled variable
+   * @return Vector of VectorVariableValue pointers for each component of \p var_name
+   */
+  std::vector<const VectorVariableValue *> coupledVectorValues(const std::string & var_name) const;
 
   /**
    * Returns value of a coupled variable for use in templated automatic differentiation classes
@@ -206,6 +225,16 @@ protected:
   template <bool is_ad>
   std::vector<const GenericVariableValue<is_ad> *>
   coupledGenericValues(const std::string & var_name) const;
+
+  /**
+   * Returns DOF value of a coupled variable for use in templated automatic differentiation classes
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a GenericVariableValue for the coupled variable
+   */
+  template <bool is_ad>
+  const GenericVariableValue<is_ad> & coupledGenericDofValue(const std::string & var_name,
+                                                             unsigned int comp = 0) const;
 
   /**
    * Returns value of a coupled lower-dimensional variable
@@ -392,7 +421,8 @@ protected:
    * @return Reference to a ArrayVariableValue for the coupled variable
    */
   const ArrayVariableValue & coupledVectorTagArrayDofValue(const std::string & var_name,
-                                                           const std::string & tag_name) const;
+                                                           const std::string & tag_name,
+                                                           unsigned int comp = 0) const;
 
   /**
    * Returns the dof values for all the coupled variables desired for a given tag
@@ -461,16 +491,33 @@ protected:
   std::vector<const ArrayVariableValue *> coupledArrayValues(const std::string & var_name) const;
 
   /**
-   * Returns a *writable* reference to a coupled variable.  Note: you
-   * should not have to use this very often (use coupledValue()
-   * instead) but there are situations, such as writing to multiple
-   * AuxVariables from a single AuxKernel, where it is required.
+   * Returns a *writable* MooseVariable object for a nodal or elemental variable. Use
+   * var.setNodalValue(val[, idx]) in both cases (!) to set the solution DOF values. Only one object
+   * can obtain a writable reference in a simulation. Note that the written values will not ba
+   * available in the same system loop! E.g. values written using this API by a nodal AuxKernel will
+   * not be updated for other nodal AuxKernels during the same iteration over all nodes.
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to a MooseVariable for the coupled variable
+   * @see Kernel::value
+   */
+  MooseVariable & writableVariable(const std::string & var_name, unsigned int comp = 0);
+
+  /**
+   * Returns a *writable* reference to a coupled variable for writing to multiple
+   * AuxVariables from a single AuxKernel or a UserObject. Only one object can obtain
+   * a writable reference in a simulation.
    * @param var_name Name of coupled variable
    * @param comp Component number for vector of coupled variables
    * @return Reference to a VariableValue for the coupled variable
    * @see Kernel::value
    */
   virtual VariableValue & writableCoupledValue(const std::string & var_name, unsigned int comp = 0);
+
+  /**
+   * Checks that the passed in variable is only accessed writable by one object in a given subdomain
+   */
+  void checkWritableVar(MooseVariable * var);
 
   /**
    * Returns an old value from previous time step  of a coupled variable
@@ -1180,6 +1227,15 @@ protected:
   // coupled-dof-values-end
 
   /**
+   * Returns DOF value of a coupled variable for use in Automatic Differentiation
+   * @param var_name Name of coupled variable
+   * @param comp Component number for vector of coupled variables
+   * @return Reference to an ADVariableValue for the DoFs of the coupled variable
+   */
+  virtual const ADVariableValue & adCoupledDofValues(const std::string & var_name,
+                                                     unsigned int comp = 0) const;
+
+  /**
    * method that returns _zero to RESIDUAL computing objects and _ad_zero to JACOBIAN
    * computing objects
    */
@@ -1621,12 +1677,16 @@ private:
   /// vector tag names for which we need to request older solution states from the system
   const std::set<std::string> _older_state_tags = {Moose::OLD_SOLUTION_TAG,
                                                    Moose::OLDER_SOLUTION_TAG};
+
+  /// keep a set of allocated writable variable references to make sure only one object can obtain them per thread
+  std::vector<std::set<MooseVariable *>> _writable_coupled_variables;
 };
 
 template <typename T>
 T *
-Coupleable::getVarHelper(const std::string & var_name, unsigned int comp)
+Coupleable::getVarHelper(const std::string & var_name_in, unsigned int comp)
 {
+  const auto var_name = _c_parameters.checkForRename(var_name_in);
   auto name_to_use = var_name;
 
   // First check for supplied name

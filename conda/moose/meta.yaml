@@ -12,8 +12,6 @@ package:
 
 source:
   - path: ../../../moose
-  - patches:
-      - gap_heat_transfer_umat.patch
 
 build:
   number: {{ build }}
@@ -26,20 +24,17 @@ build:
 
 requirements:
   build:
-    - {{ moose_libmesh }}
-    - {{ moose_python }}
-    - moose-tools
+    - {{ moose_dev }}
 
   run:
-    - {{ moose_libmesh }}
-    - {{ moose_python }}
-    - moose-tools
+    - {{ moose_dev }}
 
 test:
   script: run_test.sh
   commands:
     - $PREFIX/moose/bin/combined-opt -h
     - $PREFIX/bin/moose-opt -h
+    - $PREFIX/bin/moose -h
 
 about:
   home: https://mooseframework.org/

@@ -30,6 +30,12 @@ Checkpoint::validParams()
 {
   // Get the parameters from the base classes
   InputParameters params = FileOutput::validParams();
+
+  // Controls whether the checkpoint will actually run. Should only ever be changed by the
+  // auto-checkpoint created by AutoCheckpointAction, which does not write unless a signal
+  // is received.
+  params.addPrivateParam<AutosaveType>("is_autosave", NONE);
+
   params.addClassDescription("Output for MOOSE recovery checkpoint files.");
 
   // Typical checkpoint options
@@ -47,6 +53,7 @@ Checkpoint::validParams()
 
 Checkpoint::Checkpoint(const InputParameters & parameters)
   : FileOutput(parameters),
+    _is_autosave(getParam<AutosaveType>("is_autosave")),
     _num_files(getParam<unsigned int>("num_files")),
     _suffix(getParam<std::string>("suffix")),
     _binary(getParam<bool>("binary")),
@@ -63,6 +70,7 @@ Checkpoint::filename()
   std::ostringstream output;
   output << directory() << "/" << std::setw(_padding) << std::setprecision(0) << std::setfill('0')
          << std::right << timeStep();
+
   return output.str();
 }
 
@@ -73,7 +81,61 @@ Checkpoint::directory() const
 }
 
 void
-Checkpoint::output(const ExecFlagType & /*type*/)
+Checkpoint::outputStep(const ExecFlagType & type)
+{
+  // Output is not allowed
+  if (!_allow_output && type != EXEC_FORCED)
+    return;
+
+  // If recovering disable output of initial condition, it was already output
+  if (type == EXEC_INITIAL && _app.isRecovering())
+    return;
+
+  // store current simulation time
+  _last_output_time = _time;
+
+  // set current type
+  _current_execute_flag = type;
+
+  // Check whether we should output, then do it.
+  if (shouldOutput())
+  {
+    TIME_SECTION("outputStep", 2, "Outputting Checkpoint");
+    output();
+  }
+
+  _current_execute_flag = EXEC_NONE;
+}
+
+bool
+Checkpoint::shouldOutput()
+{
+  // Check if the checkpoint should "normally" output, i.e. if it was created
+  // through checkpoint=true
+  bool should_output =
+      (onInterval() || _current_execute_flag == EXEC_FINAL) ? FileOutput::shouldOutput() : false;
+
+  // If this is either a auto-created checkpoint, or if its an existing checkpoint acting
+  // as the autosave and that checkpoint isn't on its interval, then output.
+  if (_is_autosave == SYSTEM_AUTOSAVE || (_is_autosave == MODIFIED_EXISTING && !should_output))
+  {
+    // If this is a pure system-created autosave through AutoCheckpointAction,
+    // then sync across processes and only output one time per signal received.
+    comm().max(Moose::interrupt_signal_number);
+    // Reading checkpoint on time step 0 is not supported
+    should_output = (Moose::interrupt_signal_number != 0) && (timeStep() > 0);
+    if (should_output)
+    {
+      _console << "Unix signal SIGUSR1 detected. Outputting checkpoint file. \n";
+      // Reset signal number since we output
+      Moose::interrupt_signal_number = 0;
+    }
+  }
+  return should_output;
+}
+
+void
+Checkpoint::output()
 {
   // Create the output directory
   std::string cp_dir = directory();
@@ -112,7 +174,6 @@ Checkpoint::output(const ExecFlagType & /*type*/)
       const std::string & suffix = map_pair.second.second;
       const std::string filename(curr_file_struct.checkpoint + "/meta_data" + suffix +
                                  _restartable_data_io.getRestartableDataExt());
-
       curr_file_struct.restart_meta_data.emplace(filename);
       _restartable_data_io.writeRestartableData(filename, meta_data);
     }

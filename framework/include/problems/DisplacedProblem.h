@@ -140,6 +140,8 @@ public:
   virtual bool matrixTagExists(const TagName & tag_name) override;
   virtual bool matrixTagExists(TagID tag_id) override;
   virtual unsigned int numMatrixTags() const override;
+  virtual bool safeAccessTaggedMatrices() const override;
+  virtual bool safeAccessTaggedVectors() const override;
 
   virtual bool isTransient() const override;
 
@@ -257,12 +259,6 @@ public:
   virtual void addJacobianNeighbor(THREAD_ID tid) override;
   virtual void addJacobianNeighborLowerD(THREAD_ID tid) override;
   virtual void addJacobianLowerD(THREAD_ID tid) override;
-  virtual void addJacobianBlock(SparseMatrix<Number> & jacobian,
-                                unsigned int ivar,
-                                unsigned int jvar,
-                                const DofMap & dof_map,
-                                std::vector<dof_id_type> & dof_indices,
-                                THREAD_ID tid) override;
   virtual void addJacobianBlockTags(SparseMatrix<Number> & jacobian,
                                     unsigned int ivar,
                                     unsigned int jvar,
@@ -270,29 +266,27 @@ public:
                                     std::vector<dof_id_type> & dof_indices,
                                     const std::set<TagID> & tags,
                                     THREAD_ID tid);
-  virtual void addJacobianBlockNonlocal(SparseMatrix<Number> & jacobian,
-                                        unsigned int ivar,
-                                        unsigned int jvar,
-                                        const DofMap & dof_map,
-                                        const std::vector<dof_id_type> & idof_indices,
-                                        const std::vector<dof_id_type> & jdof_indices,
-                                        THREAD_ID tid);
+  void addJacobianBlockNonlocal(SparseMatrix<Number> & jacobian,
+                                unsigned int ivar,
+                                unsigned int jvar,
+                                const DofMap & dof_map,
+                                const std::vector<dof_id_type> & idof_indices,
+                                const std::vector<dof_id_type> & jdof_indices,
+                                const std::set<TagID> & tags,
+                                THREAD_ID tid);
   virtual void addJacobianNeighbor(SparseMatrix<Number> & jacobian,
                                    unsigned int ivar,
                                    unsigned int jvar,
                                    const DofMap & dof_map,
                                    std::vector<dof_id_type> & dof_indices,
                                    std::vector<dof_id_type> & neighbor_dof_indices,
+                                   const std::set<TagID> & tags,
                                    THREAD_ID tid) override;
 
   virtual void cacheJacobian(THREAD_ID tid) override;
   virtual void cacheJacobianNonlocal(THREAD_ID tid);
   virtual void cacheJacobianNeighbor(THREAD_ID tid) override;
   virtual void addCachedJacobian(THREAD_ID tid) override;
-  /**
-   * Deprecated method. Use addCachedJacobian
-   */
-  virtual void addCachedJacobianContributions(THREAD_ID tid) override;
 
   virtual void prepareShapes(unsigned int var, THREAD_ID tid) override;
   virtual void prepareFaceShapes(unsigned int var, THREAD_ID tid) override;
@@ -359,6 +353,13 @@ public:
   std::size_t numNonlinearSystems() const override;
 
   unsigned int currentNlSysNum() const override;
+
+  virtual const std::vector<VectorTag> & currentResidualVectorTags() const override;
+
+  /**
+   * Indicate that we have p-refinement
+   */
+  void havePRefinement();
 
 protected:
   FEProblemBase & _mproblem;

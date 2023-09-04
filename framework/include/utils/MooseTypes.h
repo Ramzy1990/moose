@@ -127,14 +127,6 @@ template <typename>
 class ADMaterialProperty;
 class InputParameters;
 
-enum class MaterialPropState
-{
-  CURRENT = 0x1,
-  OLD = 0x2,
-  OLDER = 0x4
-};
-using MaterialPropStateInt = std::underlying_type<MaterialPropState>::type;
-
 namespace libMesh
 {
 template <typename>
@@ -205,6 +197,7 @@ typedef unsigned int THREAD_ID;
 typedef unsigned int TagID;
 typedef unsigned int TagTypeID;
 typedef unsigned int PerfID;
+typedef unsigned int InvalidSolutionID;
 using RestartableDataMapName = std::string; // see MooseApp.h
 
 typedef StoredRange<std::vector<dof_id_type>::iterator, dof_id_type> NodeIdRange;
@@ -220,7 +213,7 @@ namespace Moose
 /// up with some overkill complex mechanism for dynamically resizing them.
 /// Eventually, we may need or implement that more sophisticated mechanism and
 /// will no longer need this.
-const size_t constMaxQpsPerElem = 216;
+constexpr std::size_t constMaxQpsPerElem = 216;
 
 // These are used by MooseVariableData and MooseVariableDataFV
 enum SolutionState : int
@@ -230,6 +223,13 @@ enum SolutionState : int
   Older = 2,
   PreviousNL = -1
 };
+
+enum class SolutionIterationType : unsigned short
+{
+  Time = 0,
+  Nonlinear
+};
+
 // These are used by MooseVariableData and MooseVariableDataFV
 enum GeometryType
 {
@@ -420,6 +420,65 @@ struct ADType<VariableGradient>
 };
 template <>
 struct ADType<VariableSecond>
+{
+  typedef ADVariableSecond type;
+};
+
+template <>
+struct ADType<ADReal>
+{
+  typedef ADReal type;
+};
+template <>
+struct ADType<ChainedADReal>
+{
+  typedef ChainedADReal type;
+};
+template <>
+struct ADType<ADRankTwoTensor>
+{
+  typedef ADRankTwoTensor type;
+};
+template <>
+struct ADType<ADRankThreeTensor>
+{
+  typedef ADRankThreeTensor type;
+};
+template <>
+struct ADType<ADRankFourTensor>
+{
+  typedef ADRankFourTensor type;
+};
+
+template <>
+struct ADType<ADSymmetricRankTwoTensor>
+{
+  typedef ADSymmetricRankTwoTensor type;
+};
+template <>
+struct ADType<ADSymmetricRankFourTensor>
+{
+  typedef ADSymmetricRankFourTensor type;
+};
+
+template <template <typename> class W>
+struct ADType<W<ADReal>>
+{
+  typedef W<ADReal> type;
+};
+
+template <>
+struct ADType<ADVariableValue>
+{
+  typedef ADVariableValue type;
+};
+template <>
+struct ADType<ADVariableGradient>
+{
+  typedef ADVariableGradient type;
+};
+template <>
+struct ADType<ADVariableSecond>
 {
   typedef ADVariableSecond type;
 };
@@ -830,6 +889,7 @@ typedef std::function<void(const InputParameters &, InputParameters &)>
     RelationshipManagerInputParameterCallback;
 
 std::string stringify(const Moose::RelationshipManagerType & t);
+std::string stringify(const Moose::TimeIntegratorType & t);
 } // namespace Moose
 
 namespace libMesh
@@ -950,6 +1010,12 @@ DerivativeStringClass(ExtraElementIDName);
 
 /// Name of a Reporter Value, second argument to ReporterName (see Reporter.h)
 DerivativeStringClass(ReporterValueName);
+
+/// Name of a Positions object
+DerivativeStringClass(PositionsName);
+
+/// Name of a Times object
+DerivativeStringClass(TimesName);
 
 /// Name of an Executor.  Used for inputs to Executors
 DerivativeStringClass(ExecutorName);

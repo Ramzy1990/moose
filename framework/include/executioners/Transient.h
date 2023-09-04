@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Executioner.h"
+#include "TimeIntegrator.h"
 
 // System includes
 #include <string>
@@ -118,19 +119,25 @@ public:
    * Pointer to the TimeStepper
    * @return Pointer to the time stepper for this Executioner
    */
-  TimeStepper * getTimeStepper() { return _time_stepper.get(); }
+  TimeStepper * getTimeStepper() { return _time_stepper; }
 
   /**
    * Set the timestepper to use.
    *
    * @param ts The TimeStepper to use
    */
-  void setTimeStepper(std::shared_ptr<TimeStepper> ts) { _time_stepper = ts; }
+  void setTimeStepper(TimeStepper & ts);
 
   /**
-   * Get the timestepper.
+   * Get the name of the timestepper.
    */
-  virtual std::string getTimeStepperName() override;
+  virtual std::string getTimeStepperName() const override;
+
+  /**
+   * Get the name of the time integrator (time integration scheme) used
+   * @return string with the time integration scheme name
+   */
+  virtual std::string getTimeIntegratorName() const override;
 
   /**
    * Get the time scheme used
@@ -225,7 +232,7 @@ protected:
   const bool _check_aux;
 
   Moose::TimeIntegratorType _time_scheme;
-  std::shared_ptr<TimeStepper> _time_stepper;
+  TimeStepper * _time_stepper;
 
   /// Current timestep.
   int & _t_step;
@@ -278,9 +285,6 @@ protected:
   bool _use_multiapp_dt;
 
   Real & _solution_change_norm;
-
-  /// The difference of current and old solutions
-  NumericVector<Number> & _sln_diff;
 
   void setupTimeIntegrator();
 

@@ -15,6 +15,7 @@
 #include "MooseMesh.h"
 #include "MooseTypes.h"
 #include "MooseVariableFE.h"
+#include "Positions.h"
 
 #include "libmesh/system.h"
 #include "libmesh/mesh_function.h"
@@ -42,6 +43,10 @@ MultiAppGeneralFieldShapeEvaluationTransfer::MultiAppGeneralFieldShapeEvaluation
     const InputParameters & parameters)
   : MultiAppGeneralFieldTransfer(parameters)
 {
+  // Nearest point isn't well defined for sending app-based data from main app to a multiapp
+  if (_nearest_positions_obj && isParamValid("to_multi_app") && !isParamValid("from_multi_app"))
+    paramError("use_nearest_position",
+               "Cannot use nearest-position algorithm when sending from the main application");
 }
 
 void
@@ -57,8 +62,10 @@ MultiAppGeneralFieldShapeEvaluationTransfer::prepareEvaluationOfInterpValues(
 
 void
 MultiAppGeneralFieldShapeEvaluationTransfer::buildMeshFunctions(
-    const unsigned int var_index, std::vector<std::shared_ptr<MeshFunction>> & local_meshfuns)
+    const unsigned int var_index, std::vector<MeshFunction> & local_meshfuns)
 {
+  local_meshfuns.reserve(_from_problems.size());
+
   // Construct a local mesh function for each origin problem
   for (unsigned int i_from = 0; i_from < _from_problems.size(); ++i_from)
   {
@@ -72,14 +79,12 @@ MultiAppGeneralFieldShapeEvaluationTransfer::buildMeshFunctions(
     System & from_sys = from_var.sys().system();
     unsigned int from_var_num = from_sys.variable_number(getFromVarName(var_index));
 
-    std::shared_ptr<MeshFunction> from_func;
-    from_func.reset(new MeshFunction(getEquationSystem(from_problem, _displaced_source_mesh),
-                                     *from_sys.current_local_solution,
-                                     from_sys.get_dof_map(),
-                                     from_var_num));
-    from_func->init();
-    from_func->enable_out_of_mesh_mode(GeneralFieldTransfer::BetterOutOfMeshValue);
-    local_meshfuns.push_back(from_func);
+    local_meshfuns.emplace_back(getEquationSystem(from_problem, _displaced_source_mesh),
+                                *from_sys.current_local_solution,
+                                from_sys.get_dof_map(),
+                                from_var_num);
+    local_meshfuns.back().init();
+    local_meshfuns.back().enable_out_of_mesh_mode(GeneralFieldTransfer::BetterOutOfMeshValue);
   }
 }
 
@@ -94,7 +99,7 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValues(
 void
 MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctions(
     const std::vector<BoundingBox> & local_bboxes,
-    const std::vector<std::shared_ptr<MeshFunction>> & local_meshfuns,
+    std::vector<MeshFunction> & local_meshfuns,
     const std::vector<Point> & incoming_points,
     std::vector<std::pair<Real, Real>> & outgoing_vals)
 {
@@ -102,7 +107,7 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctio
   for (auto & pt : incoming_points)
   {
     bool point_found = false;
-    if (_use_nearest_app)
+    if (_nearest_positions_obj)
       outgoing_vals[i_pt].second = GeneralFieldTransfer::BetterOutOfMeshValue;
 
     // Loop on all local origin problems until:
@@ -111,7 +116,7 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctio
     // - or if looking for the nearest app, we also check them all
     for (MooseIndex(_from_problems.size()) i_from = 0;
          i_from < _from_problems.size() &&
-         (!point_found || _search_value_conflicts || _use_nearest_app);
+         (!point_found || _search_value_conflicts || _nearest_positions_obj);
          ++i_from)
     {
       // Check spatial restrictions
@@ -120,7 +125,23 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctio
       else
       {
         // Use mesh function to compute interpolation values
-        auto val = (*local_meshfuns[i_from])(pt - _from_positions[i_from]);
+        auto val = (local_meshfuns[i_from])(pt - _from_positions[i_from]);
+
+        // Get nearest position (often a subapp position) for the target point
+        // We want values from the child app that is closest to the same position as the target
+        Point nearest_position_source;
+        if (_nearest_positions_obj)
+        {
+          const bool initial = _fe_problem.getCurrentExecuteOnFlag() == EXEC_INITIAL;
+          const Point nearest_position = _nearest_positions_obj->getNearestPosition(pt, initial);
+          nearest_position_source =
+              _nearest_positions_obj->getNearestPosition(_from_positions[i_from], initial);
+
+          // Source (often app position) is not closest to the same positions as the
+          // target, dont send values
+          if (nearest_position != nearest_position_source)
+            continue;
+        }
 
         // Look for overlaps. The check is not active outside of overlap search because in that
         // case we accept the first value from the lowest ranked process
@@ -128,7 +149,7 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctio
         //       but for shape evaluation we really do expect only one value to even be valid
         if (detectConflict(val,
                            outgoing_vals[i_pt].first,
-                           _use_nearest_app ? (pt - _from_positions[i_from]).norm() : 1,
+                           _nearest_positions_obj ? (pt - nearest_position_source).norm() : 1,
                            outgoing_vals[i_pt].second))
           registerConflict(i_from, 0, pt - _from_positions[i_from], 1, true);
 
@@ -139,15 +160,15 @@ MultiAppGeneralFieldShapeEvaluationTransfer::evaluateInterpValuesWithMeshFunctio
           point_found = true;
 
         // Assign value
-        if (!_use_nearest_app)
+        if (!_nearest_positions_obj)
         {
           outgoing_vals[i_pt].first = val;
           outgoing_vals[i_pt].second = 1;
         }
-        else if ((pt - _from_positions[i_from]).norm() < outgoing_vals[i_pt].second)
+        else if ((pt - nearest_position_source).norm() < outgoing_vals[i_pt].second)
         {
           outgoing_vals[i_pt].first = val;
-          outgoing_vals[i_pt].second = (pt - _from_positions[i_from]).norm();
+          outgoing_vals[i_pt].second = (pt - nearest_position_source).norm();
         }
       }
     }
