@@ -9,37 +9,20 @@
 
 #pragma once
 
-// MOOSE includes
-#include "MooseTypes.h"
-#include "MooseUtils.h"
-#include "InputParameters.h"
-#include "FEProblemBase.h"
-#include "MooseError.h"
-#include "MooseObject.h"
-#include "Reporter.h"
-#include "DelimitedFileReader.h"
-#include "SystemBase.h"
 #include "GeneralReporter.h"
-#include "OptimizationReporterBase.h"
-
-// Forward Declarations
-template <typename T>
-class OptimizationDataTempl;
-
-typedef OptimizationDataTempl<GeneralReporter> OptimizationData;
-
-template <typename T>
-class OptimizationDataTempl : public T
+/**
+ * Reporter to hold measurement and simulation data for optimization problems
+ */
+class OptimizationData : public GeneralReporter
 {
 public:
   static InputParameters validParams();
-  OptimizationDataTempl(const InputParameters & parameters);
+
+  OptimizationData(const InputParameters & parameters);
 
   virtual void initialize() override {}
   virtual void execute() override;
   virtual void finalize() override {}
-
-  void computeMisfit();
 
 protected:
   ///@{
@@ -50,9 +33,9 @@ protected:
   std::vector<Real> & _measurement_time;
   std::vector<Real> & _measurement_values;
   ///@}
-  /// simulated values at measurement xyzt
+  /// simulated values at measurment xyzt
   std::vector<Real> & _simulation_values;
-  /// difference between simulation and measurement values at measurement xyzt
+  /// difference between simulation and measurment values at measurment xyzt
   std::vector<Real> & _misfit_values;
 
 private:
@@ -60,12 +43,8 @@ private:
   void readMeasurementsFromFile();
   /// parse measurement data from input file
   void readMeasurementsFromInput();
+  /// private method for testing optimizationData with test src
+  void setSimulationValuesForTesting(std::vector<Real> & data);
   /// variable
-  std::vector<MooseVariableFieldBase *> _var_vec;
-  /// Weight names to reporter values
-  std::vector<std::vector<Real> *> _variable_weights;
-  /// Weight names to reporter values map created from input file
-  std::map<std::string, std::vector<Real> *> _weight_names_weights_map;
-  /// helper to check data sizes
-  void errorCheckDataSize();
+  const MooseVariableFieldBase * const _var;
 };

@@ -86,7 +86,7 @@
     type = MultiAppReporterTransfer
     from_multi_app = adjoint
     from_reporters = 'gradient/adjoint'
-    to_reporters = 'OptimizationReporter/grad_parameter_results'
+    to_reporters = 'OptimizationReporter/adjoint'
   []
 
   # HESSIAN transfers.  Same as forward.

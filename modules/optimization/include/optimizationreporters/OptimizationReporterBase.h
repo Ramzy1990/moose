@@ -9,20 +9,17 @@
 
 #pragma once
 
-#include "GeneralReporter.h"
-#include "libmesh/petsc_matrix.h"
+#include "OptimizationData.h"
 
-namespace libMesh
-{
-template <typename Number>
-class PetscVector;
-}
+// friends
+#include "OptimizeSolve.h"
+#include "OptimizationReporterTest.h"
 
 /**
  * Base class for optimization objects, implements routines for calculating misfit. Derived classes
  * are responsible for parameter members and gradient computation.
  */
-class OptimizationReporterBase : public GeneralReporter
+class OptimizationReporterBase : public OptimizationData
 {
 public:
   static InputParameters validParams();
@@ -41,9 +38,14 @@ public:
 
   /**
    * Function to override misfit values with the simulated values from the matrix free hessian
-   * forward solve.
+   * forward solve
    */
-  virtual void setMisfitToSimulatedValues(){};
+  void setMisfitToSimulatedValues();
+
+  /**
+   * Functions to check if bounds are set
+   */
+  virtual bool hasBounds() const = 0;
 
   /**
    * Upper and lower bounds for each parameter being controlled
@@ -51,8 +53,20 @@ public:
    * @param i Parameter index
    * @return The upper/lower bound for parameter i
    */
-  Real getUpperBound(dof_id_type i) const;
-  Real getLowerBound(dof_id_type i) const;
+  virtual Real getUpperBound(dof_id_type i) const;
+  virtual Real getLowerBound(dof_id_type i) const;
+
+  /**
+   * Function to compute objective.
+   * This is the last function called in objective routine
+   */
+  virtual Real computeObjective();
+
+  /**
+   * Function to compute gradient.
+   * This is the last call of the gradient routine.
+   */
+  virtual void computeGradient(libMesh::PetscVector<Number> & gradient) const;
 
   /**
    * Function to get the total number of parameters
@@ -67,38 +81,11 @@ protected:
    * Function to set parameters.
    * This is the first function called in objective/gradient/hessian routine
    */
-  virtual void updateParameters(const libMesh::PetscVector<Number> & x);
-
-  /**
-   * Function to fill vector with parameters.
-   */
-  std::vector<Real> fillParamsVector(std::string type, Real default_value) const;
-
-  /// Parameter names
-  const std::vector<ReporterValueName> & _parameter_names;
-  /// Number of parameter vectors
-  const unsigned int _nparams;
-
-  /// Parameter values declared as reporter data
-  std::vector<std::vector<Real> *> _parameters;
-  /// Gradient values declared as reporter data
-  std::vector<std::vector<Real> *> _gradients;
-
-  /// Tikhonov Coefficient for regularization
-  const Real _tikhonov_coeff;
-
-  /// Bounds of the parameters
-  std::vector<Real> _lower_bounds;
-  std::vector<Real> _upper_bounds;
-
-  /// Number of values for each parameter
-  std::vector<dof_id_type> _nvalues;
-  /// Total number of parameters
-  dof_id_type _ndof;
+  virtual void updateParameters(const libMesh::PetscVector<Number> & x) = 0;
 
 private:
   friend class OptimizeSolve;
   friend class OptimizationReporterTest;
-  /// private method for testing optimizationData with test src
-  virtual void setSimulationValuesForTesting(std::vector<Real> & /*data*/){};
+
+  void setSimulationValuesForTesting(std::vector<Real> & data);
 };

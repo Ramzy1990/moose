@@ -44,7 +44,7 @@
     type = MultiAppReporterTransfer
     from_multi_app = adjoint
     from_reporters = 'adjoint/inner_product'
-    to_reporters = 'OptimizationReporter/grad_source'
+    to_reporters = 'OptimizationReporter/adjoint'
   []
 []
 
@@ -53,7 +53,7 @@
   solve_on = none
   tao_solver = taolmvm
   petsc_options_iname = '-tao_gatol -tao_ls_type'
-  petsc_options_value = '1e-2 unit'
+  petsc_options_value = '1e-3 unit'
   verbose = true
 []
 
@@ -69,5 +69,8 @@
   [pgraph]
     type = PerfGraphOutput
     level = 1
+  []
+  [out]
+    type = JSON
   []
 []

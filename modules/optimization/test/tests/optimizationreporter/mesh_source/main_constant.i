@@ -1,34 +1,34 @@
 [Optimization]
 []
 
-[Mesh]
-  type = GeneratedMesh
-  dim = 2
-  nx = 10
-  ny = 10
-  xmax = 2
-  ymax = 2
-[]
-
 [OptimizationReporter]
-  type = OptimizationReporter
-  parameter_names = 'p1'
-  num_values = '1'
-  initial_condition = '7'
-  lower_bounds = '0'
-  upper_bounds = '10'
-  measurement_points = '0.2 0.2 0
-            0.8 0.6 0
-            0.2 1.4 0
-            0.8 1.8 0'
-  measurement_values = '226 254 214 146'
+  type = ParameterMeshOptimization
+  parameter_names = 'source'
+  parameter_meshes = 'parameter_mesh_in.e'
+  parameter_families = MONOMIAL
+  parameter_orders = CONSTANT
+
+  # Random points
+  measurement_points = '0.78193073 0.39115321 0
+                        0.72531893 0.14319403 0
+                        0.14052488 0.86976625 0
+                        0.401893   0.54241797 0
+                        0.02645427 0.43320192 0
+                        0.28856889 0.0035165  0
+                        0.51433644 0.94485949 0
+                        0.29252255 0.7962032  0
+                        0.04925654 0.58018889 0
+                        0.04717357 0.9556314  0'
+  # sin(x*pi/2)*sin(y*pi/2)
+  measurement_values = '0.54299466 0.20259611 0.21438235 0.44418597 0.02613676
+                        0.00241892 0.72014019 0.42096307 0.06108895 0.07385256'
 []
 
 [Executioner]
   type = Optimize
-  tao_solver = taoblmvm
+  tao_solver = taolmvm
   petsc_options_iname = '-tao_gatol'
-  petsc_options_value = '0.0001'
+  petsc_options_value = '1e-4'
   verbose = true
 []
 
@@ -36,19 +36,17 @@
   [forward]
     type = FullSolveMultiApp
     input_files = forward.i
-    execute_on = "FORWARD"
-    clone_parent_mesh = true
+    execute_on = FORWARD
   []
   [adjoint]
     type = FullSolveMultiApp
     input_files = adjoint.i
-    execute_on = "ADJOINT"
-    clone_parent_mesh = true
+    execute_on = ADJOINT
   []
 []
 
 [Transfers]
-  [toForward]
+  [toForward_measument]
     type = MultiAppReporterTransfer
     to_multi_app = forward
     from_reporters = 'OptimizationReporter/measurement_xcoord
@@ -56,28 +54,14 @@
                       OptimizationReporter/measurement_zcoord
                       OptimizationReporter/measurement_time
                       OptimizationReporter/measurement_values
-                      OptimizationReporter/p1'
+                      OptimizationReporter/source'
     to_reporters = 'measure_data/measurement_xcoord
                     measure_data/measurement_ycoord
                     measure_data/measurement_zcoord
                     measure_data/measurement_time
                     measure_data/measurement_values
-                    params/p1'
+                    src_rep/vals'
   []
-  [fromForward_mesh]
-    type = MultiAppCopyTransfer
-    from_multi_app = forward
-    to_multi_app = adjoint
-    source_variable = 'temperature'
-    variable = 'temperature_forward'
-  []
-  [fromForward]
-    type = MultiAppReporterTransfer
-    from_multi_app = forward
-    from_reporters = 'measure_data/simulation_values'
-    to_reporters = 'OptimizationReporter/simulation_values'
-  []
-
   [toAdjoint]
     type = MultiAppReporterTransfer
     to_multi_app = adjoint
@@ -86,22 +70,24 @@
                       OptimizationReporter/measurement_zcoord
                       OptimizationReporter/measurement_time
                       OptimizationReporter/misfit_values
-                      OptimizationReporter/p1'
+                      OptimizationReporter/source'
     to_reporters = 'misfit/measurement_xcoord
                     misfit/measurement_ycoord
                     misfit/measurement_zcoord
                     misfit/measurement_time
                     misfit/misfit_values
-                    params/p1'
+                    src_rep/vals'
   []
-  [fromAdjoint]
+  [fromForward]
+    type = MultiAppReporterTransfer
+    from_multi_app = forward
+    from_reporters = 'measure_data/simulation_values'
+    to_reporters = 'OptimizationReporter/simulation_values'
+  []
+  [fromadjoint]
     type = MultiAppReporterTransfer
     from_multi_app = adjoint
-    from_reporters = 'adjoint_grad/inner_product'
-    to_reporters = 'OptimizationReporter/adjoint'
+    from_reporters = 'gradient_vpp/inner_product'
+    to_reporters = 'OptimizationReporter/grad_source'
   []
-[]
-
-[Outputs]
-  csv = true
 []

@@ -10,23 +10,37 @@
 #pragma once
 
 // Moose Includes
-#include "ReporterPointSource.h"
+#include "DiracKernel.h"
+#include "ReporterInterface.h"
 
 /**
- * Apply a time dependent point load defined by Reporters.
+ * Apply a point load defined by vectors.
  */
-class ReporterTimePointSource : public ReporterPointSource
+class ReporterTimePointSource : public DiracKernel, public ReporterInterface
 {
 public:
   static InputParameters validParams();
   ReporterTimePointSource(const InputParameters & parameters);
   virtual void addPoints() override;
+
 protected:
-  /// time-coordinates from reporter
-  const std::vector<Real> & _coordt;
+  virtual Real computeQpResidual() override;
 
 private:
+  /// x-coordinates from reporter
+  const std::vector<Real> & _coordx;
+  /// y-coordinates from reporter
+  const std::vector<Real> & _coordy;
+  /// z-coordinates from reporter
+  const std::vector<Real> & _coordz;
+  /// time-coordinates from reporter
+  const std::vector<Real> & _coordt;
+  /// values from reporter
+  const std::vector<Real> & _values;
   /// The final time when we want to reverse the time index in function evaluation
   const Real & _reverse_time_end;
+  /// map to associate points with their index into the vpp value
+  std::map<Point, size_t> _point_to_index;
 
+  const std::vector<Real> _empty_vec = {};
 };
