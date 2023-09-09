@@ -106,14 +106,14 @@ global_temperature = 600
 
     0 0 0 0 0 0 0 0 0 0
     0 0 0 0 0 0 0 0 0 0
-    1 1 1 1 1 1 1 0 0 0
-    1 1 1 1 1 1 1 1 0 0
-    1 1 1 1 1 1 1 1 0 0
+    1 1 1 1 1 1 0 0 0 0
+    1 1 1 1 1 1 0 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
     0 1 1 1 1 1 1 1 0 0
+    0 0 1 1 1 1 1 1 0 0
     '
 
     # 0 0 0 0 0 0 0 0 0 0
@@ -393,16 +393,14 @@ global_temperature = 600
     # pp_names = 'bnorm'
     pp_names = 'bnorm hydraulic_diameter'
     # function = '-1 * ( bnorm )'
-    # function = '( 1/(bnorm) + ( 0.0000000001 * ( 1/(hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel) ) ) )'
-    function = '-1 * bnorm + 0.0001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter '
+    function = '1/bnorm + 0.00001/(hydraulic_diameter*hydraulic_diameter*hydraulic_diameter*hydraulic_diameter)'
+    # function = '-1 * bnorm + 0.0001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter '
     # function = '-bnorm - 0.00001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter'
     # function = '-bnorm'
-    # function = '-(total_source - (max_temperature / 2))'
-    # function = 'max_temperature/total_source'
     execute_on = TIMESTEP_END
   []
-
 []
+
 # 0 0 0 0 0 0 0 0 0 0
 # 0 0 0 0 0 0 0 0 0 0
 # 1 1 1 1 1 1 1 1 0 0

@@ -15,6 +15,7 @@
 
 // Forward Declarations If Any
 class DiscreteOptimizationReporter;
+class DiscreteConstraintsLibrary;
 class OptimizationReporterBase;
 class CustomOptimizationAlgorithm;
 class SimulatedAnnealingAlgorithm;
@@ -39,15 +40,26 @@ public:
 
   // This way, we can use the funciton to get the class instance.
   DiscreteOptimizationReporter & getDiscreteOptimizationReporter() const { return *_reporter; }
+
+  // This way, we can use the funciton to get the class instance.
+  // DiscreteConstraintsLibrary & getDiscreteConstraintsLibrary() const { return *_constraints; }
+
   // const std::vector<Real> & getRealParameters() const { return _real_parameters; }
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  /// @brief The number of runs for this algorithm
+  unsigned int _num_of_runs;
+
+  /// @brief The number of iterations for this algorithm
+  unsigned int _num_iterations;
+
+  /// @brief The maximum temperature for this run
+  Real _max_temp;
+
+  /// @brief The minimum temperature for this run
+  Real _min_temp;
+
+  //****************************************************************************************************************************//
+
   //************************
   // Variables Declarations
   //************************
@@ -92,6 +104,13 @@ protected:
   /// @brief Object of the reporter class we are using
   DiscreteOptimizationReporter * _reporter;
 
+  /// @brief Object of the constraints class we are using
+  DiscreteConstraintsLibrary * _constraints;
+
+  /// the optimization algorithm object
+  // std::unique_ptr<MooseMesh> _mesh;
+  std::unique_ptr<CustomOptimizationAlgorithm> _opt_alg;
+
   /// @brief Vector to hold the objective function value (assuming it has many components among different MultiApps)
   // std::vector<PostprocessorValue> & _objective_function_vector;
 
@@ -115,10 +134,6 @@ protected:
 
   /// the optimization algorithm type
   MooseEnum _opt_alg_type;
-
-  /// the optimization algorithm object
-  // std::unique_ptr<MooseMesh> _mesh;
-  std::unique_ptr<CustomOptimizationAlgorithm> _opt_alg;
 
   //****************************************************************************************************************************//
   //****************************************************************************************************************************//

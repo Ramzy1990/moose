@@ -11,6 +11,12 @@
 
 // MOOSE includes
 #include "CustomOptimizationAlgorithm.h"
+#include "DiscreteConstraintsLibrary.h"
+
+//*****************************
+// Forward Declarations If Any
+//*****************************
+class DiscreteConstraintsLibrary;
 
 class SimulatedAnnealingAlgorithm : public CustomOptimizationAlgorithm
 {
@@ -39,6 +45,11 @@ public:
     RandomDirectionStretching,
     BoxSampling
   };
+
+  void setConstraints(DiscreteConstraintsLibrary * constraints) override
+  {
+    _constraints = constraints; // Set the member variable _constraints to the provided pointer
+  }
 
   /// purely virtual optimize function
   void solve() override;
@@ -108,10 +119,10 @@ protected:
   Real _alpha;
 
   /// maximum temperature
-  Real _temp_max;
+  // Real _temp_max;
 
   /// minimum temperature
-  Real _temp_min;
+  // Real _temp_min;
 
   /// the best (aka min) objective seen so far
   Real _min_objective;
@@ -142,4 +153,6 @@ protected:
   std::vector<Real> _parameter_lower_limit;
   std::vector<Real> _parameter_upper_limit;
   ///@}
+
+  DiscreteConstraintsLibrary * _constraints;
 };

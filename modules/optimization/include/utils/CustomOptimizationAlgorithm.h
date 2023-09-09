@@ -13,6 +13,11 @@
 #include "MooseTypes.h"
 #include "MooseRandom.h"
 
+//*****************************
+// Forward Declarations If Any
+//*****************************
+class DiscreteConstraintsLibrary;
+
 class CustomOptimizationAlgorithm
 {
 public:
@@ -42,8 +47,17 @@ public:
                           const std::vector<int> & execlude_domain,
                           const std::map<int, std::vector<int>> & elem_neighbors);
 
+  virtual void setConstraints(DiscreteConstraintsLibrary * constraints)
+  {
+    mooseError("setConstraints should not be called on a CustomOptimizationAlgorithm object! "
+               "Please override it in the derived class (e.g., in SimulatedAnnealingAlgorithm).");
+  }
+
   void setSeed(unsigned int seed);
   unsigned int & maxIt() { return _max_its; }
+  unsigned int & maxRun() { return _num_runs; }
+  Real & maxTemp() { return _temp_max; }
+  Real & minTemp() { return _temp_min; }
   unsigned int & counterIteration() { return _it_counter; }
   int & counterRun() { return _it_run; }
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
@@ -71,6 +85,15 @@ protected:
 
   /// maximum number of steps/iterations
   unsigned int _max_its;
+
+  /// maximum number of runs
+  unsigned int _num_runs;
+
+  /// maximum temperature
+  Real _temp_max;
+
+  /// minimum temperature
+  Real _temp_min;
 
   /// iteration counter
   unsigned int _it_counter;

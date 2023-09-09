@@ -11,6 +11,7 @@
 #include "OptimizationAppTypes.h"
 #include "OptimizationReporterBase.h"
 #include "DiscreteOptimizationReporter.h" // declared in the header file
+#include "DiscreteConstraintsLibrary.h"
 #include "CustomOptimizationAlgorithm.h"
 #include "SimulatedAnnealingAlgorithm.h"
 
@@ -40,6 +41,30 @@ CustomOptimizeSolve::validParams()
                                           "from.  Note: This might be a UserObject from "
                                           "your MultiApp's input file!");
 
+  // DiscreteConstraintsLibrary user object
+  params.addParam<UserObjectName>("constraints_user_object",
+                                  "The constraints UserObject you want to transfer values "
+                                  "from.  Note: This might be a UserObject from "
+                                  "your MultiApp's input file!");
+
+  params.addParam<unsigned int>(
+      "number_of_runs",
+      "The number of runs allowed for the optimization algorithm (e.g., 10). Every run generates a "
+      "new seed number and starts with a new initial guess for the configuration. This initial "
+      "guess is the optimal configuration attained from the previous run.");
+
+  params.addParam<unsigned int>("number_of_iterations",
+                                "The number of iterations per one run inside the optimization "
+                                "algorithm (e.g., 25). This is the maximum allowed per one run.");
+
+  params.addParam<Real>("maximum_temperature",
+                        "The maximum temeprature used in the simualted annealing process. "
+                        "Higher values allow to check the solution space. ");
+
+  params.addParam<Real>("minimum_temperature",
+                        "The minimum temperature used in the simualted annealing process. The "
+                        "simulated annealing loop will stop after the number of iterations is "
+                        "reached *and* the temperature is below this value. ");
   return params;
 }
 
@@ -47,14 +72,45 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
   : SolveObject(ex),
     _my_comm(MPI_COMM_SELF),
     _solve_on(getParam<ExecFlagEnum>("solve_on")),
-    _opt_alg_type(getParam<MooseEnum>("custom_optimizer_type"))
+    _opt_alg_type(getParam<MooseEnum>("custom_optimizer_type")),
+    _constraints(
+        isParamValid("constraints_user_object")
+            ? &_problem.getUserObject<DiscreteConstraintsLibrary>("constraints_user_object")
+            : nullptr)
+
+// _constraints(getUserObject<DiscreteConstraintsLibrary>("constraints_user_object"))
 {
+
   // set up the optimization algorithm
   _opt_alg = std::make_unique<SimulatedAnnealingAlgorithm>();
   _opt_alg->setObjectiveRoutine(objectiveFunctionWrapper, this);
 
   if (libMesh::n_threads() > 1)
     mooseError("CustomOptimizeSolve does not currently support threaded execution");
+
+  // Reading the number of runs from the input file
+  if (isParamValid("number_of_runs"))
+    _num_of_runs = getParam<unsigned int>("number_of_runs");
+  else
+    _num_of_runs = 300;
+
+  // Reading the number of iterations from the input file
+  if (isParamValid("number_of_iterations"))
+    _num_iterations = getParam<unsigned int>("number_of_iterations");
+  else
+    _num_iterations = 25;
+
+  // Reading the maximum temperature from the input file
+  if (isParamValid("maximum_temperature"))
+    _max_temp = getParam<Real>("maximum_temperature");
+  else
+    _max_temp = 100;
+
+  // Reading the minimum temperature from the input file
+  if (isParamValid("minimum_temperature"))
+    _min_temp = getParam<Real>("minimum_temperature");
+  else
+    _min_temp = 0.001;
 }
 
 bool
@@ -79,7 +135,11 @@ CustomOptimizeSolve::solve()
   SimulatedAnnealingAlgorithm * sa_alg =
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
 
-  sa_alg->maxIt() = 25;
+  sa_alg->setConstraints(_constraints); // Setting _constraints of sa_alg
+  sa_alg->maxRun() = _num_of_runs;
+  sa_alg->maxIt() = _num_iterations;
+  sa_alg->maxTemp() = _max_temp;
+  sa_alg->minTemp() = _min_temp;
 
   sa_alg->setInitialSolution({}, iparams, exec_params, elem_neighbors);
 

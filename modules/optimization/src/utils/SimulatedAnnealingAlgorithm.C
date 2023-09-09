@@ -8,6 +8,7 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "SimulatedAnnealingAlgorithm.h"
+// #include "DiscreteConstraintsLibrary.h"
 #include <limits>
 #include <queue>
 
@@ -31,8 +32,8 @@ struct vector_hash
 SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
   : CustomOptimizationAlgorithm(),
     _alpha(1e-2),
-    _temp_max(100.0),
-    _temp_min(0.001),
+    // _temp_max(100.0),
+    // _temp_min(0.001),
     _min_objective(std::numeric_limits<Real>::max()),
     _cooling(trial), /*    LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd */
     _monotonic_cooling(false), /* Whether cooling is monotonic or not */
@@ -46,6 +47,15 @@ SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
     _upper_limit_provided(false),
     _lower_limit_provided(false)
 {
+
+  // Getting the user object of the constraints library
+  // auto & uo = getUserObject<UserObject>(getParam<UserObjectName>("user_object"));
+  // _reporter = dynamic_cast<DiscreteOptimizationReporter *>(&uo);
+  // if (!_reporter)
+  //   paramError("user_object", "This object must be a 'DiscreteOptimizationReporter' object.");
+
+  // _constraints = std::make_unique<DiscreteConstraintsUtils>();
+  // _constraints = std::make_unique<DiscreteConstraintsLibrary>();
 }
 
 void
@@ -64,7 +74,7 @@ SimulatedAnnealingAlgorithm::solve()
     mooseError("The problem has a non-zero number of categorical parameters, but the number of "
                "swaps and number of reassignments for neighbor generation are both 0.");
 
-  int num_runs = 300;                                            // number of runs to perform
+  // int num_runs = 300;                                            // number of runs to perform
   std::vector<std::pair<Real, std::vector<int>>> best_solutions; // Store best solutions of each
 
   // set initial neighbor & best states
@@ -84,10 +94,11 @@ SimulatedAnnealingAlgorithm::solve()
   std::vector<Real> best_real_solution;
   std::vector<int> best_int_solution;
 
-  for (int run = 0; run < num_runs; ++run)
+  for (int run = 0; run < _num_runs; ++run)
   {
     // initialization code for each run...
     _it_run = run;
+
     // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
     _it_counter = 0;
 
@@ -795,27 +806,42 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
 
-    bool improvedDensity = true;
-    for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+    if (_constraints->shouldCheckDensity())
     {
-      double currentDensity = computeBoundingBoxDensity(int_sol, cellType, dimension);
-      double newDensity = computeBoundingBoxDensity(int_neigh, cellType, dimension);
-
-      if (newDensity < currentDensity)
+      bool improvedDensity = true;
+      for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
       {
-        improvedDensity = false;
-        break;
+        if (!_constraints->checkDensityImprovement(int_sol, int_neigh, cellType, dimension))
+        {
+          improvedDensity = false;
+          int_neigh[index1] = int_sol[index1];
+          int_neigh[index2] = int_sol[index2];
+          break;
+        }
       }
     }
 
-    // if (!improvedDensity || !touchesRequiredSides)
-    if (!improvedDensity)
-    {
-      // If the density is not improved or if the fuel doesn't touch the required sides/faces,
-      // revert the changes
-      int_neigh[index1] = int_sol[index1];
-      int_neigh[index2] = int_sol[index2];
-    }
+    // bool improvedDensity = true;
+    // for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+    // {
+    //   double currentDensity = computeBoundingBoxDensity(int_sol, cellType, dimension);
+    //   double newDensity = computeBoundingBoxDensity(int_neigh, cellType, dimension);
+
+    //   if (newDensity < currentDensity)
+    //   {
+    //     improvedDensity = false;
+    //     int_neigh[index1] = int_sol[index1];
+    //     int_neigh[index2] = int_sol[index2];
+    //     break;
+    //   }
+    // }
+
+    // // if (!improvedDensity || !touchesRequiredSides)
+    // if (!improvedDensity)
+    // {
+    //   // If the density is not improved or if the fuel doesn't touch the required sides/faces,
+    //   // revert the changes
+    // }
 
     // Check if the new configuration is valid
     if (canFlip(int_sol, index1, index2, _elem_neighbors))

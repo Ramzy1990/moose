@@ -33,6 +33,10 @@
   type = CustomOptimize
   reporter_user_object = discrete_reporter
   solve_on = 'FORWARD'
+  number_of_runs = 2
+  number_of_iterations = 100
+  # maximum_temperature = 100
+  # minimum_temperature = 0.001
   # type = gardensnake-opt
   # nl_max_its = 50
   # execute_on = 'TIMESTEP_END'
