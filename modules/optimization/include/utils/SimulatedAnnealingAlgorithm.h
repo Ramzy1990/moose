@@ -11,7 +11,7 @@
 
 // MOOSE includes
 #include "CustomOptimizationAlgorithm.h"
-#include "DiscreteConstraintsLibrary.h"
+// #include "DiscreteConstraintsLibrary.h"
 
 //*****************************
 // Forward Declarations If Any
@@ -46,10 +46,10 @@ public:
     BoxSampling
   };
 
-  void setConstraints(DiscreteConstraintsLibrary * constraints) override
-  {
-    _constraints = constraints; // Set the member variable _constraints to the provided pointer
-  }
+  // void setConstraints(DiscreteConstraintsLibrary * constraints) override
+  // {
+  //   _constraints = constraints; // Set the member variable _constraints to the provided pointer
+  // }
 
   /// purely virtual optimize function
   void solve() override;
@@ -154,5 +154,5 @@ protected:
   std::vector<Real> _parameter_upper_limit;
   ///@}
 
-  DiscreteConstraintsLibrary * _constraints;
+  // DiscreteConstraintsLibrary * _constraints;
 };

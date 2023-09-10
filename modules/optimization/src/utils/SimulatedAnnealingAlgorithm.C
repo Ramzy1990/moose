@@ -806,37 +806,37 @@ SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
 
-    if (_constraints->shouldCheckDensity())
-    {
-      bool improvedDensity = true;
-      for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
-      {
-        if (!_constraints->checkDensityImprovement(int_sol, int_neigh, cellType, dimension))
-        {
-          improvedDensity = false;
-          int_neigh[index1] = int_sol[index1];
-          int_neigh[index2] = int_sol[index2];
-          break;
-        }
-      }
-    }
-
-    // bool improvedDensity = true;
-    // for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+    // if (_constraints->shouldCheckDensity())
     // {
-    //   double currentDensity = computeBoundingBoxDensity(int_sol, cellType, dimension);
-    //   double newDensity = computeBoundingBoxDensity(int_neigh, cellType, dimension);
-
-    //   if (newDensity < currentDensity)
+    //   bool improvedDensity = true;
+    //   for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
     //   {
-    //     improvedDensity = false;
-    //     int_neigh[index1] = int_sol[index1];
-    //     int_neigh[index2] = int_sol[index2];
-    //     break;
+    //     if (!_constraints->checkDensityImprovement(int_sol, int_neigh, cellType, dimension))
+    //     {
+    //       improvedDensity = false;
+    //       int_neigh[index1] = int_sol[index1];
+    //       int_neigh[index2] = int_sol[index2];
+    //       break;
+    //     }
     //   }
     // }
 
-    // // if (!improvedDensity || !touchesRequiredSides)
+    bool improvedDensity = true;
+    for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+    {
+      double currentDensity = computeBoundingBoxDensity(int_sol, cellType, dimension);
+      double newDensity = computeBoundingBoxDensity(int_neigh, cellType, dimension);
+
+      if (newDensity < currentDensity)
+      {
+        improvedDensity = false;
+        int_neigh[index1] = int_sol[index1];
+        int_neigh[index2] = int_sol[index2];
+        break;
+      }
+    }
+
+    // if (!improvedDensity || !touchesRequiredSides)
     // if (!improvedDensity)
     // {
     //   // If the density is not improved or if the fuel doesn't touch the required sides/faces,

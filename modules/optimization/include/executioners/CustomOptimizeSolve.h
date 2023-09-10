@@ -15,7 +15,6 @@
 
 // Forward Declarations If Any
 class DiscreteOptimizationReporter;
-class DiscreteConstraintsLibrary;
 class OptimizationReporterBase;
 class CustomOptimizationAlgorithm;
 class SimulatedAnnealingAlgorithm;
@@ -104,8 +103,8 @@ protected:
   /// @brief Object of the reporter class we are using
   DiscreteOptimizationReporter * _reporter;
 
-  /// @brief Object of the constraints class we are using
-  DiscreteConstraintsLibrary * _constraints;
+  // /// @brief Object of the constraints class we are using
+  // DiscreteConstraintsLibrary * _constraints;
 
   /// the optimization algorithm object
   // std::unique_ptr<MooseMesh> _mesh;

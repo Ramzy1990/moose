@@ -16,7 +16,7 @@
 //*****************************
 // Forward Declarations If Any
 //*****************************
-class DiscreteConstraintsLibrary;
+// class DiscreteConstraintsLibrary;
 
 class CustomOptimizationAlgorithm
 {
@@ -47,11 +47,12 @@ public:
                           const std::vector<int> & execlude_domain,
                           const std::map<int, std::vector<int>> & elem_neighbors);
 
-  virtual void setConstraints(DiscreteConstraintsLibrary * constraints)
-  {
-    mooseError("setConstraints should not be called on a CustomOptimizationAlgorithm object! "
-               "Please override it in the derived class (e.g., in SimulatedAnnealingAlgorithm).");
-  }
+  // virtual void setConstraints(DiscreteConstraintsLibrary * constraints)
+  // {
+  //   mooseError("setConstraints should not be called on a CustomOptimizationAlgorithm object! "
+  //              "Please override it in the derived class (e.g., in
+  //              SimulatedAnnealingAlgorithm).");
+  // }
 
   void setSeed(unsigned int seed);
   unsigned int & maxIt() { return _max_its; }

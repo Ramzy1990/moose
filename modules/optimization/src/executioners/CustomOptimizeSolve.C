@@ -11,7 +11,6 @@
 #include "OptimizationAppTypes.h"
 #include "OptimizationReporterBase.h"
 #include "DiscreteOptimizationReporter.h" // declared in the header file
-#include "DiscreteConstraintsLibrary.h"
 #include "CustomOptimizationAlgorithm.h"
 #include "SimulatedAnnealingAlgorithm.h"
 
@@ -42,10 +41,10 @@ CustomOptimizeSolve::validParams()
                                           "your MultiApp's input file!");
 
   // DiscreteConstraintsLibrary user object
-  params.addParam<UserObjectName>("constraints_user_object",
-                                  "The constraints UserObject you want to transfer values "
-                                  "from.  Note: This might be a UserObject from "
-                                  "your MultiApp's input file!");
+  // params.addParam<UserObjectName>("constraints_user_object",
+  //                                 "The constraints UserObject you want to transfer values "
+  //                                 "from.  Note: This might be a UserObject from "
+  //                                 "your MultiApp's input file!");
 
   params.addParam<unsigned int>(
       "number_of_runs",
@@ -72,11 +71,11 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
   : SolveObject(ex),
     _my_comm(MPI_COMM_SELF),
     _solve_on(getParam<ExecFlagEnum>("solve_on")),
-    _opt_alg_type(getParam<MooseEnum>("custom_optimizer_type")),
-    _constraints(
-        isParamValid("constraints_user_object")
-            ? &_problem.getUserObject<DiscreteConstraintsLibrary>("constraints_user_object")
-            : nullptr)
+    _opt_alg_type(getParam<MooseEnum>("custom_optimizer_type"))
+// _constraints(
+//     isParamValid("constraints_user_object")
+//         ? &_problem.getUserObject<DiscreteConstraintsLibrary>("constraints_user_object")
+//         : nullptr)
 
 // _constraints(getUserObject<DiscreteConstraintsLibrary>("constraints_user_object"))
 {
@@ -135,7 +134,7 @@ CustomOptimizeSolve::solve()
   SimulatedAnnealingAlgorithm * sa_alg =
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
 
-  sa_alg->setConstraints(_constraints); // Setting _constraints of sa_alg
+  // sa_alg->setConstraints(_constraints); // Setting _constraints of sa_alg
   sa_alg->maxRun() = _num_of_runs;
   sa_alg->maxIt() = _num_iterations;
   sa_alg->maxTemp() = _max_temp;
