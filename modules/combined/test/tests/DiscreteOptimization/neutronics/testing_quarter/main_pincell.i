@@ -29,20 +29,20 @@
   #   []
 []
 
-[Cons]
-  [discrete_constraints]
-    type = DiscreteConstraintsLibrary
-    check_bounding_box_density = 1
-  []
-[]
+# [Cons]
+#   [discrete_constraints]
+#     type = DiscreteConstraintsLibrary
+#     check_bounding_box_density = 1
+#   []
+# []
 
 [Executioner]
   type = CustomOptimize
   reporter_user_object = discrete_reporter
-  constraints_user_object = discrete_constraints
+  # constraints_user_object = discrete_constraints
   solve_on = 'FORWARD'
-  number_of_runs = 100
-  number_of_iterations = 1000
+  number_of_runs = 5
+  number_of_iterations = 250
   # type = gardensnake-opt
   # nl_max_its = 50
   # execute_on = 'TIMESTEP_END'

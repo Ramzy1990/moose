@@ -393,9 +393,9 @@ global_temperature = 600
     # pp_names = 'bnorm'
     pp_names = 'bnorm hydraulic_diameter'
     # function = '-1 * ( bnorm )'
-    function = '1/bnorm + 0.00001/(hydraulic_diameter*hydraulic_diameter*hydraulic_diameter*hydraulic_diameter)'
+    # function = '1/bnorm + 0.00001/(hydraulic_diameter*hydraulic_diameter*hydraulic_diameter*hydraulic_diameter)'
+    function = '-bnorm - 0.00001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter'
     # function = '-1 * bnorm + 0.0001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter '
-    # function = '-bnorm - 0.00001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter'
     # function = '-bnorm'
     execute_on = TIMESTEP_END
   []
