@@ -74,9 +74,13 @@ protected:
 
   /// creates neighbor states from current_states for the continuous params
   // void createNeigborInt(const std::vector<int> & int_sol, std::vector<int> & int_neigh) const;
-  void createNeigborInt(const std::vector<int> & int_sol,
-                        std::vector<int> & int_neigh,
-                        const std::vector<int> & exclude_values) const;
+  void createNeighborIntCombinatorial(const std::vector<int> & int_sol,
+                                      std::vector<int> & int_neigh,
+                                      const std::vector<int> & exclude_values) const;
+
+  void createNeighborInt(const std::vector<int> & int_sol,
+                         std::vector<int> & int_neigh,
+                         const std::vector<int> & exclude_values) const;
 
   /// computes the probability with which a neigbor objective value will be accepted given current objective value and temperature
   Real acceptProbability(Real curr_obj, Real neigh_obj, Real curr_temp) const;
@@ -91,24 +95,31 @@ protected:
                              int value,
                              const std::map<int, std::vector<int>> & neighborsMap) const;
 
-  bool canFlip(const std::vector<int> & int_vec,
-               unsigned int index,
-               unsigned int new_value,
-               const std::map<int, std::vector<int>> & neighborsMap) const;
+  bool canFlip(const std::vector<int> & int_sol,
+               const std::vector<int> & int_neigh,
+               const std::map<int, std::vector<unsigned int>> & material_indices,
+               const unsigned int index1,
+               const unsigned int index2,
+               const std::map<int, std::vector<int>> & neighbors_map) const;
 
-  int chooseBoundaryElement(const std::map<int, std::vector<int>> & neighborsMap,
-                            const std::vector<int> & int_sol) const;
+  bool canFlip(const std::vector<int> & int_sol,
+               const unsigned int & index,
+               const std::vector<int> & unique_material_ids,
+               const int & new_val,
+               const std::map<int, std::vector<int>> & neighbors_map) const;
 
-  bool isClusterRegular(const std::vector<int> & solution, int value) const;
+  // int chooseBoundaryElement(const std::map<int, std::vector<int>> & neighborsMap,
+  //                           const std::vector<int> & int_sol) const;
 
-  bool isValid(const std::vector<std::vector<int>> & grid) const;
+  // bool isClusterRegular(const std::vector<int> & solution, int value) const;
+
+  // bool isValid(const std::vector<std::vector<int>> & grid) const;
 
   bool checkConstraints(const std::vector<int> & int_vec,
                         const std::map<int, std::vector<int>> & neighborsMap) const;
-  double computeBoundingBoxDensity(const std::vector<int> & int_vec,
-                                   int cellType,
-                                   unsigned int dimension) const;
-  double computeBoundingBoxDensity2D(const std::vector<int> & int_vec, int cellType) const;
+  Real computeBoundingBoxDensity(const std::vector<int> & int_vec,
+                                 int cellType,
+                                 unsigned int dimension) const;
   /// state size of the integer space
   unsigned int _int_state_size;
 

@@ -45,11 +45,32 @@ public:
 
   // const std::vector<Real> & getRealParameters() const { return _real_parameters; }
 
+  /// @brief Flag for if compinatorial_optimization is on or off
+  bool _combinatorial_optimization;
+
+  /// @brief The domains dimension
+  unsigned int _dimension;
+
+  /// @brief Flag for if the quarter symmetry is applied
+  bool _quarter_symmetry;
+
+  /// @brief Flag for if checking the domain's density is applied or not
+  bool _check_density;
+
+  /// @brief Flag for if compinatorial_optimization is on or off
+  bool _check_enclaves;
+
+  /// @brief Flag for if compinatorial_optimization is on or off
+  bool _check_boundaries;
+
+  /// @brief Flag for if compinatorial_optimization is on or off
+  // bool _check_volumes;
+
   /// @brief The number of runs for this algorithm
   unsigned int _num_of_runs;
 
   /// @brief The number of iterations for this algorithm
-  unsigned int _num_iterations;
+  unsigned long int _num_iterations;
 
   /// @brief The maximum temperature for this run
   Real _max_temp;
@@ -81,7 +102,7 @@ protected:
 
   void print_table(std::string custom_optimizer_type,
                    //  std::string objective_function,
-                   const unsigned int iteration,
+                   const unsigned long int iteration,
                    const int run_iteration,
                    const PostprocessorName objective_name,
                    const Real objective_value,

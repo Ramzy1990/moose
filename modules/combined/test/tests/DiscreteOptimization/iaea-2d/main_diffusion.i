@@ -1,3 +1,5 @@
+# Note that the output will be a 17 x 17 mesh
+
 [Optimization]
 []
 
@@ -17,55 +19,34 @@
 [Reporters]
   [discrete_reporter]
     type = DiscreteOptimizationReporter
-    allowed_mateirals = '0 1'
-    excluded_materials = ' '
+    allowed_mateirals = '1 2 3 4'
+    excluded_materials = '3 4'
     outputs = "none"
-    # pp = objective
-    # execute_on = "ALWAYS"
   []
 []
-
-# [Cons]
-#   [discrete_constraints]
-#     type = DiscreteConstraintsLibrary
-#     check_bounding_box_density = 1
-#   []
-# []
 
 [Executioner]
   type = CustomOptimize
   reporter_user_object = discrete_reporter
   # constraints_user_object = discrete_constraints
   solve_on = 'FORWARD'
-  compinatorial_optimization = 1
+  combinatorial_optimization = 0
   # dimension = 2
-  quarter_symmetry = 1
-  check_density = 1
-  check_enclaves = 1
-  check_boundaries = 1
+  quarter_symmetry = 0
+  check_density = 0
+  check_enclaves = 0
+  check_boundaries = 0
   number_of_runs = 100
-  number_of_iterations = 30
+  number_of_iterations = 10
+  maximum_temperature = 100
+  minimum_temperature = 0.01
 []
-
-# [Problem]
-#   solve = false
-#   # type = DiscreteOptimizationReporter
-#   # outputs = none
-#   # []
-# []
-
-# [Debug]
-#   show_actions = true
-#   show_action_dependencies = true
-# []
 
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    # input_files = pin_cell.i
-    input_files = pin_cell_quarter.i
     # input_files = diffusion_reaction.i
-    # input_files = diffusion_reaction2.i
+    input_files = diffusion_reaction2.i
     # input_files = simple_heat_cool.i
     # input_files = eigen_test.i
     execute_on = 'TIMESTEP_BEGIN'
@@ -108,10 +89,3 @@
   # max_rows = 1
   # []
 []
-
-# [UserObjects]
-#   [discrete_reporter_object]
-#     type = DiscreteOptimizationReporter
-#   []
-# []
-

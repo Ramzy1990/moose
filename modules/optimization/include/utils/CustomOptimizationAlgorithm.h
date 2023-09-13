@@ -55,11 +55,18 @@ public:
   // }
 
   void setSeed(unsigned int seed);
-  unsigned int & maxIt() { return _max_its; }
+
+  bool & combinatorialOptimization() { return _combinatorial_optimization; }
+  unsigned int & meshDimesnsion() { return _dimension; }
+  bool & quarterSymmetry() { return _quarter_symmetry; }
+  bool & checkDensity() { return _check_density; }
+  bool & checkEnclaves() { return _check_enclaves; }
+  bool & checkBoundaries() { return _check_boundaries; }
+  unsigned long int & maxIt() { return _max_its; }
   unsigned int & maxRun() { return _num_runs; }
   Real & maxTemp() { return _temp_max; }
   Real & minTemp() { return _temp_min; }
-  unsigned int & counterIteration() { return _it_counter; }
+  unsigned long int & counterIteration() { return _it_counter; }
   int & counterRun() { return _it_run; }
   const std::vector<Real> & realSolution() const { return _current_real_solution; }
   std::vector<int> & intSolution() { return _current_int_solution; }
@@ -84,8 +91,26 @@ protected:
                             void * ctx);
   void * _ctx;
 
+  /// @brief Flag for if compinatorial_optimization is on or off
+  bool _combinatorial_optimization;
+
+  /// @brief The domains dimension
+  unsigned int _dimension;
+
+  /// @brief Flag for if the quarter symmetry is applied
+  bool _quarter_symmetry;
+
+  /// @brief Flag for if checking the domain's density is applied or not
+  bool _check_density;
+
+  /// @brief Flag for if checking the enclaves is applied or not
+  bool _check_enclaves;
+
+  /// @brief Flag for if checking the materials beside the boundaries is applied or not
+  bool _check_boundaries;
+
   /// maximum number of steps/iterations
-  unsigned int _max_its;
+  unsigned long int _max_its;
 
   /// maximum number of runs
   unsigned int _num_runs;
@@ -97,7 +122,7 @@ protected:
   Real _temp_min;
 
   /// iteration counter
-  unsigned int _it_counter;
+  unsigned long int _it_counter;
 
   /// iteration of multiruns
   int _it_run;

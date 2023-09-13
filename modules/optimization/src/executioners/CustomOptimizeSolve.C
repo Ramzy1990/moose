@@ -46,15 +46,35 @@ CustomOptimizeSolve::validParams()
   //                                 "from.  Note: This might be a UserObject from "
   //                                 "your MultiApp's input file!");
 
+  params.addParam<bool>("combinatorial_optimization",
+                        "If the type of optimization being carried out is combinatorial where we "
+                        "reserve the initial volume of each starting material (and hence "
+                        "the number of elements with a specific subdomain id). Otherwise, the "
+                        "optimization is discrete in that one material is allowed to have more or "
+                        "less amount than its initial state to optimize the domain.");
+
+  params.addParam<unsigned int>("dimension", "dimension of the simulated problem.");
+
+  params.addParam<bool>("quarter_symmetry", "If the problem applied has quarter or full symmetry");
+
+  params.addParam<bool>("check_density", "If the density checking constraint is applied.");
+
+  params.addParam<bool>("check_enclaves", "If the enclaves checking constraint is applied.");
+
+  params.addParam<bool>("check_boundaries", "If the boundaries checking constraint is applied.");
+
+  // params.addParam<bool>("check_volumes", "If the volumes checking constraint is applied.");
+
   params.addParam<unsigned int>(
       "number_of_runs",
       "The number of runs allowed for the optimization algorithm (e.g., 10). Every run generates a "
       "new seed number and starts with a new initial guess for the configuration. This initial "
       "guess is the optimal configuration attained from the previous run.");
 
-  params.addParam<unsigned int>("number_of_iterations",
-                                "The number of iterations per one run inside the optimization "
-                                "algorithm (e.g., 25). This is the maximum allowed per one run.");
+  params.addParam<unsigned long int>(
+      "number_of_iterations",
+      "The number of iterations per one run inside the optimization "
+      "algorithm (e.g., 25). This is the maximum allowed per one run.");
 
   params.addParam<Real>("maximum_temperature",
                         "The maximum temeprature used in the simualted annealing process. "
@@ -87,6 +107,42 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
   if (libMesh::n_threads() > 1)
     mooseError("CustomOptimizeSolve does not currently support threaded execution");
 
+  // Is it compinatorial or not
+  if (isParamValid("combinatorial_optimization"))
+    _combinatorial_optimization = getParam<bool>("combinatorial_optimization");
+  else
+    _combinatorial_optimization = 0;
+
+  // Checking the dimension
+  if (isParamValid("dimension"))
+    _dimension = getParam<unsigned int>("dimension");
+  else
+    _dimension = _problem.mesh().dimension();
+
+  // Quarter symmetry
+  if (isParamValid("quarter_symmetry"))
+    _quarter_symmetry = getParam<bool>("quarter_symmetry");
+  else
+    _quarter_symmetry = 1;
+
+  // Checking the density
+  if (isParamValid("check_density"))
+    _check_density = getParam<bool>("check_density");
+  else
+    _check_density = 0;
+
+  // Checking the encalves
+  if (isParamValid("check_enclaves"))
+    _check_enclaves = getParam<bool>("check_enclaves");
+  else
+    _check_enclaves = 0;
+
+  // Checking the boundaries
+  if (isParamValid("check_boundaries"))
+    _check_boundaries = getParam<bool>("check_boundaries");
+  else
+    _check_boundaries = 0;
+
   // Reading the number of runs from the input file
   if (isParamValid("number_of_runs"))
     _num_of_runs = getParam<unsigned int>("number_of_runs");
@@ -95,7 +151,7 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
 
   // Reading the number of iterations from the input file
   if (isParamValid("number_of_iterations"))
-    _num_iterations = getParam<unsigned int>("number_of_iterations");
+    _num_iterations = getParam<unsigned long int>("number_of_iterations");
   else
     _num_iterations = 25;
 
@@ -135,6 +191,14 @@ CustomOptimizeSolve::solve()
       dynamic_cast<SimulatedAnnealingAlgorithm *>(_opt_alg.get());
 
   // sa_alg->setConstraints(_constraints); // Setting _constraints of sa_alg
+
+  sa_alg->combinatorialOptimization() = _combinatorial_optimization;
+  sa_alg->meshDimesnsion() = _dimension;
+  sa_alg->quarterSymmetry() = _quarter_symmetry;
+  sa_alg->checkDensity() = _check_density;
+  sa_alg->checkEnclaves() = _check_enclaves;
+  sa_alg->checkBoundaries() = _check_boundaries;
+
   sa_alg->maxRun() = _num_of_runs;
   sa_alg->maxIt() = _num_iterations;
   sa_alg->maxTemp() = _max_temp;
@@ -231,7 +295,7 @@ CustomOptimizeSolve::updateTheApp()
 
 void
 CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
-                                 const unsigned int iteration,
+                                 const unsigned long int iteration,
                                  const int run_iteration,
                                  const PostprocessorName objective_name,
                                  const Real objective_value,

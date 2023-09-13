@@ -106,15 +106,26 @@ global_temperature = 600
 
     0 0 0 0 0 0 0 0 0 0
     0 0 0 0 0 0 0 0 0 0
+    1 1 1 1 0 0 0 0 0 0
     1 1 1 1 1 1 0 0 0 0
-    1 1 1 1 1 1 0 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
     1 1 1 1 1 1 1 1 0 0
-    0 1 1 1 1 1 1 1 0 0
-    0 0 1 1 1 1 1 1 0 0
+    1 1 1 1 1 1 1 1 0 0
+    1 1 1 1 1 1 1 1 0 0
     '
+
+    # 0 0 0 0 0 0 0 0 0 0
+    # 0 0 0 0 0 0 0 0 0 0
+    # 1 1 1 1 0 0 0 0 0 0
+    # 1 1 1 1 1 1 0 0 0 0
+    # 1 1 1 1 1 1 1 1 0 0
+    # 1 1 1 1 1 1 1 1 0 0
+    # 1 1 1 1 1 1 1 1 0 0
+    # 1 1 1 1 1 1 1 1 0 0
+    # 1 1 1 1 1 1 1 1 0 0
+    # 1 1 1 1 1 1 1 1 0 0
 
     # 0 0 0 0 0 0 0 0 0 0
     # 0 0 0 0 0 0 0 0 0 0
@@ -340,6 +351,13 @@ global_temperature = 600
     execute_on = TIMESTEP_END
   []
 
+  [perimeter_Mod]
+    type = RegionInterfaceAreaPostprocessor
+    primary_block_names = '0'
+    paired_block_names = '1'
+    execute_on = TIMESTEP_END
+  []
+
   # [area_all]
   #   type = RegionInterfaceAreaPostprocessor
   # []
@@ -365,13 +383,13 @@ global_temperature = 600
   [hydraulic_diameter]
     type = ParsedPostprocessor
     # pp_names = 'perimeter_fuel area_all_fuel area_all_moderator'
-    pp_names = 'perimeter_fuel area_all'
+    pp_names = 'perimeter_fuel area_all_fuel'
     # function = '-1*(bnorm * if(max_temperature < 360, 1, 0.01))'
     # function = '(area_all_fuel+area_all_moderator)/ perimeter_fuel'
 
     # This is how it should be after testing the individual input file with different
     # confgurations including water in the middle or tetris shape around the middle and seeing how cost function is behaving.
-    function = '4 * area_all/ perimeter_fuel'
+    function = '4 * area_all_fuel/ perimeter_fuel'
 
     # function = 'perimeter_fuel/area_all'
     # function = '-(total_source - (max_temperature / 2))'
