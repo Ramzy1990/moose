@@ -22,15 +22,19 @@ void
 CustomOptimizationAlgorithm::setInitialSolution(
     const std::vector<Real> & real_sol,
     const std::vector<int> & int_sol,
-    const std::vector<int> & execlude_domain,
+    const std::vector<int> & exclude_materials,
     const std::map<int, std::vector<int>> & elem_neighbors)
 {
-  _current_real_solution = real_sol;
-  _current_int_solution = int_sol;
-  _execlude_domain = execlude_domain;
+  _it_run = 0;
+  _tabu_used = 0;
+  _cache_used = 0;
+  _solution_accepted = 0;
+  _current_real_config = real_sol;
+  _current_int_config = int_sol;
+  _exclude_materials = exclude_materials;
   _elem_neighbors = elem_neighbors;
-  _real_size = _current_real_solution.size();
-  _int_size = _current_int_solution.size();
+  _real_size = _current_real_config.size();
+  _int_size = _current_int_config.size();
   _size = _real_size + _int_size;
 }
 

@@ -14,26 +14,26 @@ von_karman_const = 0.22
 # This model has been non-dimensionalized. The diameter (D), density (rho), and
 # bulk velocity (bulk_u) are all considered unity.
 D = 1
-total_len = ${fparse 40 * D}
+total_len = '${fparse 40 * D}'
 rho = 1
 bulk_u = 1
 
 # With those parameters set, the viscosity is then computed in order to reach
 # the desired Reynolds number.
-mu = ${fparse rho * bulk_u * D / Re}
+mu = '${fparse rho * bulk_u * D / Re}'
 
 # Here the DeltaP will be evaluted by using a postprocessor to find the pressure
 # at a point that is 10 diameters away from the outlet. (The outlet pressure is
 # set to zero.)
-L = ${fparse 10 * D}
+L = '${fparse 10 * D}'
 
 # We will use the McAdams correlation to find the Darcy friction factor. Note
 # that this correlation is valid for fully developed flow in smooth circular
 # tubes at 3e4 < Re < 1e6.
-f = ${fparse 0.316 * Re^(-0.25)}
+f = '${fparse 0.316 * Re^(-0.25)}'
 
 # The DeltaP can then be computed using this friction factor as,
-ref_delta_P = ${fparse f * L / D * rho * bulk_u^2 / 2}
+ref_delta_P = '${fparse f * L / D * rho * bulk_u^2 / 2}'
 
 [Mesh]
   [gen]
@@ -42,10 +42,10 @@ ref_delta_P = ${fparse f * L / D * rho * bulk_u^2 / 2}
     xmin = 0
     xmax = ${total_len}
     ymin = 0
-    ymax = ${fparse 0.5 * D}
+    ymax = '${fparse 0.5 * D}'
     nx = 200
     ny = 40
-    bias_y = ${fparse 1 / 1.2}
+    bias_y = '${fparse 1 / 1.2}'
   []
   [rename1]
     type = RenameBoundaryGenerator
@@ -87,8 +87,8 @@ ref_delta_P = ${fparse f * L / D * rho * bulk_u^2 / 2}
 [GlobalParams]
   rhie_chow_user_object = 'rc'
   # The upwind and Rhie-Chow interpolation schemes are used here.
-  advected_interp_method='upwind'
-  velocity_interp_method='rc'
+  advected_interp_method = 'upwind'
+  velocity_interp_method = 'rc'
 []
 
 [UserObjects]

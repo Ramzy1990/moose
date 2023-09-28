@@ -15,6 +15,7 @@
 
 // Forward Declarations If Any
 class DiscreteOptimizationReporter;
+class DensityDiscreteConstraint;
 class OptimizationReporterBase;
 class CustomOptimizationAlgorithm;
 class SimulatedAnnealingAlgorithm;
@@ -39,6 +40,12 @@ public:
 
   // This way, we can use the funciton to get the class instance.
   DiscreteOptimizationReporter & getDiscreteOptimizationReporter() const { return *_reporter; }
+
+  // Method to set the DensityDiscreteConstraint in the optimization algorithm
+  void setDensityDiscreteConstraintForAlgorithm(const DensityDiscreteConstraint * ddc);
+
+  // could be not needed!
+  // DensityDiscreteConstraint & getDensityConstraint() { return *_ddc_uo; }
 
   // This way, we can use the funciton to get the class instance.
   // DiscreteConstraintsLibrary & getDiscreteConstraintsLibrary() const { return *_constraints; }
@@ -70,13 +77,16 @@ public:
   unsigned int _num_of_runs;
 
   /// @brief The number of iterations for this algorithm
-  unsigned long int _num_iterations;
+  unsigned int _num_iterations;
 
   /// @brief The maximum temperature for this run
   Real _max_temp;
 
   /// @brief The minimum temperature for this run
   Real _min_temp;
+
+  /// @brief The debug flag
+  bool _debug;
 
   //****************************************************************************************************************************//
 
@@ -102,21 +112,14 @@ protected:
 
   void print_table(std::string custom_optimizer_type,
                    //  std::string objective_function,
-                   const unsigned long int iteration,
-                   const int run_iteration,
+                   const unsigned int iteration,
+                   const unsigned int run_iteration,
                    const PostprocessorName objective_name,
                    const Real objective_value,
                    bool solution_accepted,
                    bool tabu_list_used,
                    bool cache_used);
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
   //************************
   // Variables Declarations
   //************************
@@ -128,8 +131,10 @@ protected:
   // DiscreteConstraintsLibrary * _constraints;
 
   /// the optimization algorithm object
-  // std::unique_ptr<MooseMesh> _mesh;
   std::unique_ptr<CustomOptimizationAlgorithm> _opt_alg;
+
+  /// @brief Object of the density constraint class
+  // DensityDiscreteConstraint * _ddc_uo;
 
   /// @brief Vector to hold the objective function value (assuming it has many components among different MultiApps)
   // std::vector<PostprocessorValue> & _objective_function_vector;
@@ -138,10 +143,10 @@ protected:
   // PostprocessorValue _objective_function_value;
 
   /// @brief Vector to hold the constraints results
-  std::vector<bool> _constraints_reults;
+  // std::vector<bool> _constraints_reults;
 
   /// @brief Vector to hold the domain's constraints results
-  std::vector<std::string> _domain_constraints;
+  // std::vector<std::string> _domain_constraints;
 
   /// objective function defining objective, gradient, and hessian
   OptimizationReporterBase * _obj_function = nullptr;
@@ -164,13 +169,8 @@ private:
   // Functions Declarations
   //************************
 
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  //****************************************************************************************************************************//
+
   //************************
   // Variables Declarations
   //************************

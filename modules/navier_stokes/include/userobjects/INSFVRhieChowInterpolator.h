@@ -244,7 +244,8 @@ private:
   bool _pull_all_nonlocal;
 };
 
-inline const Moose::FunctorBase<ADReal> & INSFVRhieChowInterpolator::epsilon(THREAD_ID) const
+inline const Moose::FunctorBase<ADReal> &
+INSFVRhieChowInterpolator::epsilon(THREAD_ID) const
 {
   return _unity_functor;
 }

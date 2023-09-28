@@ -11,6 +11,9 @@
 #include "OptimizationAppTypes.h"
 #include "OptimizationReporterBase.h"
 #include "DiscreteOptimizationReporter.h" // declared in the header file
+
+// #include "DensityDiscreteConstraint.h"
+
 #include "CustomOptimizationAlgorithm.h"
 #include "SimulatedAnnealingAlgorithm.h"
 
@@ -40,12 +43,6 @@ CustomOptimizeSolve::validParams()
                                           "from.  Note: This might be a UserObject from "
                                           "your MultiApp's input file!");
 
-  // DiscreteConstraintsLibrary user object
-  // params.addParam<UserObjectName>("constraints_user_object",
-  //                                 "The constraints UserObject you want to transfer values "
-  //                                 "from.  Note: This might be a UserObject from "
-  //                                 "your MultiApp's input file!");
-
   params.addParam<bool>("combinatorial_optimization",
                         "If the type of optimization being carried out is combinatorial where we "
                         "reserve the initial volume of each starting material (and hence "
@@ -71,10 +68,9 @@ CustomOptimizeSolve::validParams()
       "new seed number and starts with a new initial guess for the configuration. This initial "
       "guess is the optimal configuration attained from the previous run.");
 
-  params.addParam<unsigned long int>(
-      "number_of_iterations",
-      "The number of iterations per one run inside the optimization "
-      "algorithm (e.g., 25). This is the maximum allowed per one run.");
+  params.addParam<unsigned int>("number_of_iterations",
+                                "The number of iterations per one run inside the optimization "
+                                "algorithm (e.g., 25). This is the maximum allowed per one run.");
 
   params.addParam<Real>("maximum_temperature",
                         "The maximum temeprature used in the simualted annealing process. "
@@ -84,6 +80,12 @@ CustomOptimizeSolve::validParams()
                         "The minimum temperature used in the simualted annealing process. The "
                         "simulated annealing loop will stop after the number of iterations is "
                         "reached *and* the temperature is below this value. ");
+
+  params.addParam<bool>("debug_on",
+                        "The debug variable to print more information during the execution. If on, "
+                        "then we print to a file that contains information about different parts "
+                        "of the otpimzier and the optimziation process. ");
+
   return params;
 }
 
@@ -92,14 +94,11 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
     _my_comm(MPI_COMM_SELF),
     _solve_on(getParam<ExecFlagEnum>("solve_on")),
     _opt_alg_type(getParam<MooseEnum>("custom_optimizer_type"))
-// _constraints(
-//     isParamValid("constraints_user_object")
-//         ? &_problem.getUserObject<DiscreteConstraintsLibrary>("constraints_user_object")
-//         : nullptr)
+// _ddc_uo(isParamValid("density_constraint_user_object")
+//             ? &getUserObject<DensityDiscreteConstraint>("density_constraint_user_object")
+//             : nullptr)
 
-// _constraints(getUserObject<DiscreteConstraintsLibrary>("constraints_user_object"))
 {
-
   // set up the optimization algorithm
   _opt_alg = std::make_unique<SimulatedAnnealingAlgorithm>();
   _opt_alg->setObjectiveRoutine(objectiveFunctionWrapper, this);
@@ -151,7 +150,7 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
 
   // Reading the number of iterations from the input file
   if (isParamValid("number_of_iterations"))
-    _num_iterations = getParam<unsigned long int>("number_of_iterations");
+    _num_iterations = getParam<unsigned int>("number_of_iterations");
   else
     _num_iterations = 25;
 
@@ -166,6 +165,12 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
     _min_temp = getParam<Real>("minimum_temperature");
   else
     _min_temp = 0.001;
+
+  // Reading the debug variable from the input file
+  if (isParamValid("debug_on"))
+    _debug = getParam<bool>("debug_on");
+  else
+    _debug = 0;
 }
 
 bool
@@ -195,29 +200,44 @@ CustomOptimizeSolve::solve()
   sa_alg->combinatorialOptimization() = _combinatorial_optimization;
   sa_alg->meshDimesnsion() = _dimension;
   sa_alg->quarterSymmetry() = _quarter_symmetry;
-  sa_alg->checkDensity() = _check_density;
-  sa_alg->checkEnclaves() = _check_enclaves;
-  sa_alg->checkBoundaries() = _check_boundaries;
+  sa_alg->checkDensityConstraint() = _check_density;
+  sa_alg->checkEnclavesConstraint() = _check_enclaves;
+  sa_alg->checkBoundariesConstraint() = _check_boundaries;
 
   sa_alg->maxRun() = _num_of_runs;
   sa_alg->maxIt() = _num_iterations;
   sa_alg->maxTemp() = _max_temp;
   sa_alg->minTemp() = _min_temp;
+  sa_alg->debug() = _debug;
 
+  // Here we set the initial integer configuration subdomains, as well as the execluded subdomains
+  // and the neighbors (i.e., neighbor map) of each subdomain.
+  // Note that this initialSolution() method is in the custom optimziation algorithm class which the
+  // SA inherits from, and we actually casted the sa_alg object from the opt_alg object which was of
+  // type custom optimziation algorithm.
   sa_alg->setInitialSolution({}, iparams, exec_params, elem_neighbors);
 
+  // Okay, so if we do not use the following solve(), the optimziation will not work as expected.
+  // This is becuase the following solve() of the SA_alg is what makes the optimization process
+  // starts. Inside of this solve(), we have the multi-run loops and the while main annealing loop.
+  // Both have their iterations (num_of_runs and num_of_iterations, respectively.)
+  // This was verified with the pincell problem, where the initial objective function value was
+  // compared with a standalone computation and using the logging added to the sa algorithm.
   sa_alg->solve();
 
-  // std::cout << "ultimate answer " << sa_alg->intSolution()[0] << " " << sa_alg->intSolution()[1]
-  //           << std::endl;
-
-  // // Print the map
-  // for (const auto & i : sa_alg->intSolution())
-  // {
-  //   std::cout << "ultimate mesh subdomain ids:  " << i << " " << std::endl;
-  // }
+  // Here we can do anything after the sa_alg finishes running. maybe we can get some data from the
+  // sa_alg to print out to the screen.
 
   return true; // solveInfo;
+}
+
+void
+CustomOptimizeSolve::setDensityDiscreteConstraintForAlgorithm(const DensityDiscreteConstraint * ddc)
+{
+  if (_opt_alg)
+  { // Ensure the unique_ptr is not null
+    _opt_alg->setDensityDiscreteConstraint(ddc);
+  }
 }
 
 void
@@ -226,27 +246,42 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
                                               const std::vector<int> & iparams,
                                               void * ctx)
 {
-
   // This Wrapper is called everytime inside the simualted annealing algorithm, or so I think!
   auto * solver = static_cast<CustomOptimizeSolve *>(ctx);
+  // I think the previous solver object is the current solver which has the _opt_alg and sa_alg
+  // inside of it.
+  // The opt_alg is the custom optimziation algorithm class.
+  // We should add a
 
   // solver->getDiscreteOptimizationReporter().getMeshDomain();
 
   // We get the optimized mesh solution
-  auto optimized_vector = solver->_opt_alg->intSolution();
+  // There was a big bug here that did not affect the results but only the solution consistency, and
+  // the time needed to debug it!!
+  /// auto optimized_vector = solver->_opt_alg->intSolution();
+  auto optimized_vector = iparams;
 
   // We set this optimized mesh solution in the reporter
   solver->getDiscreteOptimizationReporter().setMeshDomain(optimized_vector);
 
   // We then call the updateTheApp function to execute the problem we have!
+  // If we do not call this function, the objective function will not be updated at all.
+  // It will stay at its initial value.
+  // However, the neighbor configuration (neighbor in the subdomain space) will be generated a new
+  // everytime. This is becuase the generation of the neighbor is a different process which happens
+  // inside the sa_alg->solve() method. So basically, we need this one to be done.
   solver->updateTheApp();
 
-  // We get the objective value! this is from the rpeorter and it have been set during the transfers
-  // execution
+  // We get the objective value! this is from the reporter and it have been set during the transfers
+  // execution after the app has finished execution successfully.
   objective = solver->getDiscreteOptimizationReporter()
                   .getObjectiveResult(); // call actual objective function here
 
-  // We get the objective name if we need to use it
+  // Now what comes next is basically happening after the app has solved the problem.
+  // The solved problem has generated a new objective function, seen above, and finished execution
+  // successfully.
+  // Next we just print a table that summarizes some of the optimization process that has happened.
+  /// We get the objective name if we need to use it
   PostprocessorName objective_name;
   objective_name = solver->getDiscreteOptimizationReporter()
                        .getObjectiveName(); // call actual objective function here
@@ -257,10 +292,10 @@ CustomOptimizeSolve::objectiveFunctionWrapper(Real & objective,
   // current objective value
   auto objective_value = objective;
 
-  // if solution is accepted, or tabu list is used, or cache is used
-  auto solution_accepted = solver->_opt_alg->tabu();
-  auto tabu_list_used = solver->_opt_alg->cache();
-  auto cache_used = solver->_opt_alg->solution();
+  // if solution is accepted, or tabu list is used, or cache is used, and the current run iteration
+  auto solution_accepted = solver->_opt_alg->solution();
+  auto tabu_list_used = solver->_opt_alg->tabu();
+  auto cache_used = solver->_opt_alg->cache();
   auto run_iteration = solver->_opt_alg->counterRun();
 
   // get the optimizer name
@@ -282,6 +317,8 @@ CustomOptimizeSolve::updateTheApp()
 {
   TIME_SECTION("updateTheApp", 2, "Objective forward solve");
 
+  // This part needs revision.
+
   // execute the MultiApp!
   _problem.execute(OptimizationAppTypes::EXEC_FORWARD);
 
@@ -295,13 +332,13 @@ CustomOptimizeSolve::updateTheApp()
 
 void
 CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
-                                 const unsigned long int iteration,
-                                 const int run_iteration,
+                                 const unsigned int iteration,
+                                 const unsigned int run_iteration,
                                  const PostprocessorName objective_name,
                                  const Real objective_value,
-                                 bool solution_accepted,
-                                 bool tabu_list_used,
-                                 bool cache_used)
+                                 const bool solution_accepted,
+                                 const bool tabu_list_used,
+                                 const bool cache_used)
 {
   // int w = 20; // width of each column
   // Calculate the width of each column dynamically
@@ -316,7 +353,7 @@ CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
                                    std::string(w, '-') + "+" + std::string(w, '-') + "+" +
                                    std::string(w, '-') + "+" + std::string(w, '-') + "+";
 
-  std::cout << cell_boundary_line << "\n";
+  std::cout << cell_boundary_line << std::endl;
   // add "Run" to the column headers, before "Iteration"
   std::cout << "|" << std::left << std::setw(w) << " Optimizer Type"
             << "|" << std::setw(w) << " Objective Function"
@@ -326,9 +363,8 @@ CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
             << "|" << std::setw(w) << " Solution Accepted?"
             << "|" << std::setw(w) << " Tabu List Used?"
             << "|" << std::setw(w) << " Cache Used?"
-            << "|"
-            << "\n";
-  std::cout << cell_boundary_line << "\n";
+            << "|" << std::endl;
+  std::cout << cell_boundary_line << std::endl;
 
   std::cout << "|" << std::left << std::setw(w) << " " + custom_optimizer_type << "|"
             << std::setw(w) << " " + objective_name << "|" << std::setw(w)
@@ -337,8 +373,7 @@ CustomOptimizeSolve::print_table(std::string custom_optimizer_type,
             << " " + std::to_string(objective_value) << "|" << std::setw(w)
             << std::string(" ") + (solution_accepted ? "Yes" : "No") << "|" << std::setw(w)
             << std::string(" ") + (tabu_list_used ? "Yes" : "No") << "|" << std::setw(w)
-            << std::string(" ") + (cache_used ? "Yes" : "No") << "|"
-            << "\n";
+            << std::string(" ") + (cache_used ? "Yes" : "No") << "|" << std::endl;
 
-  std::cout << cell_boundary_line << "\n";
+  std::cout << cell_boundary_line << std::endl;
 }

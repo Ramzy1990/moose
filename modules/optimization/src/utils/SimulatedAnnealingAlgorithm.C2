@@ -1,0 +1,2340 @@
+//* This file is part of the MOOSE framework
+//* https://www.mooseframework.org
+//*
+//* All rights reserved, see COPYRIGHT for full restrictions
+//* https://github.com/idaholab/moose/blob/master/COPYRIGHT
+//*
+//* Licensed under LGPL 2.1, please see LICENSE for details
+//* https://www.gnu.org/licenses/lgpl-2.1.html
+
+#include "SimulatedAnnealingAlgorithm.h"
+// #include "DiscreteConstraintsLibrary.h"
+#include <limits>
+#include <queue>
+
+// The vector_hash struct
+// Taken from: https://stackoverflow.com/questions/20511347/a-good-hash-function-for-a-vector
+// Used to hash the solutions cache with a map!
+struct vector_hash
+{
+  template <class T1>
+  std::size_t operator()(const std::vector<T1> & vector) const
+  {
+    std::size_t seed = vector.size();
+    for (auto & i : vector)
+    {
+      seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
+SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
+  : CustomOptimizationAlgorithm(),
+    _alpha(1e-2),
+    _min_objective(std::numeric_limits<Real>::max()),
+    _best_solutions{{std::numeric_limits<Real>::max(), {}}},
+    _cooling(trial), /*    trial, LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd,
+                        TrigAdd */
+    _monotonic_cooling(false), /* Whether cooling is monotonic or not */
+    _res_var(1), /*the initial temperature to start resetting the current state to the best found
+                       state when this temperature is reached. This temperature is halved every-time
+                       it is reached.*/
+    _num_swaps(1),
+    _num_reassignments(0),
+    _real_perturbation_type(RandomDirectionStretching),
+    _relative_perturbation(0.05),
+    _upper_limit_provided(false),
+    _lower_limit_provided(false)
+{
+}
+
+void
+SimulatedAnnealingAlgorithm::solve()
+{
+  // check that solution size has been set
+  if (_size == 0)
+    mooseError("Solution size is zero. Most likely setInitialSolution was not called.");
+
+  // check neighbor generation options for int params
+  if (_int_state_size > 0 && _num_reassignments > 0 && _valid_options.size() < 2)
+    mooseError("If the number of reassignments for neigbor generation is > 0, then the number of "
+               "valid options must be at least 2.");
+
+  if (_int_state_size > 0 && _num_swaps + _num_reassignments == 0)
+    mooseError("The problem has a non-zero number of categorical parameters, but the number of "
+               "swaps and number of reassignments for neighbor generation are both 0.");
+
+  // set initial neighbor & best states
+  std::vector<Real> init_real_solution = _current_real_configuration;
+  std::vector<int> init_int_solution = _current_int_configuration;
+  std::vector<Real> init_best_real_solution = _current_real_configuration;
+  std::vector<int> init_best_int_solution = _current_int_configuration;
+
+  Real current_objective;
+  objectiveFunction(
+      current_objective, _current_real_configuration, _current_int_configuration, _ctx);
+
+  _min_objective = current_objective; // Initialize the minimum objective
+
+  std::vector<Real> neighbor_real_solution;
+  std::vector<int> neighbor_int_solution;
+  std::vector<Real> best_real_solution;
+  std::vector<int> best_int_solution;
+
+  for (int run = 0; run < _num_runs; ++run)
+  {
+    // initialization code for each run...
+    _it_run = run;
+
+    // the number of "accepted" steps [not necessarily equal to # of traversals of while loop]
+    _it_counter = 0;
+
+    _res_var = 1.0;
+
+    // Sets the seed for the random number generator
+    MooseRandom::seed(std::time(0) + run);
+
+    Real temp_current = _temp_max; // Current temperature is set to maximum one.
+
+    // Tabu list
+    const int max_tabu_size = 1000; // maximum size of the Tabu list
+    std::deque<std::vector<int>> tabu_list;
+
+    // Solution cache
+    std::unordered_map<std::vector<int>, Real, vector_hash> solution_cache;
+
+    neighbor_real_solution = init_real_solution;
+    best_real_solution = init_real_solution;
+
+    // Initialize solutions
+    if (run == 0)
+    {
+      neighbor_int_solution = init_int_solution;
+      best_int_solution = init_int_solution;
+    }
+    else
+    {
+      neighbor_int_solution = _best_solutions.front().second;
+      best_int_solution = _best_solutions.front().second;
+      current_objective =
+          _best_solutions.front().first;  // Update the current objective with the objective value
+                                          // from the best solution of the previous runs
+      _min_objective = current_objective; // Minimum objective is e_best in the fortran code
+    }
+
+    // Keeping track of the accepted solutions!
+    // This initializes with 3 pairs, each having a maximum possible objective value and an empty
+    // vector of integers
+    std::vector<std::pair<Real, std::vector<int>>> solutions(
+        3, std::make_pair(std::numeric_limits<Real>::max(), std::vector<int>()));
+
+    // simulated annealing loop
+    while (_it_counter < _max_its && std::abs(temp_current) > _temp_min)
+    {
+
+      // Sets the seed for the random number generator
+      // std::srand(std::time(0));
+      // MooseRandom::seed(std::time(0) + _it_counter);
+
+      // get a new neighbor and compute energy
+      createNeigborReal(_current_real_configuration, neighbor_real_solution);
+
+      if (_combinatorial_optimization)
+      {
+        createNeighborIntCombinatorial(
+            _current_int_configuration, neighbor_int_solution, _execlude_domain);
+      }
+      else
+      {
+        createNeighborInt(_current_int_configuration, neighbor_int_solution, _execlude_domain);
+      }
+
+      // Check if neighbor is in Tabu list
+      _tabu_used = false;
+      if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_solution) != tabu_list.end())
+      {
+        // Neighbor is in Tabu list, skip this iteration
+        _tabu_used = true;
+        continue;
+      }
+
+      Real neigh_objective;
+
+      _cache_used = false;
+      // auto it = solution_cache.find(neighbor_int_solution);
+      // if (it != solution_cache.end())
+      // {
+      //   // If the solution is in the cache, use the cached objective value
+      //   neigh_objective = it->second;
+      //   _cache_used = true;
+      // }
+      // else
+      // {
+      // Otherwise, compute the objective value and add it to the cache
+      objectiveFunction(neigh_objective, neighbor_real_solution, neighbor_int_solution, _ctx);
+      // solution_cache[neighbor_int_solution] = neigh_objective;
+      // }
+
+      // std::cout << "Here is the neighbour objective value:  " << neigh_objective << " !\n\n\n";
+      // std::cout << "Here is the current objective value:  " << current_objective << " !\n\n\n";
+
+      // Copy the current solution
+      std::vector<int> current_int_solution_copy = _current_int_configuration;
+
+      // acceptance check: lower objective always accepted;
+      // acceptance check: lower temps always accepted;
+      // higher objective sometimes accepted
+      _solution_accepted = false;
+      Real temp_r = MooseRandom::rand();
+      if (temp_r <= acceptProbability(current_objective, neigh_objective, temp_current))
+      {
+        // if we accept then it always counts as a new step
+        ++_it_counter;
+        _current_real_configuration = neighbor_real_solution;
+        _current_int_configuration = neighbor_int_solution;
+        current_objective = neigh_objective;
+        _solution_accepted = true;
+        // Add the current solution to the Tabu list
+        tabu_list.push_back(_current_int_configuration);
+
+        // If the Tabu list is too big, remove the oldest element
+        if (tabu_list.size() > max_tabu_size)
+        {
+          tabu_list.pop_front();
+        }
+
+        // std::cout << "IN THIS STEP, WE ACCEPTED THE SOLUTION!"
+        //           << "\n\n\n";
+        // std::cout << "The current Objective value is: " << current_objective << "!\n";
+        // std::cout << "The neighbor Objective value is: " << neigh_objective << "!\n";
+      }
+      else
+      {
+        // otherwise, it has a 10% chance to count as a new step to finish the problem
+        // this is especially important for combinatorial problems
+        Real temp_rr = MooseRandom::rand();
+        if (temp_rr <= 0.1)
+          ++_it_counter;
+
+        // std::cout << "IN THIS STEP, WE DID NOT ACCEPT!"
+        // << "\n\n\n";
+      }
+
+      // cool the temperature
+      temp_current = coolingSchedule(_it_counter);
+
+      // if this is the best energy, it's our new best value
+      if (current_objective < _min_objective)
+      {
+        _min_objective = current_objective;
+        best_real_solution = _current_real_configuration;
+        // best_int_solution = _current_int_configuration;
+        best_int_solution = current_int_solution_copy;
+
+        // // Each time you find a better solution, add it to the vector
+        solutions.push_back(std::make_pair(_min_objective, best_int_solution));
+
+        // // Find the pair with the worst objective value
+        // // Here we are using the iterators functionality in C++
+        auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+        // // If the current objective is better than the worst stored one, replace it
+        if (current_objective < worst_it->first)
+        {
+          *worst_it = std::make_pair(_min_objective, best_int_solution);
+        }
+      }
+
+      // perform non-monotonic adjustment if applicable
+      if (!_monotonic_cooling)
+        temp_current *= (1.0 + (current_objective - _min_objective) / current_objective);
+
+      // rewind to best value if reset is enabled
+      if (std::abs(temp_current) <= _res_var)
+      {
+        _res_var *= 0.5;
+        current_objective = _min_objective;
+        _current_real_configuration = best_real_solution;
+        _current_int_configuration = best_int_solution;
+      }
+    }
+
+    // select the best state we ended up finding
+    current_objective = _min_objective;
+    _current_real_configuration = best_real_solution;
+    _current_int_configuration = best_int_solution;
+
+    // Add the ultimate best solution to the vector
+    solutions.push_back(std::make_pair(current_objective, _current_int_configuration));
+
+    // // Find the pair with the worst objective value
+    // // Here we are using the iterators functionality in C++
+    auto worst_it = std::max_element(solutions.begin(), solutions.end());
+
+    // // If the current objective is better than the worst stored one, replace it
+    if (current_objective < worst_it->first)
+    {
+      *worst_it = std::make_pair(current_objective, _current_int_configuration);
+    }
+
+    // Now sort the vector
+    std::sort(solutions.begin(), solutions.end());
+
+    std::pair<Real, std::vector<int>> best_pair_one_run = solutions[0];
+
+    // _best_solutions.push_back(std::make_pair(_min_objective, _current_int_configuration));
+    _best_solutions.push_back(best_pair_one_run);
+    // After each run, sort the _best_solutions vector in ascending order of the objective function
+    // value
+    std::sort(_best_solutions.begin(), _best_solutions.end());
+
+    // std::sort(all_accepted_solutions.begin(), all_accepted_solutions.end());
+
+    // Insert the best 3 solutions into the solutions vector
+    // for (std::size_t i = 0; i < 3 && i < all_accepted_solutions.size(); i++)
+    // {
+    //   solutions[i] = all_accepted_solutions[i];
+    // }
+  }
+
+  // std::pair<Real, std::vector<int>> best_pair = solutions[0];
+  std::pair<Real, std::vector<int>> best_pair = _best_solutions[0];
+
+  // // Print the best solution and its objective value
+  // std::cout << "Best objective value: " << best_pair.first << "\n";
+  // std::cout << "Associated solution: ";
+  // for (int value : best_pair.second)
+  // {
+  //   std::cout << value << " ";
+  // }
+  // std::cout << "\n";
+
+  std::cout << "The best solutions for all runs are as follows: \n";
+  for (const auto & pair : _best_solutions)
+  {
+    std::cout << "Objective value: " << pair.first << ", Solution: ";
+    for (const auto & val : pair.second)
+    {
+      std::cout << val << " ";
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << "The overall best solution is:\n";
+  std::cout << "Objective value: " << best_pair.first << ", Solution: ";
+  for (const auto & val : best_pair.second)
+  {
+    std::cout << val << " ";
+  }
+  std::cout << std::endl;
+}
+
+Real
+SimulatedAnnealingAlgorithm::coolingSchedule(unsigned int step) const
+{
+
+  auto fraction = (((Real)_max_its - (Real)step) / (Real)_max_its);
+
+  switch (_cooling)
+  {
+    case LinAdd:
+      return _temp_min + (_temp_max - _temp_min) * fraction;
+
+    case ExpMult:
+      return _temp_max * std::pow(_alpha, step);
+
+    case QuadAdd:
+      return _temp_min + (_temp_max - _temp_min) * std::pow(fraction, 2);
+    case trial:
+      return _temp_max * std::pow(_temp_min / _temp_max, (Real)step / (Real)_max_its);
+
+    default:
+      ::mooseError("Cooling option not yet implemented! Please choose from the follwoing options: "
+                   "LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd, TrigAdd, trial");
+  }
+
+  return 1;
+}
+
+void
+SimulatedAnnealingAlgorithm::createNeigborReal(const std::vector<Real> & real_sol,
+                                               std::vector<Real> & real_neigh) const
+{
+  if (_real_size == 0)
+  {
+    real_neigh = {};
+    return;
+  }
+
+  Real norm = 0;
+  for (auto & p : real_sol)
+    norm += p * p;
+  norm = std::sqrt(norm);
+
+  switch (_real_perturbation_type)
+  {
+    case RandomDirectionStretching:
+      // we need to loop until we find a perturbation
+      // that does not violate the parameter limits
+      while (true)
+      {
+        Real norm_perturbation = norm * _relative_perturbation * MooseRandom::randNormal(0.0, 1.0);
+        std::vector<Real> dir;
+        randomDirection(_real_size, dir);
+
+        bool accept = true;
+        for (unsigned int j = 0; j < _real_size; ++j)
+        {
+          real_neigh[j] = real_sol[j] + norm_perturbation * dir[j];
+
+          if (_upper_limit_provided && real_neigh[j] > _parameter_upper_limit[j])
+            accept = false;
+
+          if (_lower_limit_provided && real_neigh[j] < _parameter_lower_limit[j])
+            accept = false;
+
+          if (!accept)
+            break;
+        }
+
+        if (accept)
+          return;
+      }
+      break;
+    case BoxSampling:
+      if (!_upper_limit_provided || !_lower_limit_provided)
+        mooseError("Upper and lower limits must be provided for BoxSampling");
+
+      for (unsigned int j = 0; j < _real_size; ++j)
+        real_neigh[j] =
+            _parameter_lower_limit[j] +
+            MooseRandom::rand() * (_parameter_upper_limit[j] - _parameter_lower_limit[j]);
+      break;
+    default:
+      mooseError("Unrecognized neigbor perturation selection");
+  }
+}
+
+void
+SimulatedAnnealingAlgorithm::createNeighborInt(const std::vector<int> & int_sol,
+                                               std::vector<int> & int_neigh,
+                                               const std::vector<int> & exclude_values) const
+{
+  // ///////////////////////////////////////////////////////////
+  // //// Many vlaues but flipping just one element at a time///
+  // ///////////////////////////////////////////////////////////
+  if (_int_size == 0)
+  {
+    int_neigh = {};
+    return;
+  }
+
+  unsigned int index;
+  int_neigh = int_sol;
+
+  // Get the min and max values from int_sol
+  int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+  int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+  std::set<int> unique_material_ids_set;
+
+  for (const auto & id : int_sol)
+  {
+    if (std::find(exclude_values.begin(), exclude_values.end(), id) == exclude_values.end())
+    {
+      unique_material_ids_set.insert(id);
+    }
+  }
+
+  std::vector<int> unique_material_ids(unique_material_ids_set.begin(),
+                                       unique_material_ids_set.end());
+
+  // Ensure there are at least two materials to flip
+  if (unique_material_ids.size() < 2)
+  {
+    mooseError(
+        "The createNeighborInt() method received just one material in the whole domain! Please "
+        "make sure you are optimizing a domain that contains at least 2 materials!");
+  }
+
+  // Find a random index whose corresponding value is not in the exclude_values
+  do
+  {
+    index = MooseRandom::randl() % _int_size;
+  } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+           exclude_values.end());
+
+  int new_val;
+
+  const int max_failed_attempts = 1000; // Adjust as necessary
+  int failed_attempts = 0;
+
+  // Loop until a valid new_val is found or we hit too many failed attempts
+  do
+  {
+    new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+    if (new_val == int_neigh[index] ||
+        std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end() ||
+        !canFlip(int_sol, index, unique_material_ids, new_val, _elem_neighbors))
+    {
+      failed_attempts++;
+    }
+    else
+    {
+      // Reset the failed_attempts counter if we find a valid new_val
+      failed_attempts = 0;
+    }
+  } while (
+      (new_val == int_neigh[index] ||
+       std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end() ||
+       !canFlip(int_sol, index, unique_material_ids, new_val, _elem_neighbors)) &&
+      failed_attempts < max_failed_attempts);
+
+  // If we've reached the maximum number of failed attempts, we could either revert or proceed as is
+  if (failed_attempts >= max_failed_attempts)
+  {
+    // Choose a strategy here. Either:
+    // 1. Revert to the original solution (by copying int_sol into int_neigh)
+    int_neigh = int_sol;
+    // 2. Or, proceed with the last generated solution, even if it's not ideal.
+    // (No extra code needed for this, just move on.)
+  }
+  else
+  {
+    // We found a valid new_val within our attempts, so apply the flip
+    int_neigh[index] = new_val;
+  }
+
+  // int_neigh[index] = new_val;
+
+  // Check if all possible values are in the new solution
+  std::vector<bool> hasValue(max_value - min_value + 1, false);
+  for (unsigned int i = 0; i < _int_size; ++i)
+  {
+    hasValue[int_neigh[i] - min_value] = true;
+  }
+
+  // If any value is missing (and not in exclude_values), insert it at a random position
+  for (int i = 0; i <= max_value - min_value; ++i)
+  {
+    if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
+                            exclude_values.end())
+    {
+      int random_index;
+      // Find a random index whose value is not in exclude_values and satisfies constraints
+      do
+      {
+        random_index = MooseRandom::randl() % _int_size;
+      } while (
+          std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index]) !=
+              exclude_values.end() ||
+          !canFlip(int_sol, random_index, unique_material_ids, i + min_value, _elem_neighbors));
+
+      int_neigh[random_index] = i + min_value;
+      break;
+    }
+  }
+
+  //   ///////////////////////////////////////////////////////////
+  //   /////////////       One and two values           //////////
+  //   ///////////////////////////////////////////////////////////
+
+  // if (_int_size == 0)
+  // {
+  //   int_neigh = {};
+  //   return;
+  // }
+  // unsigned int index = MooseRandom::randl() % _int_size;
+  // int_neigh = int_sol;
+  // // Flip the value at the chosen index (change 1 to 2 or vice versa)
+  // if (int_neigh[index] == 1)
+  // {
+  //   int_neigh[index] = 2;
+  // }
+  // else
+  // {
+  //   int_neigh[index] = 1;
+  // }
+
+  // // Check to make sure the domain contains at least one type of each material
+  // bool hasOne = false, hasTwo = false;
+  // for (unsigned int i = 0; i < _int_size; ++i)
+  // {
+  //   if (int_neigh[i] == 1)
+  //   {
+  //     hasOne = true;
+  //   }
+  //   else if (int_neigh[i] == 2)
+  //   {
+  //     hasTwo = true;
+  //   }
+
+  //   // If both materials are found, break the loop early
+  //   if (hasOne && hasTwo)
+  //     break;
+  // }
+
+  // // If either material is missing, insert it at a random position
+  // if (!hasOne || !hasTwo)
+  // {
+  //   int_neigh[MooseRandom::randl() % _int_size] = !hasOne ? 1 : 2;
+  // }
+
+  //   ///////////////////////////////////////////////////////////
+  //   ///////// Many vlaues but flipping a lot at a time ////////
+  //   ///////////////////////////////////////////////////////////
+  // if (_int_size == 0)
+  // {
+  //   int_neigh = {};
+  //   return;
+  // }
+
+  // Real flip_ratio = 0.80; // Adjust this to the desired flip ratio
+  // unsigned int num_flips = static_cast<unsigned int>(_int_size * flip_ratio);
+  // if (num_flips > _int_size)
+  // {
+  //   num_flips = _int_size; // ensure we do not try to flip more elements than we have
+  // }
+
+  // // Get the min and max values from int_sol
+  // subdomain_id_type min_value = *std::min_element(int_sol.begin(), int_sol.end());
+  // subdomain_id_type max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+  // int_neigh = int_sol; // copy the solution into the neighbor
+
+  // for (unsigned int flip = 0; flip < num_flips; ++flip)
+  // {
+  //   unsigned int index;
+  //   // Find a random index whose value is not in exclude_values
+  //   do
+  //   {
+  //     index = MooseRandom::randl() % _int_size;
+  //   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+  //            exclude_values.end());
+
+  //   // Generate a new random value different from the current one and not in exclude_values
+  //   subdomain_id_type new_val;
+  //   do
+  //   {
+  //     // Adjust the modulus operation to be the size of our desired range (max_value - min_value +
+  //     // 1) Add the minimum value, min_value, to shift this range up from starting at 0 to starting
+  //     // at our minimum value.
+  //     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+  //   } while (new_val == int_neigh[index] ||
+  //            std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+  //                exclude_values.end());
+
+  //   int_neigh[index] = new_val; // assign the new value
+  // }
+}
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   int_neigh = int_sol; // Start with a copy of the current solution
+
+//   // Create lists of indices for 0s and 1s
+//   std::vector<unsigned int> indices_0;
+//   std::vector<unsigned int> indices_1;
+//   unsigned int gridSize = static_cast<unsigned int>(sqrt(int_sol.size()));
+
+//   for (unsigned int i = 0; i < int_sol.size(); ++i)
+//   {
+//     if (int_sol[i] == 0)
+//     {
+//       indices_0.push_back(i);
+//     }
+//     else
+//     {
+//       indices_1.push_back(i);
+//     }
+//   }
+
+//   // Ensure there are cells of both types to flip
+//   if (indices_0.empty() || indices_1.empty())
+//   {
+//     return;
+//   }
+
+//   const unsigned int MAX_ATTEMPTS = 100; // Limit the number of flip attempts
+//   unsigned int attempts = 0;
+
+//   const unsigned int MAX_CANFLIP_CALLS = 100; // Limit the number of calls to canFlip
+//   unsigned int canFlipCalls = 0;
+
+//   while (attempts < MAX_ATTEMPTS)
+//   {
+//     unsigned int index1 = (int_sol[MooseRandom::randl() % int_sol.size()] == 0)
+//                               ? indices_0[MooseRandom::randl() % indices_0.size()]
+//                               : indices_1[MooseRandom::randl() % indices_1.size()];
+
+//     unsigned int index2 = (int_sol[index1] == 0)
+//                               ? indices_1[MooseRandom::randl() % indices_1.size()]
+//                               : indices_0[MooseRandom::randl() % indices_0.size()];
+
+//     // if (int_neigh[index1] == 1)
+//     // {
+//     //   int fuelNeighbors = 0;
+//     //   for (int neighbor : getNeighbors(_elem_neighbors, index1))
+//     //   {
+//     //     if (int_neigh[neighbor] == 1)
+//     //       fuelNeighbors++;
+//     //   }
+//     //   if (fuelNeighbors == 4)
+//     //   {
+//     //     // This flip would create a hole. Avoid it.
+//     //     continue;
+//     //   }
+//     // }
+
+//     // Flip the values at the chosen indices
+//     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
+//     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
+
+//     // // Inside createNeigborInt after a flip
+//     // std::pair<int, int> topLeft = {gridSize, gridSize};
+//     // std::pair<int, int> bottomRight = {0, 0};
+//     // int fuelCount = 0;
+//     // for (unsigned int i = 0; i < gridSize; ++i)
+//     // {
+//     //   for (unsigned int j = 0; j < gridSize; ++j)
+//     //   {
+//     //     if (int_neigh[i * gridSize + j] == 1)
+//     //     {
+//     //       topLeft.first = std::min(topLeft.first, (int)i);
+//     //       topLeft.second = std::min(topLeft.second, (int)j);
+//     //       bottomRight.first = std::max(bottomRight.first, (int)i);
+//     //       bottomRight.second = std::max(bottomRight.second, (int)j);
+//     //       fuelCount++;
+//     //     }
+//     //   }
+//     // }
+//     // int boundingBoxArea =
+//     //     (bottomRight.first - topLeft.first + 1) * (bottomRight.second - topLeft.second + 1);
+//     // if ((float)fuelCount / boundingBoxArea < 0.93)
+//     // {
+//     //   int_neigh[index1] = int_sol[index1];
+//     //   int_neigh[index2] = int_sol[index2];
+//     // }
+
+//     // Check if the new configuration improves the bounding box density for each cell type
+//     bool improvedDensity = true;
+//     for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+//     {
+//       double currentDensity = computeBoundingBoxDensity2D(int_sol, cellType);
+//       double newDensity = computeBoundingBoxDensity2D(int_neigh, cellType);
+
+//       if (newDensity < currentDensity)
+//       {
+//         improvedDensity = false;
+//         break;
+//       }
+//     }
+
+//     // Inside createNeigborInt after a flip
+//     // std::pair<int, int> topLeft = {gridSize, gridSize};
+//     // std::pair<int, int> bottomRight = {0, 0};
+//     // int fuelCount = 0;
+//     // for (unsigned int i = 0; i < gridSize; ++i)
+//     // {
+//     //   for (unsigned int j = 0; j < gridSize; ++j)
+//     //   {
+//     //     if (int_neigh[i * gridSize + j] == 1)
+//     //     {
+//     //       topLeft.first = std::min(topLeft.first, (int)i);
+//     //       topLeft.second = std::min(topLeft.second, (int)j);
+//     //       bottomRight.first = std::max(bottomRight.first, (int)i);
+//     //       bottomRight.second = std::max(bottomRight.second, (int)j);
+//     //       fuelCount++;
+//     //     }
+//     //   }
+//     // }
+//     // int boundingBoxArea =
+//     //     (bottomRight.first - topLeft.first + 1) * (bottomRight.second - topLeft.second + 1);
+
+//     // Check if the top-left corner of the grid is a 0
+//     // bool cornerIsZero = (int_neigh[0] == 0);
+//     // bool cornerIsZero = (int_neigh[(gridSize - 1) * gridSize] == 0); // Bottom-left cell
+
+//     // // Check if the fuel touches the top and left sides
+//     // bool fuelTouchesTop = false;
+//     // bool fuelTouchesLeft = false;
+//     // for (unsigned int i = 0; i < gridSize; ++i)
+//     // {
+//     //   if (int_neigh[i] == 1) // Check the top side
+//     //   {
+//     //     fuelTouchesTop = true;
+//     //   }
+//     //   if (int_neigh[i * gridSize] == 1) // Check the left side
+//     //   {
+//     //     fuelTouchesLeft = true;
+//     //   }
+//     // }
+
+//     // Check if the fuel touches the bottom and right sides
+//     // bool fuelTouchesBottom = false;
+//     // bool fuelTouchesRight = false;
+//     // for (unsigned int i = 0; i < gridSize; ++i)
+//     // {
+//     //   if (int_neigh[(gridSize - 1) * gridSize + i] == 1) // Check the bottom side
+//     //   {
+//     //     fuelTouchesBottom = true;
+//     //   }
+//     //   if (int_neigh[i * gridSize + (gridSize - 1)] == 1) // Check the right side
+//     //   {
+//     //     fuelTouchesRight = true;
+//     //   }
+//     // }
+
+//     bool fuelTouchesBottom = false;
+//     bool fuelTouchesLeft = false;
+//     for (unsigned int i = 0; i < gridSize; ++i)
+//     {
+//       if (int_neigh[(gridSize - 1) * gridSize + i] == 1) // Check the bottom side
+//       {
+//         fuelTouchesBottom = true;
+//       }
+//       if (int_neigh[i * gridSize] == 1) // Check the left side
+//       {
+//         fuelTouchesLeft = true;
+//       }
+//     }
+
+//     // if (!improvedDensity || !cornerIsZero || !fuelTouchesBottom || !fuelTouchesLeft)
+//     if (!improvedDensity || !fuelTouchesBottom || !fuelTouchesLeft)
+//     {
+//       // If the density is not improved, revert the changes
+//       int_neigh[index1] = int_sol[index1];
+//       int_neigh[index2] = int_sol[index2];
+//     }
+
+//     // if ((float)fuelCount / boundingBoxArea < 0.90 || !cornerIsZero || !fuelTouchesTop ||
+//     //     !fuelTouchesLeft)
+//     // {
+//     //   int_neigh[index1] = int_sol[index1];
+//     //   int_neigh[index2] = int_sol[index2];
+//     // }
+
+//     // Check if the new configuration is valid
+//     if (canFlip(int_sol, index1, index2, _elem_neighbors))
+//     {
+//       break; // Exit the loop if a valid configuration is found
+//     }
+//     else
+//     {
+//       // If not valid, revert the changes and try again
+//       int_neigh[index1] = int_sol[index1];
+//       int_neigh[index2] = int_sol[index2];
+//       attempts++;
+
+//       canFlipCalls++;
+//       if (canFlipCalls >= MAX_CANFLIP_CALLS)
+//       {
+//         break; // Exit the loop if we've called canFlip too many times
+//       }
+//     }
+//   }
+// }
+
+void
+SimulatedAnnealingAlgorithm::createNeighborIntCombinatorial(
+    const std::vector<int> & int_sol,
+    std::vector<int> & int_neigh,
+    const std::vector<int> & exclude_values) const
+{
+
+  int_neigh = int_sol; // Start with a copy of the current solution
+
+  // Create a map of material IDs to their indices
+  std::map<int, std::vector<unsigned int>> material_indices;
+
+  for (unsigned int i = 0; i < int_neigh.size(); ++i)
+  {
+    if (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[i]) ==
+        exclude_values.end())
+    {
+      material_indices[int_neigh[i]].push_back(i);
+    }
+  }
+
+  // Ensure there are at least two materials to flip
+  if (material_indices.size() < 2)
+  {
+    mooseError(
+        "The createNeighborInt() method received just one material in the whole domain! Please "
+        "make sure you are optimizing a domain that contains at least 2 materials!");
+  }
+
+  const unsigned int max_attempts = 100; // Limit the number of flip attempts
+  unsigned int attempts = 0;
+
+  const unsigned int max_canflip_calls = 100; // Limit the number of calls to canFlip
+  unsigned int canflip_calls = 0;
+
+  // If no valid flipping is found, we basically return to the original int_sol we started with.
+  bool valid_flip_found = false;
+
+  while (attempts < max_attempts)
+  {
+    unsigned int index1 = MooseRandom::randl() % int_neigh.size();
+    unsigned int index2 = index1;
+
+    while (index1 == index2 ||
+           std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index1]) !=
+               exclude_values.end() ||
+           std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index2]) !=
+               exclude_values.end())
+    {
+      index2 = MooseRandom::randl() % int_neigh.size();
+      index1 = MooseRandom::randl() % int_neigh.size();
+    }
+
+    if (int_neigh[index1] != int_neigh[index2])
+    {
+      std::swap(int_neigh[index1], int_neigh[index2]);
+    }
+    else
+    {
+      continue;
+    }
+
+    if (canFlip(int_sol, int_neigh, material_indices, index1, index2, _elem_neighbors))
+    {
+      valid_flip_found = true;
+      break; // Exit the loop if a valid configuration is found
+    }
+    else
+    {
+      // If not valid, revert the changes and try again
+      // int_neigh = int_sol;
+      std::swap(int_neigh[index1], int_neigh[index2]);
+      attempts++;
+
+      canflip_calls++;
+      if (canflip_calls >= max_canflip_calls)
+      {
+        break; // Exit the loop if we have called canFlip too many times
+      }
+    }
+
+    // If no valid flip was found after all attempts, revert int_neigh to int_sol
+    if (!valid_flip_found)
+    {
+      int_neigh = int_sol;
+    }
+  }
+}
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   int_neigh = int_sol; // Start with a copy of the current solution
+
+//   // Create lists of indices for 0s and 1s
+//   std::vector<unsigned int> indices_0;
+//   std::vector<unsigned int> indices_1;
+
+//   for (unsigned int i = 0; i < int_sol.size(); ++i)
+//   {
+//     if (int_sol[i] == 0)
+//     {
+//       indices_0.push_back(i);
+//     }
+//     else
+//     {
+//       indices_1.push_back(i);
+//     }
+//   }
+
+//   // Ensure there are cells of both types to flip
+//   if (indices_0.empty() || indices_1.empty())
+//   {
+//     return;
+//   }
+
+//   const unsigned int max_attempts = 100; // Limit the number of flip attempts
+//   unsigned int attempts = 0;
+
+//   const unsigned int max_canflip_calls = 100; // Limit the number of calls to canFlip
+//   unsigned int canflip_calls = 0;
+
+//   while (attempts < max_attempts)
+//   {
+//     unsigned int index1 = (int_sol[MooseRandom::randl() % int_sol.size()] == 0)
+//                               ? indices_0[MooseRandom::randl() % indices_0.size()]
+//                               : indices_1[MooseRandom::randl() % indices_1.size()];
+
+//     unsigned int index2 = (int_sol[index1] == 0)
+//                               ? indices_1[MooseRandom::randl() % indices_1.size()]
+//                               : indices_0[MooseRandom::randl() % indices_0.size()];
+
+//     // Flip the values at the chosen indices
+//     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
+//     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
+
+//     // if (_constraints->shouldCheckDensity())
+//     // {
+//     //   bool improvedDensity = true;
+//     //   for (int cellType : {0, 1}) // Assuming only two cell types for simplicity
+//     //   {
+//     //     if (!_constraints->checkDensityImprovement(int_sol, int_neigh, cellType, dimension))
+//     //     {
+//     //       improvedDensity = false;
+//     //       int_neigh[index1] = int_sol[index1];
+//     //       int_neigh[index2] = int_sol[index2];
+//     //       break;
+//     //     }
+//     //   }
+//     // }
+
+//     if (_check_density)
+//     {
+//       bool improved_density = true;
+//       for (int cell_type : {0, 1}) // Assuming only two cell types for simplicity
+//       {
+//         Real current_density = computeBoundingBoxDensity(int_sol, cell_type, _dimension);
+//         Real new_density = computeBoundingBoxDensity(int_neigh, cell_type, _dimension);
+
+//         if (new_density < current_density)
+//         {
+//           improved_density = false;
+//           int_neigh[index1] = int_sol[index1];
+//           int_neigh[index2] = int_sol[index2];
+//           break;
+//         }
+//       }
+//     }
+
+//     // Check if the new configuration is valid
+//     if (canFlip(int_sol, index1, index2, _elem_neighbors))
+//     {
+//       break; // Exit the loop if a valid configuration is found
+//     }
+//     else
+//     {
+//       // If not valid, revert the changes and try again
+//       int_neigh[index1] = int_sol[index1];
+//       int_neigh[index2] = int_sol[index2];
+//       attempts++;
+
+//       canflip_calls++;
+//       if (canflip_calls >= max_canflip_calls)
+//       {
+//         break; // Exit the loop if we've called canFlip too many times
+//       }
+//     }
+//   }
+// }
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   std::cout << "Entering createNeigborInt" << std::endl;
+
+//   int_neigh = int_sol; // Start with a copy of the current solution
+
+//   // Create lists of indices for 0s and 1s
+//   std::vector<unsigned int> indices_0;
+//   std::vector<unsigned int> indices_1;
+
+//   for (unsigned int i = 0; i < int_sol.size(); ++i)
+//   {
+//     if (int_sol[i] == 0)
+//     {
+//       indices_0.push_back(i);
+//     }
+//     else
+//     {
+//       indices_1.push_back(i);
+//     }
+//   }
+
+//   // Ensure there are cells of both types to flip
+//   if (indices_0.empty() || indices_1.empty())
+//   {
+//     std::cout << "No cells of one type to flip. Exiting createNeigborInt early." << std::endl;
+//     return;
+//   }
+
+//   const unsigned int MAX_ATTEMPTS = 10; // Limit the number of flip attempts
+//   unsigned int attempts = 0;
+
+//   while (attempts < MAX_ATTEMPTS)
+//   {
+//     std::cout << "Attempt: " << attempts << std::endl;
+
+//     unsigned int index1 = (int_sol[MooseRandom::randl() % int_sol.size()] == 0)
+//                               ? indices_0[MooseRandom::randl() % indices_0.size()]
+//                               : indices_1[MooseRandom::randl() % indices_1.size()];
+
+//     unsigned int index2 = (int_sol[index1] == 0)
+//                               ? indices_1[MooseRandom::randl() % indices_1.size()]
+//                               : indices_0[MooseRandom::randl() % indices_0.size()];
+
+//     // Flip the values at the chosen indices
+//     int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
+//     int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
+
+//     // Check if the new configuration is valid
+//     if (canFlip(int_sol, index1, index2, _elem_neighbors))
+//     {
+//       std::cout << "Valid flip found. Exiting loop." << std::endl;
+//       break; // Exit the loop if a valid configuration is found
+//     }
+//     else
+//     {
+//       // If not valid, revert the changes and try again
+//       int_neigh[index1] = int_sol[index1];
+//       int_neigh[index2] = int_sol[index2];
+//       attempts++;
+//     }
+//   }
+
+//   std::cout << "Exiting createNeigborInt" << std::endl;
+// }
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   int_neigh = int_sol; // Start with a copy of the current solution
+
+// std::vector<unsigned int> indices_0;
+// std::vector<unsigned int> indices_1;
+
+//   for (unsigned int i = 0; i < int_sol.size(); ++i)
+//   {
+//     if (int_sol[i] == 0)
+//     {
+//       indices_0.push_back(i);
+//     }
+//     else
+//     {
+//       indices_1.push_back(i);
+//     }
+//   }
+
+//   unsigned int index1 = (int_sol[MooseRandom::randl() % int_sol.size()] == 0)
+//                             ? indices_0[MooseRandom::randl() % indices_0.size()]
+//                             : indices_1[MooseRandom::randl() % indices_1.size()];
+
+//   unsigned int index2 = (int_sol[index1] == 0) ? indices_1[MooseRandom::randl() %
+//   indices_1.size()]
+//                                                : indices_0[MooseRandom::randl() %
+//                                                indices_0.size()];
+
+//   // unsigned int index1 = MooseRandom::randl() % int_sol.size();
+//   // unsigned int index2;
+
+//   // Ensure index2 is different from index1 and that it has the opposite value
+//   do
+//   {
+//     index2 = MooseRandom::randl() % int_sol.size();
+//   } while (index2 == index1 || int_sol[index2] == int_sol[index1]);
+
+//   // Flip the values at the chosen indices
+//   int_neigh[index1] = (int_neigh[index1] == 1) ? 0 : 1;
+//   int_neigh[index2] = (int_neigh[index2] == 1) ? 0 : 1;
+
+//   // Check if the new configuration is valid
+//   if (!canFlip(int_sol, index1, int_neigh[index1], _elem_neighbors) ||
+//       !canFlip(int_sol, index2, int_neigh[index2], _elem_neighbors))
+//   {
+//     // If not valid, revert the changes
+//     int_neigh[index1] = int_sol[index1];
+//     int_neigh[index2] = int_sol[index2];
+//   }
+// }
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   if (_int_size == 0)
+//   {
+//     int_neigh = {};
+//     return;
+//   }
+
+//   int_neigh = int_sol;
+//   int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+//   int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+//   unsigned int index;
+//   int attempts = 0;
+//   const int MAX_ATTEMPTS = 10;
+
+//   do
+//   {
+//     index = chooseBoundaryElement(_elem_neighbors, int_neigh);
+//     int new_val;
+//     do
+//     {
+//       new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+//     } while (new_val == int_neigh[index] ||
+//              std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+//                  exclude_values.end());
+
+//     int_neigh[index] = new_val;
+
+//     attempts++;
+//   } while ((isClusterRegular(int_neigh, 0) && isClusterRegular(int_neigh, 1)) == false &&
+//            attempts < MAX_ATTEMPTS);
+
+//   if (attempts == MAX_ATTEMPTS)
+//   {
+//     int_neigh = int_sol; // Revert to original if no valid neighbor found after max attempts
+//   }
+
+//   // Check if all possible values are in the new solution
+//   std::vector<bool> hasValue(max_value - min_value + 1, false);
+//   for (unsigned int i = 0; i < _int_size; ++i)
+//   {
+//     hasValue[int_neigh[i] - min_value] = true;
+//   }
+
+//   // If any value is missing (and not in exclude_values), insert it at a random position
+//   for (int i = 0; i <= max_value - min_value; ++i)
+//   {
+//     if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value)
+//     ==
+//                             exclude_values.end())
+//     {
+//       int random_index;
+//       // Find a random index whose value is not in exclude_values and satisfies constraints
+//       do
+//       {
+//         random_index = MooseRandom::randl() % _int_size;
+//       } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index])
+//       !=
+//                exclude_values.end());
+
+//       int_neigh[random_index] = i + min_value;
+//       break;
+//     }
+//   }
+// }
+
+Real
+SimulatedAnnealingAlgorithm::acceptProbability(Real curr_obj, Real neigh_obj, Real curr_temp) const
+{
+
+  // Metropolis criterion
+  Real delta_obj = neigh_obj - curr_obj;
+  Real aprob;
+  if (-delta_obj / curr_temp <= -700.0)
+    aprob = 0.0;
+  else if (-delta_obj / curr_temp >= 700.0)
+    aprob = 1.0;
+  else
+    // aprob = std::exp(-delta_obj / curr_temp);
+    aprob = std::exp(-delta_obj / curr_temp);
+
+  if (delta_obj <= 0.0)
+    aprob = 1.0;
+
+  if (std::isnan(aprob))
+    aprob = 0.0;
+  return aprob;
+}
+
+void
+SimulatedAnnealingAlgorithm::setValidReassignmentOptions(const std::set<int> & options)
+{
+  if (options.size() == 0)
+    mooseError("Empty set of options");
+  _valid_options.clear();
+  _valid_options.resize(options.size());
+  unsigned int j = 0;
+  for (auto & p : options)
+    _valid_options[j++] = p;
+}
+
+void
+SimulatedAnnealingAlgorithm::setLowerLimits(const std::vector<Real> & lower_limits)
+{
+  _lower_limit_provided = true;
+  _parameter_lower_limit = lower_limits;
+  if (_parameter_lower_limit.size() != _real_size)
+    mooseError("Lower limits has incorrect size");
+}
+
+void
+SimulatedAnnealingAlgorithm::setUpperLimits(const std::vector<Real> & upper_limits)
+{
+  _upper_limit_provided = true;
+  _parameter_upper_limit = upper_limits;
+  if (_parameter_upper_limit.size() != _real_size)
+    mooseError("Upper limits has incorrect size");
+}
+
+// Muller & Marsaglia (‘Normalized Gaussians’)
+void
+SimulatedAnnealingAlgorithm::randomDirection(unsigned int size, std::vector<Real> & direction) const
+{
+  direction.resize(size);
+
+  // set direction to a vector normally distributed random variables
+  for (unsigned int j = 0; j < size; ++j)
+    direction[j] = MooseRandom::randNormal(0.0, 1.0);
+
+  // compute the norm of direction
+  Real norm = 0.0;
+  for (auto & p : direction)
+    norm += p * p;
+  norm = std::sqrt(norm);
+
+  // normalize
+  for (unsigned int j = 0; j < size; ++j)
+    direction[j] /= norm;
+}
+
+std::vector<int>
+SimulatedAnnealingAlgorithm::getNeighbors(const std::map<int, std::vector<int>> & neighbors_map,
+                                          const int target_elem_id) const
+{
+  // If the element exists in the map, return its neighbors; otherwise, return an empty vector.
+  if (neighbors_map.find(target_elem_id) != neighbors_map.end())
+  {
+    return neighbors_map.at(target_elem_id);
+  }
+  else
+  {
+    return std::vector<int>();
+  }
+}
+
+unsigned int
+SimulatedAnnealingAlgorithm::countEnclaves(
+    const std::vector<int> & int_vec,
+    int value,
+    const std::map<int, std::vector<int>> & neighbors_map) const
+{
+  std::vector<int> visited(int_vec.size(), 0);
+  unsigned int regions = 0;
+  unsigned int max_regions = (value == 0) ? 2 : 1;
+
+  // std::cout << "Starting countEnclaves for value: " << value << "\n";
+
+  for (unsigned int i = 0; i < int_vec.size() && regions <= max_regions; ++i)
+  {
+    if (int_vec[i] == value && visited[i] == 0)
+    {
+      // std::cout << "Found a new region at index: " << i << "\n";
+
+      std::queue<int> queue;
+      queue.push(i);
+      visited[i] = 1;
+      regions++;
+
+      if (regions > max_regions)
+      {
+        // std::cout << "Regions exceeded max allowed regions. Exiting...\n";
+        return regions;
+      }
+
+      while (!queue.empty())
+      {
+        int current = queue.front();
+        queue.pop();
+
+        for (int neighbor : getNeighbors(neighbors_map, current))
+        {
+          if (int_vec[neighbor] == value && visited[neighbor] == 0)
+          {
+            queue.push(neighbor);
+            visited[neighbor] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  // std::cout << "Total regions for value " << value << ": " << regions << "\n";
+  return regions;
+}
+
+// bool
+// SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_vec,
+//                                      unsigned int index1,
+//                                      unsigned int index2,
+//                                      const std::map<int, std::vector<int>> & neighborsMap)
+//                                      const
+// {
+//   // std::cout << "Entering canFlip" << std::endl;
+
+//   std::vector<int> testVec = int_vec;
+//   testVec[index1] = (testVec[index1] == 1) ? 0 : 1;
+//   testVec[index2] = (testVec[index2] == 1) ? 0 : 1;
+
+//   unsigned int count0 = countEnclaves(testVec, 0, neighborsMap);
+//   unsigned int count1 = countEnclaves(testVec, 1, neighborsMap);
+
+//   // std::cout << "Current counts - 0s: " << count0 << ", 1s: " << count1 << std::endl;
+
+//   if (count0 > 2 || count1 > 1)
+//   {
+//     // std::cout << "Exiting canFlip with result: false" << std::endl;
+//     return false;
+//   }
+
+//   // std::cout << "Exiting canFlip with result: true" << std::endl;
+//   return true;
+// }
+
+bool
+SimulatedAnnealingAlgorithm::canFlip(
+    const std::vector<int> & int_sol,
+    const std::vector<int> & int_neigh,
+    const std::map<int, std::vector<unsigned int>> & material_indices,
+    const unsigned int index1,
+    const unsigned int index2,
+    const std::map<int, std::vector<int>> & neighbors_map) const
+{
+
+  // Check the boundary constraints
+  if (_check_boundaries)
+  {
+    if (!checkConstraints(int_neigh, neighbors_map))
+      return false;
+  }
+
+  // Now, check the previous constraints regarding the number of enclaves
+  // Assuming you have a method to count enclaves for a given material
+  if (_check_enclaves)
+  {
+    for (const auto & [material, indices] : material_indices)
+    {
+      // unsigned int enclave_count = countEnclaves(int_neigh, material, neighbors_map);
+      unsigned int count0 = countEnclaves(int_neigh, 0, neighbors_map);
+      unsigned int count1 = countEnclaves(int_neigh, 1, neighbors_map);
+      if (count0 > 2 || count1 > 1)
+        // Adjust the condition based on the allowed number of enclaves for each material
+        // if (enclave_count > /* some threshold based on material */)
+        return false;
+    }
+  }
+
+  // Check density improvement
+  if (_check_density)
+  {
+    bool improved_density = true;
+    for (const auto & [material, indices] : material_indices)
+    {
+      Real current_density = computeBoundingBoxDensity(int_sol, material, _dimension);
+      Real new_density = computeBoundingBoxDensity(int_neigh, material, _dimension);
+
+      if (new_density < current_density)
+      {
+        improved_density = false;
+        break;
+      }
+    }
+
+    if (!improved_density)
+    {
+      return false; // Skip the rest of the method iteration
+    }
+  }
+
+  // // Now, check the previous constraints regarding the number of enclaves
+  // if (_check_enclaves)
+  // {
+  //   unsigned int count0 = countEnclaves(int_neigh, 0, neighbors_map);
+  //   unsigned int count1 = countEnclaves(int_neigh, 1, neighbors_map);
+
+  //   if (count0 > 2 || count1 > 1)
+  //     return false;
+  // }
+
+  return true;
+}
+
+bool
+SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_sol,
+                                     const unsigned int & index,
+                                     const std::vector<int> & unique_material_ids,
+                                     const int & new_val,
+                                     const std::map<int, std::vector<int>> & neighbors_map) const
+{
+  // Create a test vector with the proposed flip
+  std::vector<int> testVec = int_sol;
+  testVec[index] = new_val;
+
+  // Check density improvement
+  if (_check_density)
+  {
+    bool improved_density = true;
+    for (const auto & material : unique_material_ids)
+    {
+      Real current_density = computeBoundingBoxDensity(int_sol, material, _dimension);
+      Real new_density = computeBoundingBoxDensity(testVec, material, _dimension);
+
+      if (new_density < current_density)
+      {
+        improved_density = false;
+        break;
+      }
+    }
+
+    if (!improved_density)
+    {
+      return false; // Skip the rest of the method iteration
+    }
+  }
+
+  // First, check the new constraints using checkConstraints
+  if (_check_boundaries)
+  {
+    if (!checkConstraints(testVec, neighbors_map))
+      return false;
+  }
+
+  // Now, check the previous constraints regarding the number of enclaves
+  if (_check_enclaves)
+  {
+    unsigned int count0 = countEnclaves(testVec, 0, neighbors_map);
+    unsigned int count1 = countEnclaves(testVec, 1, neighbors_map);
+
+    if (count0 > 2 || count1 > 1)
+      return false;
+  }
+
+  // Add other constraints as necessary
+
+  // // Check if the new value is valid based on neighbors or other constraints
+  // // For this example, I'll assume that the new value shouldn't be the same as any of its neighbors
+  // for (int neighbor_index : neighbors_map.at(index))
+  // {
+  //   if (testVec[neighbor_index] == new_val)
+  //   {
+  //     return false; // The new value is the same as one of its neighbors
+  //   }
+  // }
+
+  return true; // The flip is valid
+}
+
+// bool
+// SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_vec,
+//                                      unsigned int index1,
+//                                      unsigned int index2,
+//                                      const std::map<int, std::vector<int>> & neighbors_map) const
+// {
+//   std::vector<int> testVec = int_vec;
+
+//   testVec[index1] = (testVec[index1] == 1) ? 0 : 1;
+//   testVec[index2] = (testVec[index2] == 1) ? 0 : 1;
+
+//   // First, check the new constraints
+//   if (_check_boundaries)
+//   {
+//     if (!checkConstraints(testVec, neighbors_map))
+//       return false;
+//   }
+//   // Now, check the previous constraints regarding the number of enclaves
+//   if (_check_enclaves)
+//   {
+//     unsigned int count0 = countEnclaves(testVec, 0, neighbors_map);
+//     unsigned int count1 = countEnclaves(testVec, 1, neighbors_map);
+
+//     if (count0 > 2 || count1 > 1)
+//       return false;
+//   }
+
+//   return true;
+// }
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   if (_int_size == 0)
+//   {
+//     int_neigh = {};
+//     return;
+//   }
+
+//   unsigned int index;
+//   int_neigh = int_sol;
+
+//   int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+//   int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+//   const int MAX_TOTAL_ATTEMPTS = 1000; // Adjust as necessary
+//   int totalAttempts = 0;
+
+//   // Find a random index whose value is not in exclude_values
+//   do
+//   {
+//     index = MooseRandom::randl() % _int_size;
+//     totalAttempts++;
+//   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+//                exclude_values.end() &&
+//            totalAttempts < MAX_TOTAL_ATTEMPTS);
+
+//   if (totalAttempts >= MAX_TOTAL_ATTEMPTS)
+//   {
+//     int_neigh = int_sol;
+//     return;
+//   }
+
+//   int new_val;
+//   const int max_failed_attempts = 100;
+//   int failed_attempts = 0;
+
+//   do
+//   {
+//     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+//     if (!canFlip(int_neigh, index, new_val, _elem_neighbors))
+//     {
+//       failed_attempts++;
+//     }
+//     else
+//     {
+//       failed_attempts = 0;
+//     }
+//     totalAttempts++;
+//   } while (!canFlip(int_neigh, index, new_val, _elem_neighbors) &&
+//            failed_attempts < max_failed_attempts && totalAttempts < MAX_TOTAL_ATTEMPTS);
+
+//   if (failed_attempts >= max_failed_attempts || totalAttempts >= MAX_TOTAL_ATTEMPTS)
+//   {
+//     int_neigh = int_sol;
+//     return;
+//   }
+//   else
+//   {
+//     int_neigh[index] = new_val;
+//   }
+
+//   // int_neigh[index] = new_val;
+
+//   // Check if all possible values are in the new solution
+//   std::vector<bool> hasValue(max_value - min_value + 1, false);
+//   for (unsigned int i = 0; i < _int_size; ++i)
+//   {
+//     hasValue[int_neigh[i] - min_value] = true;
+//   }
+
+//   // If any value is missing (and not in exclude_values), insert it at a random position
+//   for (int i = 0; i <= max_value - min_value; ++i)
+//   {
+//     if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value)
+//     ==
+//                             exclude_values.end())
+//     {
+//       int random_index;
+//       // Find a random index whose value is not in exclude_values and satisfies constraints
+//       do
+//       {
+//         random_index = MooseRandom::randl() % _int_size;
+//       } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index])
+//       !=
+//                    exclude_values.end() ||
+//                !canFlip(int_neigh, random_index, i + min_value, _elem_neighbors));
+
+//       int_neigh[random_index] = i + min_value;
+//       break;
+//     }
+//   }
+// }
+
+// int
+// SimulatedAnnealingAlgorithm::chooseBoundaryElement(
+//     const std::map<int, std::vector<int>> & neighborsMap, const std::vector<int> & int_sol) const
+// {
+//   std::vector<int> boundaryElements;
+
+//   for (int i = 0; i < int_sol.size(); i++)
+//   {
+//     std::vector<int> neighbors = getNeighbors(neighborsMap, i);
+//     for (int neighbor : neighbors)
+//     {
+//       if (int_sol[neighbor] != int_sol[i])
+//       {
+//         boundaryElements.push_back(i);
+//         break;
+//       }
+//     }
+//   }
+
+//   if (boundaryElements.empty())
+//   {
+//     return MooseRandom::randl() % int_sol.size(); // fallback to a random element
+//   }
+
+//   // Choose a random boundary element
+//   return boundaryElements[MooseRandom::randl() % boundaryElements.size()];
+// }
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   if (_int_size == 0)
+//   {
+//     int_neigh = {};
+//     return;
+//   }
+
+//   unsigned int index;
+//   int_neigh = int_sol;
+
+//   int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+//   int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+//   // Find a random index whose value is not in exclude_values
+//   do
+//   {
+//     index = MooseRandom::randl() % _int_size;
+//   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+//            exclude_values.end());
+
+//   int new_val;
+//   const int max_failed_attempts = 100;
+//   int failed_attempts = 0;
+
+//   do
+//   {
+//     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+//     if (!canFlip(int_neigh, index, new_val, _elem_neighbors))
+//     {
+//       failed_attempts++;
+//     }
+//     else
+//     {
+//       failed_attempts = 0;
+//     }
+//   } while (!canFlip(int_neigh, index, new_val, _elem_neighbors) &&
+//            failed_attempts < max_failed_attempts);
+
+//   if (failed_attempts >= max_failed_attempts)
+//   {
+//     int_neigh = int_sol;
+//   }
+//   else
+//   {
+//     int_neigh[index] = new_val;
+//   }
+
+//   // Check if all possible values are in the new solution
+//   std::vector<bool> hasValue(max_value - min_value + 1, false);
+//   for (unsigned int i = 0; i < _int_size; ++i)
+//   {
+//     hasValue[int_neigh[i] - min_value] = true;
+//   }
+
+//   for (int i = 0; i <= max_value - min_value; ++i)
+//   {
+//     if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value)
+//     ==
+//                             exclude_values.end())
+//     {
+//       int random_index;
+//       do
+//       {
+//         random_index = MooseRandom::randl() % _int_size;
+//       } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index])
+//       !=
+//                    exclude_values.end() ||
+//                !canFlip(int_neigh, random_index, i + min_value, _elem_neighbors));
+
+//       int_neigh[random_index] = i + min_value;
+//       break;
+//     }
+//   }
+// }
+
+// bool
+// SimulatedAnnealingAlgorithm::isValid(const std::vector<std::vector<int>> & grid) const
+// {
+
+//   // Nick's function converted from Fortran
+
+//   int size_in = grid.size();
+//   int n_fuel = static_cast<int>(round(size_in * size_in * 0.57702722208));
+
+//   // 1. Check if the left and top sides have some fuel touching
+//   if (std::accumulate(grid.begin(),
+//                       grid.end(),
+//                       0,
+//                       [](int sum, const std::vector<int> & row) { return sum + row[0]; }) <= 0 ||
+//       std::accumulate(grid[0].begin(), grid[0].end(), 0) <= 0)
+//   {
+//     return false;
+//   }
+
+//   // 2. Ensure the bottom and right sides don't have any fuel touching
+//   if (std::accumulate(grid.begin(),
+//                       grid.end(),
+//                       0,
+//                       [](int sum, const std::vector<int> & row) { return sum + row.back(); }) > 0
+//                       ||
+//       std::accumulate(grid.back().begin(), grid.back().end(), 0) > 0)
+//   {
+//     return false;
+//   }
+
+//   // 3. Check that the main fuel enclave is continuous
+
+//   const int MAX_ITERATIONS = 100; // Adjust as necessary
+//   int iterations = 0;
+
+//   std::vector<std::vector<int>> main_enc(size_in, std::vector<int>(size_in, 0));
+//   int i = 0;
+//   while (i < size_in && grid[i][0] != 1)
+//   {
+//     i++;
+//   }
+//   if (i >= size_in)
+//   {
+//     return false; // Not a valid location
+//   }
+//   main_enc[i][0] = 1;
+//   int enc_count = 0;
+//   int prev_enc_count;
+//   do
+//   {
+//     prev_enc_count = enc_count;
+//     enc_count = 0;
+//     for (int i = 0; i < size_in; ++i)
+//     {
+//       for (int j = 0; j < size_in; ++j)
+//       {
+//         if (grid[i][j] == 1)
+//         {
+//           if (i > 0 && main_enc[i - 1][j] == 1)
+//             main_enc[i][j] = 1;
+//           if (i < size_in - 1 && main_enc[i + 1][j] == 1)
+//             main_enc[i][j] = 1;
+//           if (j > 0 && main_enc[i][j - 1] == 1)
+//             main_enc[i][j] = 1;
+//           if (j < size_in - 1 && main_enc[i][j + 1] == 1)
+//             main_enc[i][j] = 1;
+//         }
+//         if (main_enc[i][j] == 1)
+//         {
+//           enc_count++;
+//         }
+//       }
+//     }
+//   } while (enc_count != prev_enc_count && iterations < MAX_ITERATIONS);
+//   if (enc_count != n_fuel)
+//   {
+//     return false;
+//   }
+
+//   // Reset for the water enclave:
+//   iterations = 0;
+
+//   // 4. Ensure there are no more than two total water enclaves
+//   main_enc = std::vector<std::vector<int>>(size_in, std::vector<int>(size_in, 0));
+//   for (int i = 0; i < size_in; ++i)
+//   {
+//     main_enc[i][size_in - 1] = 1; // Right boundary
+//     main_enc[size_in - 1][i] = 1; // Bottom boundary
+//   }
+
+//   enc_count = 0;
+//   prev_enc_count = -1;
+//   do
+//   {
+//     prev_enc_count = enc_count;
+//     enc_count = 0;
+//     for (int i = 0; i < size_in; ++i)
+//     {
+//       for (int j = 0; j < size_in; ++j)
+//       {
+//         if (grid[i][j] == 0)
+//         {
+//           if (i > 0 && main_enc[i - 1][j] == 1)
+//             main_enc[i][j] = 1;
+//           if (i < size_in - 1 && main_enc[i + 1][j] == 1)
+//             main_enc[i][j] = 1;
+//           if (j > 0 && main_enc[i][j - 1] == 1)
+//             main_enc[i][j] = 1;
+//           if (j < size_in - 1 && main_enc[i][j + 1] == 1)
+//             main_enc[i][j] = 1;
+//         }
+//         if (main_enc[i][j] == 1)
+//         {
+//           enc_count++;
+//         }
+//       }
+//     }
+//   } while (enc_count != prev_enc_count && iterations < MAX_ITERATIONS);
+
+//   int tot_count = enc_count;
+//   if (grid[0][0] == 0)
+//   { // If there's another enclave starting at 1,1
+//     main_enc = std::vector<std::vector<int>>(size_in, std::vector<int>(size_in, 0));
+//     main_enc[0][0] = 1;
+
+//     enc_count = 0;
+//     prev_enc_count = -1;
+
+//     // Reset :
+//     iterations = 0;
+
+//     do
+//     {
+//       prev_enc_count = enc_count;
+//       enc_count = 0;
+//       for (int i = 0; i < size_in; ++i)
+//       {
+//         for (int j = 0; j < size_in; ++j)
+//         {
+//           if (grid[i][j] == 0)
+//           {
+//             if (i > 0 && main_enc[i - 1][j] == 1)
+//               main_enc[i][j] = 1;
+//             if (i < size_in - 1 && main_enc[i + 1][j] == 1)
+//               main_enc[i][j] = 1;
+//             if (j > 0 && main_enc[i][j - 1] == 1)
+//               main_enc[i][j] = 1;
+//             if (j < size_in - 1 && main_enc[i][j + 1] == 1)
+//               main_enc[i][j] = 1;
+//           }
+//           if (main_enc[i][j] == 1)
+//           {
+//             enc_count++;
+//           }
+//         }
+//       }
+//     } while (enc_count != prev_enc_count && iterations < MAX_ITERATIONS);
+//     tot_count += enc_count;
+//   }
+
+//   if (tot_count != size_in * size_in - n_fuel)
+//   {
+//     return false;
+//   }
+
+//   return true;
+// }
+
+bool
+SimulatedAnnealingAlgorithm::checkConstraints(
+    const std::vector<int> & int_vec, const std::map<int, std::vector<int>> & neighborsMap) const
+{
+
+  unsigned int grid_size = static_cast<unsigned int>(sqrt(int_vec.size()));
+  unsigned int cube_length = static_cast<unsigned int>(cbrt(int_vec.size()));
+
+  auto idx3D = [&](unsigned int x, unsigned int y, unsigned int z) -> unsigned int
+  { return (cube_length - 1 - z) * cube_length * cube_length + y * cube_length + x; };
+
+  // // Check if the bottom-right corner has a 0s region
+  // if (int_vec[(grid_size - 1) * grid_size + (grid_size - 1)] != 0)
+  // {
+  //   return false; // Constraint not met
+  // }
+
+  // // Check if the bottom boundary has fuel touching
+  // for (unsigned int j = 0; j < grid_size; ++j)
+  // {
+  //   if (int_vec[(grid_size - 1) * grid_size + j] != 1)
+  //   {
+  //     return false; // Constraint not met
+  //   }
+  // }
+
+  // // Check if the right boundary has fuel touching
+  // for (unsigned int i = 0; i < grid_size; ++i)
+  // {
+  //   if (int_vec[i * grid_size + (grid_size - 1)] != 1)
+  //   {
+  //     return false; // Constraint not met
+  //   }
+  // }
+
+  // // Ensure the top boundary doesn't have any fuel touching
+  // for (unsigned int j = 0; j < grid_size; ++j)
+  // {
+  //   if (int_vec[j] == 1)
+  //   {
+  //     return false; // Constraint not met
+  //   }
+  // }
+
+  // // Ensure the left boundary doesn't have any fuel touching
+  // for (unsigned int i = 0; i < grid_size; ++i)
+  // {
+  //   if (int_vec[i * grid_size] == 1)
+  //   {
+  //     return false; // Constraint not met
+  //   }
+  // }
+  if (_dimension == 2)
+  {
+    // bool zerosAtBottomLeft = (int_vec[(grid_size - 1) * grid_size] == 0);
+    // if (!zerosAtBottomLeft)
+    //   return false;
+
+    bool fuelTouchesBottom = false;
+    bool fuelTouchesLeft = false;
+    for (unsigned int i = 0; i < grid_size; ++i)
+    {
+      if (int_vec[(grid_size - 1) * grid_size + i] == 1)
+        fuelTouchesBottom = true;
+      if (int_vec[i * grid_size] == 1)
+        fuelTouchesLeft = true;
+    }
+    if (!fuelTouchesBottom || !fuelTouchesLeft)
+      return false;
+
+    bool fuelTouchesTop = false;
+    bool fuelTouchesRight = false;
+    for (unsigned int i = 0; i < grid_size; ++i)
+    {
+      if (int_vec[i] == 1)
+        fuelTouchesTop = true;
+      if (int_vec[i * grid_size + (grid_size - 1)] == 1)
+        fuelTouchesRight = true;
+    }
+    if (fuelTouchesTop || fuelTouchesRight)
+      return false;
+  }
+
+  else if (_dimension == 3)
+  {
+
+    bool zerosAtBottomLeft = true;
+
+    for (unsigned int z = 0; z < cube_length; ++z)
+    {
+      if (int_vec[idx3D(0, cube_length - 1, z)] !=
+          0) // (0, cube_length - 1) denotes the bottom-left in each layer
+      {
+        zerosAtBottomLeft = false;
+        break;
+      }
+    }
+
+    if (!zerosAtBottomLeft)
+      return false;
+
+    bool westFaceTouched = false;
+    bool southFaceTouched = false;
+
+    // West Face
+    for (unsigned int z = 0; z < cube_length; ++z)
+    {
+      for (unsigned int y = 0; y < cube_length; ++y)
+      {
+        if (int_vec[idx3D(0, y, z)] == 1)
+        {
+          westFaceTouched = true;
+          break; // Move to the next layer
+        }
+      }
+      if (westFaceTouched)
+        break; // Exit the outer loop if constraint met
+    }
+
+    // South Face (touching 1s)
+    for (unsigned int z = 0; z < cube_length; ++z)
+    {
+      for (unsigned int x = 0; x < cube_length; ++x)
+      {
+        if (int_vec[idx3D(x, cube_length - 1, z)] == 1)
+        {
+          southFaceTouched = true;
+          break; // Move to the next layer
+        }
+      }
+      if (southFaceTouched)
+        break; // Exit the outer loop if constraint met
+    }
+
+    // Top Face (all 0s)
+    for (unsigned int z = 0; z < cube_length; ++z)
+    {
+      for (unsigned int x = 0; x < cube_length; ++x)
+      {
+        if (int_vec[idx3D(x, 0, z)] != 0)
+        {
+          return false; // Constraint not met
+        }
+      }
+    }
+
+    // Right Face
+    for (unsigned int z = 0; z < cube_length; ++z)
+    {
+      for (unsigned int y = 0; y < cube_length; ++y)
+      {
+        if (int_vec[idx3D(cube_length - 1, y, z)] != 0)
+        {
+          return false; // Constraint not met
+        }
+      }
+    }
+
+    // After all constraints are checked
+    return westFaceTouched && southFaceTouched;
+  }
+
+  // 3. Check that the main fuel enclave is continuous
+  // Using BFS for this purpose
+  std::vector<bool> visited(int_vec.size(), false);
+  std::queue<int> queue;
+  int start_fuel_index =
+      std::find(int_vec.begin(), int_vec.end(), 1) - int_vec.begin(); // Find the first fuel cell
+  queue.push(start_fuel_index);
+  visited[start_fuel_index] = true;
+
+  while (!queue.empty())
+  {
+    int current = queue.front();
+    queue.pop();
+    for (int neighbor : neighborsMap.at(current))
+    {
+      if (int_vec[neighbor] == 1 && !visited[neighbor])
+      {
+        queue.push(neighbor);
+        visited[neighbor] = true;
+      }
+    }
+  }
+
+  // If any fuel cell is not visited, then the enclave is not continuous
+  for (unsigned int i = 0; i < int_vec.size(); ++i)
+  {
+    if (int_vec[i] == 1 && !visited[i])
+      return false;
+  }
+
+  return true;
+}
+
+Real
+SimulatedAnnealingAlgorithm::computeBoundingBoxDensity(const std::vector<int> & int_vec,
+                                                       int cell_type,
+                                                       unsigned int dimension) const
+{
+  unsigned int grid_size = static_cast<unsigned int>(pow(int_vec.size(), 1.0 / dimension));
+
+  unsigned int min_i = grid_size, max_i = 0;
+  unsigned int min_j = grid_size, max_j = 0;
+  unsigned int min_k = grid_size, max_k = 0; // For 3D
+  unsigned int cell_count = 0;
+
+  for (unsigned int i = 0; i < grid_size; ++i)
+  {
+    for (unsigned int j = 0; j < grid_size; ++j)
+    {
+      for (unsigned int k = 0; k < (dimension == 3 ? grid_size : 1); ++k) // Loop only once for 2D
+      {
+        unsigned int index;
+        if (dimension == 2)
+        {
+          index = i * grid_size + j;
+        }
+        else // 3D
+        {
+          index = i * grid_size * grid_size + j * grid_size + k;
+        }
+
+        if (int_vec[index] == cell_type)
+        {
+          min_i = std::min(min_i, i);
+          max_i = std::max(max_i, i);
+          min_j = std::min(min_j, j);
+          max_j = std::max(max_j, j);
+          if (dimension == 3)
+          {
+            min_k = std::min(min_k, k);
+            max_k = std::max(max_k, k);
+          }
+          cell_count++;
+        }
+      }
+    }
+  }
+
+  unsigned int bounding_box_volume;
+  if (dimension == 2)
+  {
+    bounding_box_volume = (max_i - min_i + 1) * (max_j - min_j + 1);
+  }
+  else // 3D
+  {
+    bounding_box_volume = (max_i - min_i + 1) * (max_j - min_j + 1) * (max_k - min_k + 1);
+  }
+
+  if (bounding_box_volume == 0)
+    return 0; // Avoid division by zero
+
+  return static_cast<Real>(cell_count) / bounding_box_volume;
+}
+
+// void
+// SimulatedAnnealingAlgorithm::createNeigborInt(const std::vector<int> & int_sol,
+//                                               std::vector<int> & int_neigh,
+//                                               const std::vector<int> & exclude_values) const
+// {
+//   // One and two values
+//   // if (_int_size == 0)
+//   // {
+//   //   int_neigh = {};
+//   //   return;
+//   // }
+//   // unsigned int index = MooseRandom::randl() % _int_size;
+//   // int_neigh = int_sol;
+//   // // Flip the value at the chosen index (change 1 to 2 or vice versa)
+//   // if (int_neigh[index] == 1)
+//   // {
+//   //   int_neigh[index] = 2;
+//   // }
+//   // else
+//   // {
+//   //   int_neigh[index] = 1;
+//   // }
+
+//   // // Check to make sure the domain contains at least one type of each material
+//   // bool hasOne = false, hasTwo = false;
+//   // for (unsigned int i = 0; i < _int_size; ++i)
+//   // {
+//   //   if (int_neigh[i] == 1)
+//   //   {
+//   //     hasOne = true;
+//   //   }
+//   //   else if (int_neigh[i] == 2)
+//   //   {
+//   //     hasTwo = true;
+//   //   }
+
+//   //   // If both materials are found, break the loop early
+//   //   if (hasOne && hasTwo)
+//   //     break;
+//   // }
+
+//   // // If either material is missing, insert it at a random position
+//   // if (!hasOne || !hasTwo)
+//   // {
+//   //   int_neigh[MooseRandom::randl() % _int_size] = !hasOne ? 1 : 2;
+//   // }
+
+//   ///////////////////////////////////////////////////////////
+//   //// Many vlaues but flipping just one element at a time///
+//   ///////////////////////////////////////////////////////////
+//   if (_int_size == 0)
+//   {
+//     int_neigh = {};
+//     return;
+//   }
+
+//   unsigned int index;
+//   int_neigh = int_sol;
+//   // Get the min and max values from int_sol
+//   int min_value = *std::min_element(int_sol.begin(), int_sol.end());
+//   int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+
+//   // Find a random index whose value is not in exclude_values
+//   do
+//   {
+//     index = MooseRandom::randl() % _int_size;
+//   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+//            exclude_values.end());
+
+//   // Generate a new random value different from the current one and not in exclude_values
+//   int new_val;
+//   do
+//   {
+//     // Adjust the modulus operation to be the size of our desired range (max_value - min_value + 1)
+//     // Add the minimum value, min_value, to shift this range up from starting at 0 to starting at
+//     // our minimum value.
+//     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+//   } while (new_val == int_neigh[index] ||
+//            std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+//                exclude_values.end());
+
+//   int_neigh[index] = new_val;
+
+//   // Check if all possible values are in the new solution
+//   std::vector<bool> hasValue(max_value - min_value + 1, false);
+//   for (unsigned int i = 0; i < _int_size; ++i)
+//   {
+//     hasValue[int_neigh[i] - min_value] = true;
+//   }
+
+//   // If any value is missing (and not in exclude_values), insert it at a random position
+//   for (int i = 0; i <= max_value - min_value; ++i)
+//   {
+//     if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
+//                             exclude_values.end())
+//     {
+//       int random_index;
+//       // Find a random index whose value is not in exclude_values
+//       do
+//       {
+//         random_index = MooseRandom::randl() % _int_size;
+//       } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index])
+//       !=
+//                exclude_values.end());
+
+//       int_neigh[random_index] = i + min_value;
+//       // Assuming the distribution is uniform, we do not need to re-check after inserting
+//       break;
+//     }
+//   }
+
+//   ///////////////////////////////////////////////////////////
+//   ///////// Many vlaues but flipping a lot at a time ////////
+//   ///////////////////////////////////////////////////////////
+//   // if (_int_size == 0)
+//   // {
+//   //   int_neigh = {};
+//   //   return;
+//   // }
+
+//   // Real flip_ratio = 0.50; // Adjust this to the desired flip ratio
+//   // unsigned int num_flips = static_cast<unsigned int>(_int_size * flip_ratio);
+//   // if (num_flips > _int_size)
+//   // {
+//   //   num_flips = _int_size; // ensure we do not try to flip more elements than we have
+//   // }
+
+//   // // Get the min and max values from int_sol
+//   // subdomain_id_type min_value = *std::min_element(int_sol.begin(), int_sol.end());
+//   // subdomain_id_type max_value = *std::max_element(int_sol.begin(), int_sol.end());
+//   // int_neigh = int_sol; // copy the solution into the neighbor
+
+//   // for (unsigned int flip = 0; flip < num_flips; ++flip)
+//   // {
+//   //   unsigned int index;
+//   //   // Find a random index whose value is not in exclude_values
+//   //   do
+//   //   {
+//   //     index = MooseRandom::randl() % _int_size;
+//   //   } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
+//   //            exclude_values.end());
+
+//   //   // Generate a new random value different from the current one and not in exclude_values
+//   //   subdomain_id_type new_val;
+//   //   do
+//   //   {
+//   //     // Adjust the modulus operation to be the size of our desired range (max_value - min_value +
+//   //     // 1) Add the minimum value, min_value, to shift this range up from starting at 0 to starting
+//   //     // at our minimum value.
+//   //     new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
+//   //   } while (new_val == int_neigh[index] ||
+//   //            std::find(exclude_values.begin(), exclude_values.end(), new_val) !=
+//   //                exclude_values.end());
+
+//   //   int_neigh[index] = new_val; // assign the new value
+//   // }
+// }

@@ -352,7 +352,7 @@ input_heat_flux = 40000.0
     optimal_iterations = 20
     iteration_window = 2
   []
-
+  error_on_dtmin = false
   nl_max_its = 30
   nl_abs_tol = 1e-10
 
@@ -371,6 +371,13 @@ input_heat_flux = 40000.0
     functor = Ts
     block = 1
   []
+  [cost_function]
+    pp_names = 'max_Ts'
+    type = ParsedPostprocessor
+    function = 'max_Ts'
+    execute_on = LINEAR
+  []
+
 []
 
 [Outputs]

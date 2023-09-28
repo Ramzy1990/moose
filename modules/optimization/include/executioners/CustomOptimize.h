@@ -9,14 +9,16 @@
 
 #pragma once
 
+// Moose Includes
 #include "Steady.h"
 #include "CustomOptimizeSolve.h"
 
 // System includes
 #include <string>
 
-// Forward declarations
+// Forward Declarations If Any
 class InputParameters;
+class DensityDiscreteConstraint;
 class FEProblemBase;
 
 class CustomOptimize : public Steady
@@ -28,8 +30,19 @@ public:
 
   virtual void execute() override;
 
+  // DensityDiscreteConstraint * getDensityDiscreteConstraint() override
+  // {
+  //   return &_ddc_uo; // Returns address of the ThirdParty object
+  // }
+
   CustomOptimizeSolve & getOptimizeSolve() { return _optim_solve; }
+
+  // could be not needed!
+  const DensityDiscreteConstraint & getDensityConstraint() const { return *_ddc_uo; }
 
 protected:
   CustomOptimizeSolve _optim_solve;
+
+  /// @brief Object of the density constraint class
+  const DensityDiscreteConstraint * _ddc_uo;
 };

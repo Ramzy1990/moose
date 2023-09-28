@@ -16,7 +16,7 @@
 //*****************************
 // Forward Declarations If Any
 //*****************************
-// class DiscreteConstraintsLibrary;
+class DensityDiscreteConstraint;
 
 class CustomOptimizationAlgorithm
 {
@@ -44,7 +44,7 @@ public:
   ///@{ public interface
   void setInitialSolution(const std::vector<Real> & real_sol,
                           const std::vector<int> & int_sol,
-                          const std::vector<int> & execlude_domain,
+                          const std::vector<int> & exclude_materials,
                           const std::map<int, std::vector<int>> & elem_neighbors);
 
   // virtual void setConstraints(DiscreteConstraintsLibrary * constraints)
@@ -56,20 +56,23 @@ public:
 
   void setSeed(unsigned int seed);
 
+  void setDensityDiscreteConstraint(const DensityDiscreteConstraint * ddc) { _ddc_ptr = ddc; }
+
   bool & combinatorialOptimization() { return _combinatorial_optimization; }
   unsigned int & meshDimesnsion() { return _dimension; }
   bool & quarterSymmetry() { return _quarter_symmetry; }
-  bool & checkDensity() { return _check_density; }
-  bool & checkEnclaves() { return _check_enclaves; }
-  bool & checkBoundaries() { return _check_boundaries; }
-  unsigned long int & maxIt() { return _max_its; }
+  bool & checkDensityConstraint() { return _check_density; }
+  bool & checkEnclavesConstraint() { return _check_enclaves; }
+  bool & checkBoundariesConstraint() { return _check_boundaries; }
+  unsigned int & maxIt() { return _max_its; }
   unsigned int & maxRun() { return _num_runs; }
   Real & maxTemp() { return _temp_max; }
   Real & minTemp() { return _temp_min; }
-  unsigned long int & counterIteration() { return _it_counter; }
-  int & counterRun() { return _it_run; }
-  const std::vector<Real> & realSolution() const { return _current_real_solution; }
-  std::vector<int> & intSolution() { return _current_int_solution; }
+  bool & debug() { return _debug_on; }
+  unsigned int & counterIteration() { return _it_counter; }
+  unsigned int & counterRun() { return _it_run; }
+  const std::vector<Real> & realSolution() const { return _current_real_config; }
+  std::vector<int> & intSolution() { return _current_int_config; }
   Real & objective() { return _objective_value; }
   bool & tabu() { return _tabu_used; }
   bool & cache() { return _cache_used; }
@@ -77,8 +80,8 @@ public:
 
   ///@}
 
-  std::vector<int> _current_int_solution;
-  std::vector<int> _execlude_domain;
+  std::vector<int> _current_int_config;
+  std::vector<int> _exclude_materials;
   std::map<int, std::vector<int>> _elem_neighbors;
 
   /// the best (aka min) objective seen so far
@@ -90,6 +93,9 @@ protected:
                             const std::vector<int> & iparams,
                             void * ctx);
   void * _ctx;
+
+  /// @brief pointer to the density discrete constraint object
+  const DensityDiscreteConstraint * _ddc_ptr = nullptr;
 
   /// @brief Flag for if compinatorial_optimization is on or off
   bool _combinatorial_optimization;
@@ -110,7 +116,7 @@ protected:
   bool _check_boundaries;
 
   /// maximum number of steps/iterations
-  unsigned long int _max_its;
+  unsigned int _max_its;
 
   /// maximum number of runs
   unsigned int _num_runs;
@@ -121,11 +127,14 @@ protected:
   /// minimum temperature
   Real _temp_min;
 
+  /// debug flag
+  bool _debug_on;
+
   /// iteration counter
-  unsigned long int _it_counter;
+  unsigned int _it_counter;
 
   /// iteration of multiruns
-  int _it_run;
+  unsigned int _it_run;
 
   /// Tabu list used
   bool _tabu_used;
@@ -140,7 +149,7 @@ protected:
   unsigned int _random_seed;
 
   ///@{ the current solution
-  std::vector<Real> _current_real_solution;
+  std::vector<Real> _current_real_config;
 
   unsigned int _real_size;
   unsigned int _int_size;

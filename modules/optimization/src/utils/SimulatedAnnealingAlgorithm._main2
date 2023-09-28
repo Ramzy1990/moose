@@ -68,13 +68,13 @@ SimulatedAnnealingAlgorithm::solve()
   std::vector<std::pair<Real, std::vector<int>>> best_solutions; // Store best solutions of each
 
   // set initial neighbor & best states
-  std::vector<Real> init_real_solution = _current_real_solution;
-  std::vector<int> init_int_solution = _current_int_solution;
-  std::vector<Real> init_best_real_solution = _current_real_solution;
-  std::vector<int> init_best_int_solution = _current_int_solution;
+  std::vector<Real> init_real_solution = _current_real_configuration;
+  std::vector<int> init_int_solution = _current_int_configuration;
+  std::vector<Real> init_best_real_solution = _current_real_configuration;
+  std::vector<int> init_best_int_solution = _current_int_configuration;
 
   Real current_objective;
-  objectiveFunction(current_objective, _current_real_solution, _current_int_solution, _ctx);
+  objectiveFunction(current_objective, _current_real_configuration, _current_int_configuration, _ctx);
 
   Real initial_objective = current_objective;
   _min_objective = initial_objective; // Initialize the minimum objective
@@ -139,8 +139,8 @@ SimulatedAnnealingAlgorithm::solve()
       // MooseRandom::seed(std::time(0) + _it_counter);
 
       // get a new neighbor and compute energy
-      createNeigborReal(_current_real_solution, neighbor_real_solution);
-      createNeigborInt(_current_int_solution, neighbor_int_solution, _execlude_domain);
+      createNeigborReal(_current_real_configuration, neighbor_real_solution);
+      createNeigborInt(_current_int_configuration, neighbor_int_solution, _execlude_domain);
 
       // Check if neighbor is in Tabu list
       _tabu_used = false;
@@ -172,7 +172,7 @@ SimulatedAnnealingAlgorithm::solve()
       // std::cout << "Here is the current objective value:  " << current_objective << " !\n\n\n";
 
       // Copy the current solution
-      std::vector<int> current_int_solution_copy = _current_int_solution;
+      std::vector<int> current_int_solution_copy = _current_int_configuration;
 
       // acceptance check: lower objective always accepted;
       // acceptance check: lower temps always accepted;
@@ -183,12 +183,12 @@ SimulatedAnnealingAlgorithm::solve()
       {
         // if we accept then it always counts as a new step
         ++_it_counter;
-        _current_real_solution = neighbor_real_solution;
-        _current_int_solution = neighbor_int_solution;
+        _current_real_configuration = neighbor_real_solution;
+        _current_int_configuration = neighbor_int_solution;
         current_objective = neigh_objective;
         _solution_accepted = true;
         // Add the current solution to the Tabu list
-        tabu_list.push_back(_current_int_solution);
+        tabu_list.push_back(_current_int_configuration);
 
         // If the Tabu list is too big, remove the oldest element
         if (tabu_list.size() > max_tabu_size)
@@ -220,8 +220,8 @@ SimulatedAnnealingAlgorithm::solve()
       if (current_objective < _min_objective)
       {
         _min_objective = current_objective;
-        best_real_solution = _current_real_solution;
-        // best_int_solution = _current_int_solution;
+        best_real_solution = _current_real_configuration;
+        // best_int_solution = _current_int_configuration;
         best_int_solution = current_int_solution_copy;
 
         // // Each time you find a better solution, add it to the vector
@@ -247,18 +247,18 @@ SimulatedAnnealingAlgorithm::solve()
       {
         _res_var *= 0.5;
         current_objective = _min_objective;
-        _current_real_solution = best_real_solution;
-        _current_int_solution = best_int_solution;
+        _current_real_configuration = best_real_solution;
+        _current_int_configuration = best_int_solution;
       }
     }
 
     // select the best state we ended up finding
     current_objective = _min_objective;
-    _current_real_solution = best_real_solution;
-    _current_int_solution = best_int_solution;
+    _current_real_configuration = best_real_solution;
+    _current_int_configuration = best_int_solution;
 
     // Add the ultimate best solution to the vector
-    solutions.push_back(std::make_pair(current_objective, _current_int_solution));
+    solutions.push_back(std::make_pair(current_objective, _current_int_configuration));
 
     // // Find the pair with the worst objective value
     // // Here we are using the iterators functionality in C++
@@ -267,7 +267,7 @@ SimulatedAnnealingAlgorithm::solve()
     // // If the current objective is better than the worst stored one, replace it
     if (current_objective < worst_it->first)
     {
-      *worst_it = std::make_pair(current_objective, _current_int_solution);
+      *worst_it = std::make_pair(current_objective, _current_int_configuration);
     }
 
     // Now sort the vector
@@ -275,7 +275,7 @@ SimulatedAnnealingAlgorithm::solve()
 
     std::pair<Real, std::vector<int>> best_pair_one_run = solutions[0];
 
-    // best_solutions.push_back(std::make_pair(_min_objective, _current_int_solution));
+    // best_solutions.push_back(std::make_pair(_min_objective, _current_int_configuration));
     best_solutions.push_back(best_pair_one_run);
     // After each run, sort the best_solutions vector in ascending order of the objective function
     // value

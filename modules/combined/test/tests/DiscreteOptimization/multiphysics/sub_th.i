@@ -1,10 +1,15 @@
-density = .002 # kg cm-3
-cp = 3075 # J kg-1 K-1, 6.15 / 2.0e-3
-k = .005 # W cm-1 K-1
+density_f = 2.146e-3 # kg cm-3
+# density_m = 1.860e-3 # kg cm-3
+cp_f = 1967 # J kg-1 K-1, 6.15 / 2.0e-3
+# cp_m = 1760 # J kg-1 K-1, 6.15 / 2.0e-3
+k_f = .0553 # W cm-1 K-1
+# k_m = .3120 # W cm-1 K-1
 gamma = 1 # W cm-3 K-1, Volumetric heat transfer coefficient
 viscosity = .5 # dynamic viscosity
 alpha = 1 # SUPG stabilization parameter
 t_alpha = 2e-4 # K-1, Thermal expansion coefficient
+# sink_temperature = 100
+# sink_htc = 1
 
 [GlobalParams]
   #   use_exp_form = false
@@ -12,30 +17,68 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
   integrate_p_by_parts = true
 []
 
+# [Mesh]
+#   type = GeneratedMesh
+#   dim = 2
+
+#   #   nx = 200
+#   #   ny = 200
+#   ## Use a 40-by-40 mesh instead if running on a desktop/small cluster
+#   nx = 10
+#   ny = 10
+
+#   xmin = 0
+#   xmax = 100
+#   ymin = 0
+#   ymax = 100
+#   elem_type = QUAD4
+# []
+
 [Mesh]
   [square]
-    type = GeneratedMeshGenerator
+    type = CartesianMeshGenerator
     dim = 2
+    ix = '1 1 1 1 1 1 1 1 1 1'
+    iy = '1 1 1 1 1 1 1 1 1 1'
+    # ix = '2 2 2 2 2 2 2 2 2 2'
+    # iy = '2 2 2 2 2 2 2 2 2 2'
+    # ix = '4 4 4 4 4 4 4 4 4 4'
+    # iy = '4 4 4 4 4 4 4 4 4 4'
+    dx = '20 20 20 20 20 20 20 20 20 20'
+    dy = '20 20 20 20 20 20 20 20 20 20'
+    # elem_type = QUAD4
+    subdomain_id = '
+1 1 1 1 1  1 1 1 1 1
+1 1 1 1 1  1 1 1 1 1
+1 1 0 1 1  1 1 0 1 1
+1 1 1 1 1  1 1 1 1 1
+1 1 1 1 1  1 1 1 1 1
 
-    #   nx = 200
-    #   ny = 200
-    ## Use a 40-by-40 mesh instead if running on a desktop/small cluster
-    nx = 20
-    ny = 20
-
-    xmin = 0
-    xmax = 100
-    ymin = 0
-    ymax = 100
-    elem_type = QUAD4
+1 1 1 1 1  1 1 1 1 1
+1 1 1 1 1  1 1 1 1 1
+1 1 0 1 1  1 1 0 1 1
+1 1 1 1 1  1 1 1 1 1
+1 1 1 1 1  1 1 1 1 1
+    '
   []
   [corner_node]
     type = ExtraNodesetGenerator
     input = square
     new_boundary = 'pinned_node'
-    coord = '100 100'
+    coord = '200 200'
   []
 []
+
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 1 0 0
+# 0 0 0 0 0 0 0 1 0 0
+# 0 0 0 0 0 0 0 1 0 0
+# 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 1 0 0
 
 [Problem]
   type = FEProblem
@@ -70,38 +113,66 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     family = MONOMIAL
     order = FIRST
   []
+  # [sink_var]
+  #   family = MONOMIAL
+  #   order = CONSTANT
+  #   # block = 1
+  # []
 []
 
+# From Navier Stokes: https://mooseframework.inl.gov/modules/navier_stokes/index.html
+# INSAD option, so AD
+#
 [Kernels]
+  #---------
+  # Solid
+  #---------
+  # [sink]
+  #   type = CoupledForce
+  #   variable = temp
+  #   v = sink_var
+  #   block = '1'
+  # []
+
+  #---------
+  # Fluid
+  #---------
   [mass]
     type = INSADMass
     variable = p
+    # block = '0'
   []
   [mass_pspg]
     type = INSADMassPSPG
     variable = p
+    # block = '0'
   []
   [momentum_time]
     type = INSADMomentumTimeDerivative
     variable = vel
+    # block = '0'
   []
   [momentum_advection]
     type = INSADMomentumAdvection
     variable = vel
+    # block = '0'
   []
   [momentum_viscous]
     type = INSADMomentumViscous
     variable = vel
+    # block = '0'
   []
   [momentum_pressure]
     type = INSADMomentumPressure
     variable = vel
     pressure = p
+    # block = '0'
   []
   [momentum_supg]
     type = INSADMomentumSUPG
     variable = vel
     velocity = vel
+    # block = '0'
   []
   [buoyancy]
     type = INSADBoussinesqBodyForce
@@ -110,44 +181,54 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     gravity = '0 -981 0'
     alpha_name = 't_alpha'
     ref_temp = 'temp_ref'
+    # block = '0'
   []
   [gravity]
     type = INSADGravityForce
     variable = vel
     # gravity vector, cm s-2
     gravity = '0 -981 0'
+    # block = '0'
   []
 
   [temp_time]
     type = INSADHeatConductionTimeDerivative
     variable = temp
+    # block = '0'
   []
   [temp_source]
     type = INSADEnergySource
     variable = temp
     source_variable = heat
+    # block = '0'
   []
   [temp_advection]
     type = INSADEnergyAdvection
     variable = temp
+    # block = '0'
   []
   [temp_conduction]
     type = ADHeatConduction
     variable = temp
     thermal_conductivity = 'k'
+    # block = '0'
   []
   [temp_supg]
     type = INSADEnergySUPG
     variable = temp
     velocity = vel
+    # block = '0'
   []
+
   [temp_sink]
     type = INSADEnergyAmbientConvection
     variable = temp
     # alpha is the heat transfer coefficient.
     alpha = ${gamma}
     T_ambient = 900
+    block = '1'
   []
+
 []
 
 [AuxKernels]
@@ -163,6 +244,14 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     vector_variable = vel
     component = 'y'
   []
+  # [sink_aux]
+  #   type = ParsedAux
+  #   variable = sink_var
+  #   coupled_variables = 'temp'
+  #   expression = '-${gamma} * (temp - ${sink_temperature})'
+  #   block = 1
+  #   # execute_on = FORWARD
+  # []
 []
 
 [ICs]
@@ -199,15 +288,20 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
 []
 
 [Materials]
+  #---------
+  # Fluid
+  #---------
   [fuel]
     type = GenericConstantMaterial
     prop_names = 'temp_ref'
     prop_values = '900'
+    # block = '0'
   []
   [ad_mat]
     type = ADGenericConstantMaterial
     prop_names = 'k rho cp mu t_alpha'
-    prop_values = '${k} ${density} ${cp} ${viscosity} ${t_alpha}'
+    prop_values = '${k_f} ${density_f} ${cp_f} ${viscosity} ${t_alpha}'
+    # block = '0'
   []
   [ins_temp]
     type = INSADStabilized3Eqn
@@ -215,12 +309,23 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     velocity = vel
     pressure = p
     temperature = temp
+    # block = '0'
   []
+
+  #---------
+  # Solid
+  #---------
+  # [block]
+  #   type = GenericConstantMaterial
+  #   prop_names = 'temp_ref'
+  #   prop_values = '900'
+  #   block = '1'
+  # []
 []
 
 [Executioner]
   type = Transient
-  end_time = 20
+  end_time = 30
 
   solve_type = 'NEWTON'
   petsc_options = '-snes_converged_reason -ksp_converged_reason -snes_linesearch_monitor'
@@ -232,15 +337,18 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
   petsc_options_iname = '-pc_type -sub_pc_type -ksp_gmres_restart -pc_asm_overlap -sub_pc_factor_shift_type'
   petsc_options_value = 'asm      lu           200                1               NONZERO'
 
-  nl_abs_tol = 1e-8
-
-  dtmin = 1e-1
+  nl_abs_tol = 1e-05
+  nl_rel_tol = 1e-05
+  error_on_dtmin = false
+  dtmin = 1e-6
   dtmax = 10
   steady_state_detection = true
+  # steady_state_tolerance = 1e-05
+
   [TimeStepper]
     type = IterationAdaptiveDT
-    dt = 1e-1
-    cutback_factor = .5
+    dt = 1e-6
+    cutback_factor = 0.5
     growth_factor = 1.5
     optimal_iterations = 10
     iteration_window = 4
@@ -256,6 +364,16 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
 []
 
 [Postprocessors]
+  [bnorm_th]
+    type = Receiver
+  []
+
+  [cost_function]
+    type = ParsedPostprocessor
+    pp_names = 'bnorm_th'
+    function = '-bnorm_th'
+    execute_on = TIMESTEP_END
+  []
 []
 
 [VectorPostprocessors]
@@ -266,8 +384,9 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     type = FullSolveMultiApp
     app_type = MoltresApp
     execute_on = timestep_begin
-    positions = '0 0 0'
-    input_files = 'full-coupling-nts.i'
+    # positions = '0 0 0'
+    input_files = 'sub_nts.i'
+    ignore_solve_not_converge = true
   []
 []
 
@@ -304,16 +423,32 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     source_variable = heat
     variable = heat
   []
+
+  [mesh_transfer]
+    type = MultiAppMeshTransfer
+    to_multi_app = ntsApp
+    # from_multi_app = forward1
+    execute_on = 'TIMESTEP_BEGIN'
+  []
+
+  [pp_transfer]
+    type = MultiAppPostprocessorTransfer
+    from_multi_app = ntsApp
+    reduction_type = maximum
+    from_postprocessor = bnorm
+    to_postprocessor = bnorm_th
+  []
+
 []
 
 [Outputs]
-  perf_graph = true
-  print_linear_residuals = true
+  # perf_graph = true
+  # print_linear_residuals = true
   [exodus]
     type = Exodus
   []
 []
 
 [Debug]
-  show_var_residual_norms = true
+  # show_var_residual_norms = true
 []

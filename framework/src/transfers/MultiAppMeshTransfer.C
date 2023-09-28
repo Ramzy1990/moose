@@ -24,6 +24,10 @@ MultiAppMeshTransfer::validParams()
 
   params.addClassDescription("Transfer meshes between multiapps.");
 
+  MooseEnum mesh_transfer("subdomain boundary neighbors elements mesh");
+  params.addParam<MooseEnum>(
+      "mesh_transfer_type", mesh_transfer, "The part type of the mesh object to be transfered. ");
+
   return params;
 }
 

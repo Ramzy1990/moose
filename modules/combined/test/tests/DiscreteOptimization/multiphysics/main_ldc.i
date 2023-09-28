@@ -25,13 +25,6 @@
   []
 []
 
-# [Cons]
-#   [discrete_constraints]
-#     type = DiscreteConstraintsLibrary
-#     check_bounding_box_density = 1
-#   []
-# []
-
 [Executioner]
   type = CustomOptimize
   reporter_user_object = discrete_reporter
@@ -39,32 +32,22 @@
   solve_on = 'FORWARD'
   combinatorial_optimization = 1
   # dimension = 2
-  quarter_symmetry = 1
-  check_density = 1
-  check_enclaves = 1
-  check_boundaries = 1
-  number_of_runs = 100
-  number_of_iterations = 30
-  debug_on = true
+  quarter_symmetry = 0
+  check_density = 0
+  check_enclaves = 0
+  check_boundaries = 0
+  number_of_runs = 200
+  number_of_iterations = 5
+  debug_on = 1
 []
-
-# [Problem]
-#   solve = false
-#   # type = DiscreteOptimizationReporter
-#   # outputs = none
-#   # []
-# []
-
-# [Debug]
-#   show_actions = true
-#   show_action_dependencies = true
-# []
 
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    input_files = pin_cell_quarter.i
+    input_files = sub_th.i
     execute_on = 'TIMESTEP_BEGIN'
+    # app_type = GriffinApp
+    ignore_solve_not_converge = true
   []
 []
 
@@ -76,7 +59,6 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    # objective_name = 'max_eigenvalue'
   []
   [fromforward]
     # check_multiapp_execute_on = false
@@ -85,7 +67,6 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    # objective_name = 'max_eigenvalue'
   []
 []
 
@@ -93,11 +74,9 @@
   print_linear_residuals = false
   console = true
   # exodus = true
-  execute_on = 'TIMESTEP_END FINAL'
   csv = true
   # [console]
   # type = Console
   # max_rows = 1
   # []
 []
-
