@@ -88,6 +88,8 @@ SimulatedAnnealingAlgorithm::solve()
   std::vector<int> neighbor_int_config;
   std::vector<Real> best_real_config;
   std::vector<int> best_int_config;
+  int tabu_skip_counter = 0; // to counter the stagnation problems seen
+
   std::unordered_map<std::vector<int>, Real, vector_hash> solution_cache;
 
   for (int run = 0; run < _num_runs; ++run)
@@ -116,11 +118,17 @@ SimulatedAnnealingAlgorithm::solve()
       generateNeighborConfigurations(neighbor_int_config, neighbor_real_config);
 
       // Tabu list is only enabled for integer configurations
-      // Check if neighbor is in Tabu list
       _tabu_used = false;
+      if (tabu_skip_counter > 7)
+      {
+        tabu_list.pop_front(); // Remove the oldest entry
+        // tabu_list.clear(); // Clear the entire tabu list if it is already quite small
+        tabu_skip_counter = 0; // Reset the counter
+      }
       if (std::find(tabu_list.begin(), tabu_list.end(), neighbor_int_config) != tabu_list.end())
-      { // Neighbor is in Tabu list, skip this iteration
+      {
         _tabu_used = true;
+        tabu_skip_counter++;
         continue;
       }
 
@@ -508,7 +516,7 @@ SimulatedAnnealingAlgorithm::createNeighborIntCombinatorial(
       continue;
     }
 
-    if (canFlip(int_sol, int_neigh, material_indices, index1, index2, _elem_neighbors))
+    if (canFlipCombinatorial(int_sol, int_neigh, material_indices, index1, index2, _elem_neighbors))
     {
       valid_flip_found = true;
       break; // Exit the loop if a valid configuration is found
@@ -536,32 +544,28 @@ SimulatedAnnealingAlgorithm::createNeighborIntCombinatorial(
 }
 
 void
-SimulatedAnnealingAlgorithm::createNeighborInt(const std::vector<int> & int_sol,
-                                               std::vector<int> & int_neigh,
+SimulatedAnnealingAlgorithm::createNeighborInt(const std::vector<int> & current_configuration,
+                                               std::vector<int> & neighbor_configuration,
                                                const std::vector<int> & exclude_values) const
 {
-  // ///////////////////////////////////////////////////////////
-  // //// Many vlaues but flipping just one element at a time///
-  // ///////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////
+  //// Many vlaues but flipping just one element at a time///
+  ///////////////////////////////////////////////////////////
+
+  // std::cout << "Starting createNeighborInt()" << std::endl;
+
   if (_int_size == 0)
   {
-    int_neigh = {};
+    // std::cout << "_int_size is 0, clearing neighbor_configuration and returning." << std::endl;
+    neighbor_configuration.clear();
     return;
   }
 
-  // Sets the seed for the random number generator
-  // MooseRandom::seed(std::time(0) + run);
-
-  unsigned int index;
-  int_neigh = int_sol;
-
-  // Get the min and max values from int_sol
-  int min_value = *std::min_element(int_sol.begin(), int_sol.end());
-  int max_value = *std::max_element(int_sol.begin(), int_sol.end());
+  neighbor_configuration = current_configuration;
 
   std::set<int> unique_material_ids_set;
-
-  for (const auto & id : int_sol)
+  for (const auto & id : current_configuration)
   {
     if (std::find(exclude_values.begin(), exclude_values.end(), id) == exclude_values.end())
     {
@@ -569,94 +573,138 @@ SimulatedAnnealingAlgorithm::createNeighborInt(const std::vector<int> & int_sol,
     }
   }
 
+  // std::cout << "Number of unique material IDs (excluding the given values): "
+  //           << unique_material_ids_set.size() << std::endl;
+
   std::vector<int> unique_material_ids(unique_material_ids_set.begin(),
                                        unique_material_ids_set.end());
 
-  // Ensure there are at least two materials to flip
   if (unique_material_ids.size() < 2)
   {
-    mooseError(
-        "The createNeighborInt() method received just one material in the whole domain! Please "
-        "make sure you are optimizing a domain that contains at least 2 materials!");
+    mooseError("Please optimize a domain with at least 2 materials!");
+    return;
   }
 
-  // Find a random index whose corresponding value is not in the exclude_values
+  unsigned int selected_index;
   do
   {
-    index = MooseRandom::randl() % _int_size;
-  } while (std::find(exclude_values.begin(), exclude_values.end(), int_neigh[index]) !=
-           exclude_values.end());
+    selected_index = MooseRandom::randl() % _int_size;
+  } while (std::find(exclude_values.begin(),
+                     exclude_values.end(),
+                     neighbor_configuration[selected_index]) != exclude_values.end());
 
-  int new_val;
+  // std::cout << "Selected index for flipping: " << selected_index << std::endl;
+  // std::cout << "Value at selected index (" << selected_index
+  //           << "): " << neighbor_configuration[selected_index] << std::endl;
 
-  const int max_failed_attempts = 1000; // Adjust as necessary
-  int failed_attempts = 0;
+  int min_value = *std::min_element(current_configuration.begin(), current_configuration.end());
+  int max_value = *std::max_element(current_configuration.begin(), current_configuration.end());
+  // std::cout << "Min value: " << min_value << ", Max value: " << max_value << std::endl;
 
-  // Loop until a valid new_val is found or we hit too many failed attempts
+  const int max_attempts = 10;
+  int attempt_count = 0;
+  int replacement_value = 0;
+
+  // All the possible material replacements to choose from are the ones included in the unique
+  // materials IDs. But if the current index has the same material we are going to replace, this
+  // will not change the outcome, then we will have to remove it from the possible replacemnts.
+  std::vector<int> possible_replacements = unique_material_ids;
+  possible_replacements.erase(std::remove(possible_replacements.begin(),
+                                          possible_replacements.end(),
+                                          neighbor_configuration[selected_index]),
+                              possible_replacements.end());
+
+  // std::cout << "Possible replacements: ";
+  // for (int val : possible_replacements)
+  // {
+  //   std::cout << val << " ";
+  // }
+  // std::cout << std::endl;
+
+  bool valid_replacement_found = false;
+
   do
   {
-    new_val = MooseRandom::randl() % (max_value - min_value + 1) + min_value;
-    if (new_val == int_neigh[index] ||
-        std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end() ||
-        !canFlip(int_sol, index, unique_material_ids, new_val, _elem_neighbors))
+    int random_index = MooseRandom::randl() % possible_replacements.size();
+    replacement_value = possible_replacements[random_index];
+
+    // std::cout << "Generated replacement value: " << replacement_value
+    //           << std::endl; // Logging the generated value
+
+    bool is_value_same = replacement_value == neighbor_configuration[selected_index];
+    bool is_excluded = std::find(exclude_values.begin(), exclude_values.end(), replacement_value) !=
+                       exclude_values.end();
+    bool is_canflip_false = !canFlip(current_configuration,
+                                     selected_index,
+                                     unique_material_ids,
+                                     replacement_value,
+                                     _elem_neighbors);
+
+    // std::cout << "Is value the same? " << is_value_same << std::endl;
+    // std::cout << "Is value in excluded list? " << is_excluded << std::endl;
+    // std::cout << "Is canFlip returning false? " << is_canflip_false << std::endl;
+
+    bool is_invalid_replacement = is_value_same || is_excluded || is_canflip_false;
+
+    if (!is_invalid_replacement)
     {
-      failed_attempts++;
+      valid_replacement_found = true;
     }
     else
     {
-      // Reset the failed_attempts counter if we find a valid new_val
-      failed_attempts = 0;
+      // std::cout << "Attempt #" << attempt_count + 1 << ": Replacement value " <<
+      // replacement_value
+      //           << " is invalid. Retrying..." << std::endl;
+      attempt_count++;
     }
-  } while (
-      (new_val == int_neigh[index] ||
-       std::find(exclude_values.begin(), exclude_values.end(), new_val) != exclude_values.end() ||
-       !canFlip(int_sol, index, unique_material_ids, new_val, _elem_neighbors)) &&
-      failed_attempts < max_failed_attempts);
 
-  // If we've reached the maximum number of failed attempts, we could either revert or proceed as is
-  if (failed_attempts >= max_failed_attempts)
+  } while (!valid_replacement_found && attempt_count < max_attempts);
+
+  if (valid_replacement_found)
   {
-    // Choose a strategy here. Either:
-    // 1. Revert to the original configuration (by copying int_sol into int_neigh)
-    int_neigh = int_sol;
-    // 2. Or, proceed with the last generated configuration, even if it's not ideal.
-    // (No extra code needed for this, just move on.)
+    neighbor_configuration[selected_index] = replacement_value;
+    // std::cout << "Successfully replaced value at index " << selected_index << " with "
+    //           << replacement_value << std::endl;
   }
   else
   {
-    // We found a valid new_val within our attempts, so apply the flip
-    int_neigh[index] = new_val;
+    // std::cout << "Failed to find a valid replacement value after " << max_attempts
+    //           << " attempts. Keeping original value." << std::endl;
   }
 
-  // int_neigh[index] = new_val;
-
-  // Check if all possible values are in the new configuration
-  std::vector<bool> hasValue(max_value - min_value + 1, false);
+  // Checking if any of the starting values is missing or not
+  std::vector<bool> has_value(max_value - min_value + 1, false);
   for (unsigned int i = 0; i < _int_size; ++i)
   {
-    hasValue[int_neigh[i] - min_value] = true;
+    has_value[neighbor_configuration[i] - min_value] = true;
   }
 
-  // If any value is missing (and not in exclude_values), insert it at a random position
   for (int i = 0; i <= max_value - min_value; ++i)
   {
-    if (!hasValue[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
-                            exclude_values.end())
+    if (!has_value[i] && std::find(exclude_values.begin(), exclude_values.end(), i + min_value) ==
+                             exclude_values.end())
     {
       int random_index;
-      // Find a random index whose value is not in exclude_values and satisfies constraints
       do
       {
         random_index = MooseRandom::randl() % _int_size;
-      } while (
-          std::find(exclude_values.begin(), exclude_values.end(), int_neigh[random_index]) !=
-              exclude_values.end() ||
-          !canFlip(int_sol, random_index, unique_material_ids, i + min_value, _elem_neighbors));
+      } while (std::find(exclude_values.begin(),
+                         exclude_values.end(),
+                         neighbor_configuration[random_index]) != exclude_values.end() ||
+               !canFlip(current_configuration,
+                        random_index,
+                        unique_material_ids,
+                        i + min_value,
+                        _elem_neighbors));
 
-      int_neigh[random_index] = i + min_value;
+      neighbor_configuration[random_index] = i + min_value;
+      // std::cout << "Inserted missing value " << i + min_value << " at index " << random_index
+      //           << std::endl;
       break;
     }
   }
+
+  // std::cout << "Exiting createNeighborInt()" << std::endl;
 
   //   ///////////////////////////////////////////////////////////
   //   /////////////       One and two values           //////////
@@ -752,7 +800,7 @@ SimulatedAnnealingAlgorithm::createNeighborInt(const std::vector<int> & int_sol,
 }
 
 bool
-SimulatedAnnealingAlgorithm::canFlip(
+SimulatedAnnealingAlgorithm::canFlipCombinatorial(
     const std::vector<int> & int_sol,
     const std::vector<int> & int_neigh,
     const std::map<int, std::vector<unsigned int>> & material_indices,
@@ -838,6 +886,10 @@ SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_sol,
                                      const int & new_val,
                                      const std::map<int, std::vector<int>> & neighbors_map) const
 {
+  // std::cout << "_check_density: " << _check_density << ", _check_boundaries: " <<
+  // _check_boundaries
+  //           << ", _check_enclaves: " << _check_enclaves << std::endl;
+
   // Create a test vector with the proposed flip
   std::vector<int> testVec = int_sol;
   testVec[index] = new_val;
@@ -879,7 +931,7 @@ SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_sol,
     }
   }
 
-  // First, check the new constraints using checkConstraints
+  // check the boundaries
   if (_check_boundaries)
   {
     if (!checkBoundaries(testVec, neighbors_map))
@@ -889,6 +941,7 @@ SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_sol,
   // Now, check the previous constraints regarding the number of enclaves
   if (_check_enclaves)
   {
+    // TODO: once the constraint library is added, this will be handeled there.
     unsigned int count0 = checkEnclaves(testVec, 0, neighbors_map);
     unsigned int count1 = checkEnclaves(testVec, 1, neighbors_map);
 
@@ -897,16 +950,6 @@ SimulatedAnnealingAlgorithm::canFlip(const std::vector<int> & int_sol,
   }
 
   // Add other constraints as necessary
-
-  // // Check if the new value is valid based on neighbors or other constraints
-  // // For this example, I'll assume that the new value shouldn't be the same as any of its neighbors
-  // for (int neighbor_index : neighbors_map.at(index))
-  // {
-  //   if (testVec[neighbor_index] == new_val)
-  //   {
-  //     return false; // The new value is the same as one of its neighbors
-  //   }
-  // }
 
   return true; // The flip is valid
 }
@@ -1531,7 +1574,7 @@ SimulatedAnnealingAlgorithm::vectorToString(const std::vector<int> & vec)
     result += std::to_string(vec[i]);
     if (i != vec.size() - 1)
     {
-      result += "  ";
+      result += " ";
     }
   }
   result += "]";

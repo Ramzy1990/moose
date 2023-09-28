@@ -47,14 +47,7 @@
     type = FullSolveMultiApp
     # input_files = diffusion_reaction.i
     input_files = diffusion_reaction2.i
-    # input_files = simple_heat_cool.i
-    # input_files = eigen_test.i
     execute_on = 'TIMESTEP_BEGIN'
-    # execute_on = 'FORWARD'
-    #reset_apps = '0 0'
-    #reset_time = '1 2'
-    #execute_on = TIMESTEP_END
-    # execute_on = 'INITIAL TIMESTEP_BEGIN'
   []
 []
 

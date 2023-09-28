@@ -154,16 +154,16 @@ protected:
                                       std::vector<int> & int_neigh,
                                       const std::vector<int> & exclude_values) const;
 
-  void createNeighborInt(const std::vector<int> & int_sol,
-                         std::vector<int> & int_neigh,
+  void createNeighborInt(const std::vector<int> & current_configuration,
+                         std::vector<int> & neighbor_configuration,
                          const std::vector<int> & exclude_values) const;
 
-  bool canFlip(const std::vector<int> & int_sol,
-               const std::vector<int> & int_neigh,
-               const std::map<int, std::vector<unsigned int>> & material_indices,
-               const unsigned int index1,
-               const unsigned int index2,
-               const std::map<int, std::vector<int>> & neighbors_map) const;
+  bool canFlipCombinatorial(const std::vector<int> & int_sol,
+                            const std::vector<int> & int_neigh,
+                            const std::map<int, std::vector<unsigned int>> & material_indices,
+                            const unsigned int index1,
+                            const unsigned int index2,
+                            const std::map<int, std::vector<int>> & neighbors_map) const;
 
   bool canFlip(const std::vector<int> & int_sol,
                const unsigned int & index,
@@ -289,7 +289,6 @@ protected:
 
   /// alpha value for cooling
   Real _alpha;
-
 
   /// the best (aka min) objective seen so far
   Real _min_objective;

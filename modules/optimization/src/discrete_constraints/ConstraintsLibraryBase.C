@@ -55,7 +55,7 @@ ConstraintsLibraryBase::setConfiguration(const std::vector<int> & configuration)
   std::set<int> unique_material_ids(_configuration.begin(), _configuration.end());
 
   // excluded materials should be set before getting the unique materials IDs.
-  if (_excluded_materials.empty())
+  if (!_excluded_materials_assigned) // can not use empty() since the vector can be empty.
   {
     mooseError("You have to set the excluded materials in your optimizer before getting the unique "
                "materials IDs! Use the setExcludedMaterials() method for this purpose while "
@@ -94,6 +94,7 @@ ConstraintsLibraryBase::setExcludedMaterials(const std::vector<int> & exclude_va
   // Setting up the excluded material to use.
   _excluded_materials.clear();
   _excluded_materials = exclude_values;
+  _excluded_materials_assigned = true;
 }
 
 // void

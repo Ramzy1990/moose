@@ -95,6 +95,7 @@ protected:
   /// The excluded materials information, which are those materials that are not treated for in the optimziation process and are
   /// fixed. This is also seen by the child classes.
   std::vector<int> _excluded_materials;
+  bool _excluded_materials_assigned = false;
 
   /// The subdomain type (is it subdomain 0 or 1 or 2, etc.). This is also seen by the child classes.
   // int _cell_type;

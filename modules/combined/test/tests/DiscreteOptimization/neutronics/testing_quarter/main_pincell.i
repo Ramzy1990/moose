@@ -40,7 +40,7 @@
   combinatorial_optimization = 1
   # dimension = 2
   quarter_symmetry = 1
-  check_density = 1
+  check_density = 1 # Does not work with non-combinatorial (not easy to change solution). Mandatory for combinatorial for square?
   check_enclaves = 1
   check_boundaries = 1
   number_of_runs = 100
