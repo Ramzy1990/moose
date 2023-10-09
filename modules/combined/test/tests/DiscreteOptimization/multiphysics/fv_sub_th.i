@@ -34,21 +34,26 @@ T_init = 900.0
   [square]
     type = CartesianMeshGenerator
     dim = 2
-    ix = '1 1 1 1 1'
-    iy = '1 1 1 1 1'
+    ix = '1 1 1 1 1 1 1 1 1 1'
+    iy = '1 1 1 1 1 1 1 1 1 1'
     # ix = '2 2 2 2 2 2 2 2 2 2'
     # iy = '2 2 2 2 2 2 2 2 2 2'
     # ix = '4 4 4 4 4 4 4 4 4 4'
     # iy = '4 4 4 4 4 4 4 4 4 4'
-    dx = '20 20 20 20 20'
-    dy = '20 20 20 20 20'
+    dx = '20 20 20 20 20 20 20 20 20 20'
+    dy = '20 20 20 20 20 20 20 20 20 20'
     # elem_type = QUAD4
     subdomain_id = '
-1 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
-1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1 1
 '
   []
   # [corner_node]
@@ -284,13 +289,13 @@ T_init = 900.0
   [u_wall]
     type = INSFVNoSlipWallBC
     variable = u
-    boundary = 'right'
+    boundary = 'right bottom left'
     function = 0
   []
   [v_wall]
     type = INSFVNoSlipWallBC
     variable = v
-    boundary = 'right'
+    boundary = 'right bottom left'
     function = 0
   []
 
@@ -298,29 +303,29 @@ T_init = 900.0
   # Symmetry
   #----------
 
-  [u_sym]
-    type = INSFVSymmetryVelocityBC
-    boundary = 'bottom left'
-    variable = u
-    u = u
-    v = v
-    mu = 'mu'
-    momentum_component = 'x'
-  []
-  [v_sym]
-    type = INSFVSymmetryVelocityBC
-    boundary = 'bottom left'
-    variable = v
-    u = u
-    v = v
-    mu = 'mu'
-    momentum_component = 'y'
-  []
-  [sym_p]
-    type = INSFVSymmetryPressureBC
-    boundary = 'bottom left'
-    variable = pressure
-  []
+  # [u_sym]
+  #   type = INSFVSymmetryVelocityBC
+  #   boundary = 'bottom left'
+  #   variable = u
+  #   u = u
+  #   v = v
+  #   mu = 'mu'
+  #   momentum_component = 'x'
+  # []
+  # [v_sym]
+  #   type = INSFVSymmetryVelocityBC
+  #   boundary = 'bottom left'
+  #   variable = v
+  #   u = u
+  #   v = v
+  #   mu = 'mu'
+  #   momentum_component = 'y'
+  # []
+  # [sym_p]
+  #   type = INSFVSymmetryPressureBC
+  #   boundary = 'bottom left'
+  #   variable = pressure
+  # []
   # [pressure_pin]
   #   type = FVDirichletBC
   #   variable = p

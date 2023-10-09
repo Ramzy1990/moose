@@ -27,20 +27,6 @@ public:
    */
   SimulatedAnnealingAlgorithm();
 
-  /// cooling enum
-  enum Cooling
-  {
-    LinMult,
-    ExpMult,
-    LogMult,
-    QuadMult,
-    LinAdd,
-    QuadAdd,
-    ExpAdd,
-    TrigAdd,
-    trial
-  };
-
   enum RealNeighborSelection
   {
     RandomDirectionStretching,
@@ -56,7 +42,7 @@ public:
   void solve() override;
 
   ///@{ public interface
-  Cooling & cooling() { return _cooling; }
+  // Cooling & cooling() { return _cooling; }
   unsigned int & numSwaps() { return _num_swaps; }
   // std::vector<std::pair<Real, std::vector<int>>> & bestSolutions() { return best_solutions; }
   unsigned int & numReassignments() { return _num_reassignments; }

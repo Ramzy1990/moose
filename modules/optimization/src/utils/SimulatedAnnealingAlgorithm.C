@@ -51,12 +51,6 @@ SimulatedAnnealingAlgorithm::SimulatedAnnealingAlgorithm()
   : CustomOptimizationAlgorithm(),
     _alpha(1e-2),
     _min_objective(std::numeric_limits<Real>::max()),
-    _cooling(trial), /*    trial, LinMult, ExpMult, LogMult, QuadMult, LinAdd, QuadAdd, ExpAdd,
-                        TrigAdd */
-    _monotonic_cooling(false), /* Whether cooling is monotonic or not */
-    _res_var(1.0), /*the initial temperature to start resetting the current state to the best found
-                       state when this temperature is reached. This temperature is halved every-time
-                       it is reached.*/
     _num_swaps(1),
     _num_reassignments(0),
     _real_perturbation_type(RandomDirectionStretching),
@@ -112,6 +106,17 @@ SimulatedAnnealingAlgorithm::solve()
       if (_debug_on)
       {
         logDebugInfo("==== START OF ITERATION: " + std::to_string(_it_counter) + " ====");
+      }
+      if (_debug_on)
+      {
+        logDebugInfo("Cooling Equation used is of Type: " + std::to_string(_cooling));
+        logDebugInfo("Monotonic Cooling is being used : " + std::to_string(_monotonic_cooling));
+      }
+      if (_debug_on)
+      {
+        logDebugInfo("Maximum temperature is: " + std::to_string(_temp_max));
+        logDebugInfo("minimum temperature is: " + std::to_string(_temp_min));
+        logDebugInfo("Restart temperature is: " + std::to_string(_temp_res));
       }
 
       // Generates the neighbor configurations
@@ -840,10 +845,10 @@ SimulatedAnnealingAlgorithm::canFlipCombinatorial(
   //   _ddc_ptr->setConfiguration(int_sol);
   //   _ddc_ptr->setNeighborsMap(neighbors_map);
   //   // _ddc_ptr->setCellType(int_sol); // not needed here
-  //   _ddc_ptr->setMeshDimension(_dimension);
+  // _ddc_ptr->setMeshDimension(_dimension);
 
   //   // With those set up, now we can call to check the density
-  //   return _ddc_ptr->checkConfiguration();
+  // return _ddc_ptr->checkConfiguration();
   // }
   if (_check_density)
   {
@@ -1145,6 +1150,38 @@ SimulatedAnnealingAlgorithm::checkBoundaries(
       return false;
   }
 
+  // // For the water enclave starting from top-left (if any)
+  // std::vector<bool> water_visited(int_vec.size(), false);
+  // std::queue<int> water_queue;
+
+  // int top_left_index = (grid_size - 1) * grid_size; // Top-left corner index
+
+  // if (int_vec[top_left_index] == 0) // If top-left is water
+  // {
+  //   water_queue.push(top_left_index);
+  //   water_visited[top_left_index] = true;
+
+  //   while (!water_queue.empty())
+  //   {
+  //     int current = water_queue.front();
+  //     water_queue.pop();
+  //     for (int neighbor : neighborsMap.at(current))
+  //     {
+  //       if (int_vec[neighbor] == 0 && !water_visited[neighbor])
+  //       {
+  //         water_queue.push(neighbor);
+  //         water_visited[neighbor] = true;
+  //       }
+  //     }
+  //   }
+  // }
+
+  // // Check the total count of the water cells
+  // unsigned int fuel_cells = std::count(int_vec.begin(), int_vec.end(), 1);
+  // unsigned int water_cells_visited = std::count(water_visited.begin(), water_visited.end(),
+  // true); if (water_cells_visited != int_vec.size() - fuel_cells)
+  //   return false;
+
   return true;
 }
 
@@ -1356,12 +1393,30 @@ SimulatedAnnealingAlgorithm::coolingSchedule(unsigned int step) const
       return _temp_min + (_temp_max - _temp_min) * fraction;
 
     case ExpMult:
-      return _temp_max * std::pow(_alpha, step);
+      return _temp_max * std::pow(_alpha, (Real)step);
 
     case QuadAdd:
-      return _temp_min + (_temp_max - _temp_min) * std::pow(fraction, 2);
+      return _temp_min + (_temp_max - _temp_min) * std::pow(fraction, 2.0);
+
     case trial:
       return _temp_max * std::pow(_temp_min / _temp_max, (Real)step / (Real)_max_its);
+
+    case LinMult:
+      return _temp_max / (1.0 + _alpha * (Real)step);
+
+    case LogMult:
+      return _temp_max / (1.0 + _alpha * std::log10((Real)step + 1.0));
+
+    case QuadMult:
+      return _temp_max / (1.0 + _alpha * std::pow((Real)step, 2.0));
+
+    case ExpAdd:
+      return _temp_min + (_temp_max - _temp_min) /
+                             (1.0 + std::exp(2.0 * std::log(_temp_max - _temp_min) *
+                                             ((Real)step - 0.5 * (Real)_max_its) / (Real)_max_its));
+    case TrigAdd:
+      return _temp_min +
+             0.5 * (_temp_max - _temp_min) * (1.0 + std::cos((Real)step * M_PI / (Real)_max_its));
 
     default:
       ::mooseError("Cooling option not yet implemented! Please choose from the follwoing options: "

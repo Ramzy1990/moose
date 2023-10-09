@@ -21,61 +21,30 @@
     excluded_materials = ' '
     outputs = "none"
     # pp = objective
-    # execute_on = "ALWAYS"
+    execute_on = "ALWAYS"
+    #execute_on = 'FORWARD'
   []
-  #   [test123]
-  #     type = DiscreteOptimizationReporter
-  #     outputs = "none"
-  #   []
 []
 
 [Executioner]
   type = CustomOptimize
   reporter_user_object = discrete_reporter
-  solve_on = 'FORWARD'
-  number_of_runs = 2
-  number_of_iterations = 100
-  # maximum_temperature = 100
-  # minimum_temperature = 0.001
-  # type = gardensnake-opt
-  # nl_max_its = 50
-  # execute_on = 'TIMESTEP_END'
-  # num_steps = 500
-  # dt = 0.1
-  # solve_type = PJFNK
-  # nl_abs_tol = 1e-6
-  # nl_rel_tol = 1e-8
-  # petsc_options_iname = '-pc_type'
-  # petsc_options_value = 'lu'
+  #solve_on = 'FORWARD'
+  combinatorial_optimization = 1
+  quarter_symmetry = 1
+  check_density = 0 # Does not work with non-combinatorial (not easy to change solution). Mandatory for combinatorial for square?
+  check_enclaves = 0
+  check_boundaries = 0
+  number_of_runs = 100
+  number_of_iterations = 30
+  debug_on = true
 []
-
-# [Problem]
-#   solve = false
-#   # type = DiscreteOptimizationReporter
-#   # outputs = none
-#   # []
-# []
-
-# [Debug]
-#   show_actions = true
-#   show_action_dependencies = true
-# []
 
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    # input_files = pin_cell.i
-    input_files = pin_cell_sym.i
-    # input_files = diffusion_reaction.i
-    # input_files = diffusion_reaction2.i
-    # input_files = simple_heat_cool.i
-    # input_files = eigen_test.i
-    execute_on = 'TIMESTEP_BEGIN'
-    # execute_on = 'FORWARD'
-    #reset_apps = '0 0'
-    #reset_time = '1 2'
-    #execute_on = TIMESTEP_END
-    # execute_on = 'INITIAL TIMESTEP_BEGIN'
+    input_files = pin_cell_quarter.i
+    execute_on = 'FORWARD'
   []
 []
 
@@ -87,7 +56,7 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    # objective_name = 'max_eigenvalue'
+    execute_on = 'initial forward'
   []
   [fromforward]
     # check_multiapp_execute_on = false
@@ -96,24 +65,13 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    # objective_name = 'max_eigenvalue'
+    execute_on = 'initial forward'
   []
 []
 
 [Outputs]
   print_linear_residuals = false
   console = true
-  # exodus = true
+  execute_on = 'TIMESTEP_END FINAL'
   csv = true
-  # [console]
-  # type = Console
-  # max_rows = 1
-  # []
 []
-
-# [UserObjects]
-#   [discrete_reporter_object]
-#     type = DiscreteOptimizationReporter
-#   []
-# []
-

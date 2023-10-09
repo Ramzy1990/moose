@@ -12,12 +12,12 @@
 // Moose Includes
 #include "SolveObject.h"
 #include "ExecFlagEnum.h"
+#include "CustomOptimizationAlgorithm.h"
 
 // Forward Declarations If Any
 class DiscreteOptimizationReporter;
 class DensityDiscreteConstraint;
 class OptimizationReporterBase;
-class CustomOptimizationAlgorithm;
 class SimulatedAnnealingAlgorithm;
 
 /**
@@ -84,6 +84,18 @@ public:
 
   /// @brief The minimum temperature for this run
   Real _min_temp;
+
+  /// cooling option
+  CustomOptimizationAlgorithm::Cooling _cooling;
+
+  /// if cooling is monotonic or not
+  bool _monotonic_cooling;
+
+  /**
+   * the temperature where simulated annealing starts resetting the current state
+   * to the best found state. This temperature is halved every-time it is reached.
+   */
+  Real _res_var;
 
   /// @brief The debug flag
   bool _debug;

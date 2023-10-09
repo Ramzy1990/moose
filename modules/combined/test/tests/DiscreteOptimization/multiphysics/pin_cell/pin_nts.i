@@ -1,55 +1,45 @@
 [GlobalParams]
-  num_groups = 6
-  num_precursor_groups = 8
+  num_groups = 2
+  group_fluxes = ' group1  group2'
+  num_precursor_groups = 6
   use_exp_form = false
-  group_fluxes = 'group1 group2 group3 group4 group5 group6'
-  pre_concs = 'pre1 pre2 pre3 pre4 pre5 pre6 pre7 pre8'
-  temperature = temp
   sss2_input = true
-  account_delayed = true
+  account_delayed = false
+  create_temperature_var = false
+
+  temperature = temp
+  base_file = 'PinXS.json'
+  # temperature = 600
+  # base_file = 'PinXS_F_M.json'
+
 []
 
-# [Mesh]
-#   type = GeneratedMesh
-#   dim = 2
-
-#   #   nx = 200
-#   #   ny = 200
-#   ## Use a 40-by-40 mesh instead if running on a desktop/small cluster
-#   nx = 10
-#   ny = 10
-
-#   xmin = 0
-#   xmax = 100
-#   ymin = 0
-#   ymax = 100
-#   elem_type = QUAD4
-# []
-
 [Mesh]
-  [gmg]
+  #   file = pin_cell_mesh.e
+  [cmg]
     type = CartesianMeshGenerator
+    # elem_type = Tri3
     dim = 2
-    ix = '1 1 1 1 1 1 1 1 1 1'
-    iy = '1 1 1 1 1 1 1 1 1 1'
+    dx = '0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063'
+    dy = '0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063'
+    # dz = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
+    # dz = '0.126 0.126 0.126 0.126 0.126'
     # ix = '2 2 2 2 2 2 2 2 2 2'
     # iy = '2 2 2 2 2 2 2 2 2 2'
-    # ix = '4 4 4 4 4 4 4 4 4 4'
-    # iy = '4 4 4 4 4 4 4 4 4 4'
-    dx = '20 20 20 20 20 20 20 20 20 20'
-    dy = '20 20 20 20 20 20 20 20 20 20'
-    # elem_type = QUAD4
+    ix = '4 4 4 4 4 4 4 4 4 4'
+    iy = '4 4 4 4 4 4 4 4 4 4'
     subdomain_id = '
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1
+
+ 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 0 0 0 1 1 1 1 1 0 0
+ 0 0 0 1 1 1 1 1 0 0
 '
   []
 []
@@ -61,51 +51,20 @@
 [Nt]
   var_name_base = group
   # vacuum_boundaries = 'bottom left right top'
-  vacuum_boundaries = 'right top'
-  create_temperature_var = false
   #   transient = false
   eigen = true
   scaling = 1e3
 []
 
-[Precursors]
-  [pres]
-    var_name_base = pre
-    outlet_boundaries = 'right'
-    constant_velocity_values = false
-    uvel = velocity_x
-    vvel = velocity_y
-    nt_exp_form = false
-    family = MONOMIAL
-    order = CONSTANT
-    loop_precursors = false
-    transient = false
-    eigen = true
-    scaling = 1e3
-  []
-[]
-
 [AuxVariables]
   [temp]
-    family = MONOMIAL
-    order = CONSTANT
-    fv = true
-    initial_condition = 900
-  []
-  [velocity_x]
-    family = MONOMIAL
-    order = CONSTANT
-    fv = true
-  []
-  [velocity_y]
-    family = MONOMIAL
-    order = CONSTANT
-    fv = true
+    family = LAGRANGE
+    order = FIRST
+    initial_condition = 1000
   []
   [heat]
     family = MONOMIAL
-    order = CONSTANT
-    fv = true
+    order = FIRST
   []
 []
 
@@ -114,25 +73,54 @@
     type = FissionHeatSourceAux
     variable = heat
     tot_fission_heat = powernorm
-    power = 1e7
+    power = 1e3
   []
 []
 
+# [Materials]
+#   [fuel]
+#     type = GenericMoltresMaterial
+#     # property_tables_root = './cnrs-benchmark/groups_2/benchmark_Fuel_'
+#     property_tables_root = './cnrs-benchmark/benchmark_'
+#     interp_type = 'linear'
+#     block = '1'
+#   []
+#   # [moderator]
+#   #   type = GenericMoltresMaterial
+#   #   # property_tables_root = './cnrs-benchmark/groups_2/benchmark_Mod_'
+#   #   # property_tables_root = './cnrs-benchmark/groups_6/benchmark_'
+#   #   property_tables_root = './cnrs-benchmark/benchmark_'
+#   #   interp_type = 'linear'
+#   #   block = '1'
+#   # []
+# []
+
 [Materials]
-  # [fuel]
-  #   type = GenericMoltresMaterial
-  #   # property_tables_root = './cnrs-benchmark/groups_2/benchmark_Fuel_'
-  #   property_tables_root = './cnrs-benchmark/benchmark_'
-  #   interp_type = 'linear'
-  #   block = '0'
-  # []
-  [moderator]
-    type = GenericMoltresMaterial
-    # property_tables_root = './cnrs-benchmark/groups_2/benchmark_Mod_'
-    # property_tables_root = './cnrs-benchmark/groups_6/benchmark_'
-    property_tables_root = './cnrs-benchmark/benchmark_'
-    interp_type = 'linear'
+  [F]
+    type = MoltresJsonMaterial
     block = '1'
+    material_key = 'F'
+
+    interp_type = 'linear'
+    temperature = temp
+    # interp_type = 'NONE'
+    # temperature = 600
+
+    prop_names = ''
+    prop_values = ''
+  []
+  [W]
+    type = MoltresJsonMaterial
+    block = 0
+    material_key = 'W'
+
+    interp_type = 'linear'
+    temperature = temp
+    # interp_type = 'NONE'
+    # temperature = 600
+
+    prop_names = ''
+    prop_values = ''
   []
 []
 
@@ -164,45 +152,6 @@
 
   line_search = none
 []
-
-# [BCs]
-#   [reflective_1]
-#     type = NeumannBC
-#     variable = 'group1'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-#   [reflective_2]
-#     type = NeumannBC
-#     variable = 'group2'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-#   [reflective_3]
-#     type = NeumannBC
-#     variable = 'group3'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-#   [reflective_4]
-#     type = NeumannBC
-#     variable = 'group4'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-#   [reflective_5]
-#     type = NeumannBC
-#     variable = 'group5'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-#   [reflective_6]
-#     type = NeumannBC
-#     variable = 'group6'
-#     boundary = 'bottom left'
-#     value = 0
-#   []
-# []
 
 [Preconditioning]
   [SMP]
@@ -258,15 +207,43 @@
     execute_on = 'linear timestep_end'
     use_displaced_mesh = false
   []
-[]
 
-[VectorPostprocessors]
-  [pre_elemental]
-    type = ElementValueSampler
-    variable = 'pre1 pre2 pre3 pre4 pre5 pre6 pre7 pre8'
-    sort_by = id
+  [perimeter_fuel]
+    type = RegionInterfaceAreaPostprocessor
+    primary_block_names = '1'
+    paired_block_names = '0'
     execute_on = TIMESTEP_END
   []
+
+  [perimeter_mod]
+    type = RegionInterfaceAreaPostprocessor
+    primary_block_names = '0'
+    paired_block_names = '1'
+    execute_on = TIMESTEP_END
+  []
+
+  # [area_all]
+  #   type = RegionInterfaceAreaPostprocessor
+  # []
+
+  [area_all_moderator]
+    type = VolumePostprocessor
+    block = '0'
+    execute_on = TIMESTEP_END
+  []
+
+  [area_all_fuel]
+    type = VolumePostprocessor
+    block = '1'
+    execute_on = TIMESTEP_END
+  []
+
+  [area_all]
+    type = VolumePostprocessor
+    block = '0 1'
+    execute_on = TIMESTEP_END
+  []
+
 []
 
 [Outputs]

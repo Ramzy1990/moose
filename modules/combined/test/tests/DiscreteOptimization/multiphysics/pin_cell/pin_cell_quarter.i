@@ -34,199 +34,99 @@ global_temperature = 600
 #   []
 # []
 
-[Mesh]
-  #   file = pin_cell_mesh.e
-  [cmg]
-    type = CartesianMeshGenerator
-    # elem_type = Tri3
-    dim = 2
-    dx = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
-    dy = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
-    #     ix = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
-    #     iy = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
-    subdomain_id = '
-
-0 0 0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 0 0
-0 0 0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 0 0
-0 0 0 0 1 1 1 1 1 1  1 1 1 1 1 1 0 0 0 0
-0 0 0 1 1 1 1 1 1 1  1 1 1 1 1 1 1 0 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 0  0 1 1 1 1 1 1 1 0 0
-
-0 0 1 1 1 1 1 1 1 0  0 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 1 1 1 1 1 1 1 1  1 1 1 1 1 1 1 1 0 0
-0 0 0 1 1 1 1 1 1 1  1 1 1 1 1 1 1 0 0 0
-0 0 0 0 1 1 1 1 1 1  1 1 1 1 1 1 0 0 0 0
-0 0 0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 0 0
-0 0 0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0 0 0
-'
-  []
-[]
-
-# First try:
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0 0 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 0 0 0 0 0 0 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-
-# Example:
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-
-# Example continued:
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0 0 0 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0 0 0 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-
-# Example continued (initial condition candidate):
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-
 # [Mesh]
 #   #   file = pin_cell_mesh.e
 #   [cmg]
 #     type = CartesianMeshGenerator
 #     # elem_type = Tri3
 #     dim = 2
-#     dx = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
-#     dy = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
+#     dx = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+#     dy = '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
 #     #     ix = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
 #     #     iy = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
 #     subdomain_id = '
-# 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 0 0'
 
+# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0
+# 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0
+# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
 #   []
 # []
 
-# Example (compare against the middle square moderator):
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+# 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+
+[Mesh]
+  #   file = pin_cell_mesh.e
+  [cmg]
+    type = CartesianMeshGenerator
+    # elem_type = Tri3
+    dim = 2
+    dx = '0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063'
+    dy = '0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063 0.063'
+    # dz = '0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126 0.126'
+    # dz = '0.126 0.126 0.126 0.126 0.126'
+    #     ix = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
+    #     iy = '${halfa} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla} ${fulla}'
+    subdomain_id = '
+
+ 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0
+ 1 1 1 1 1 0 0 0 0 0
+ 1 1 1 1 1 1 0 0 0 0
+ 1 1 1 1 1 1 1 0 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0
+ 1 1 1 1 1 1 1 1 0 0'
+  []
+[]
+
 # 0 0 0 0 0 0 0 0 0 0
 # 0 0 0 0 0 0 0 0 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
-# 1 1 0 1 1 1 1 1 0 0
-# 1 1 0 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
 # 0 0 0 1 1 1 1 1 0 0
-# 0 1 1 1 1 1 1 1 0 0
-
-# 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0
-# 1 1 1 0 0 0 0 0 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 0 1 1 1 1 1 1 1 0 0
+# 0 0 0 0 1 1 1 1 0 0
 
 # 0 0 0 0 0 0 0 0 0 0
 # 0 0 0 0 0 0 0 0 0 0
@@ -236,20 +136,8 @@ global_temperature = 600
 # 1 1 1 1 1 1 1 1 0 0
 # 1 0 1 1 1 1 1 1 0 0
 # 1 0 1 1 1 1 1 1 0 0
-# 0 1 0 1 1 1 1 1 0 0
+# 1 0 0 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 0 0
-
-#  -1.001692e+00
-# 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 0 0 1 1 1 1 1 0 0
-# 1 0 0 1 1 1 1 1 0 0
-# 1 1 0 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 0 0
 
 # 0 0 0 0 0 0 0 0 0 0
 # 0 0 0 0 0 0 0 0 0 0
@@ -257,32 +145,21 @@ global_temperature = 600
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
-# 1 0 0 1 1 1 1 1 0 0
-# 1 1 0 0 1 1 1 1 0 0
-# 1 1 0 1 1 1 1 1 0 0
-# 0 0 0 1 1 1 1 1 0 0
-
-# 0 0 0 0 0 0 0 0 0 0
-# 0 0 0 0 0 0 0 0 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
-# 1 1 1 1 1 1 1 1 0 0
-# 1 0 1 1 1 1 1 1 0 0
-# 1 0 1 1 1 1 1 1 0 0
-# 1 0 0 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 0 0
 # 0 0 1 1 1 1 1 1 0 0
 
 # 0 0 0 0 0 0 0 0 0 0
 # 0 0 0 0 0 0 0 0 0 0
+# 1 1 1 1 0 0 0 0 0 0
+# 1 1 1 1 1 1 0 0 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
 # 1 1 1 1 1 1 1 1 0 0
-# 1 0 0 1 1 1 1 1 0 0
-# 1 0 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0
-# 0 0 1 1 1 1 1 1 0 0
-# 0 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
+# 1 1 1 1 1 1 1 1 0 0
 
 [Problem]
   type = FEProblem
@@ -321,7 +198,7 @@ global_temperature = 600
 [Executioner]
   # type = NonlinearEigen
   type = InversePowerMethod
-  nl_abs_tol = 1e-6
+  nl_abs_tol = 1e-8
   # free_power_iterations = 10
   Chebyshev_acceleration_on = false
   bx_norm = 'bnorm'
@@ -367,7 +244,7 @@ global_temperature = 600
   [group1diff]
     type = ElementL2Diff
     variable = group1
-    execute_on = 'linear timestep_end'
+    execute_on = TIMESTEP_END
     use_displaced_mesh = false
   []
   [group2norm]
@@ -384,7 +261,7 @@ global_temperature = 600
   [group2diff]
     type = ElementL2Diff
     variable = group2
-    execute_on = 'linear timestep_end'
+    execute_on = TIMESTEP_END
     use_displaced_mesh = false
   []
 
@@ -392,7 +269,14 @@ global_temperature = 600
     type = RegionInterfaceAreaPostprocessor
     primary_block_names = '1'
     paired_block_names = '0'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
+  []
+
+  [perimeter_mod]
+    type = RegionInterfaceAreaPostprocessor
+    primary_block_names = '0'
+    paired_block_names = '1'
+    execute_on = TIMESTEP_END
   []
 
   # [area_all]
@@ -402,36 +286,36 @@ global_temperature = 600
   [area_all_moderator]
     type = VolumePostprocessor
     block = '0'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
   []
 
   [area_all_fuel]
     type = VolumePostprocessor
     block = '1'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
   []
 
   [area_all]
     type = VolumePostprocessor
     block = '0 1'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
   []
 
   [hydraulic_diameter]
     type = ParsedPostprocessor
     # pp_names = 'perimeter_fuel area_all_fuel area_all_moderator'
-    pp_names = 'perimeter_fuel area_all'
+    pp_names = 'perimeter_mod area_all_moderator'
     # function = '-1*(bnorm * if(max_temperature < 360, 1, 0.01))'
     # function = '(area_all_fuel+area_all_moderator)/ perimeter_fuel'
 
     # This is how it should be after testing the individual input file with different
     # confgurations including water in the middle or tetris shape around the middle and seeing how cost function is behaving.
-    function = '4 * area_all/ perimeter_fuel'
+    function = '4 * area_all_moderator/ perimeter_mod'
 
     # function = 'perimeter_fuel/area_all'
     # function = '-(total_source - (max_temperature / 2))'
     # function = 'max_temperature/total_source'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
   []
 
   # [cost_function]
@@ -448,15 +332,12 @@ global_temperature = 600
     # pp_names = 'bnorm'
     pp_names = 'bnorm hydraulic_diameter'
     # function = '-1 * ( bnorm )'
-    # function = '( 1/(bnorm) + ( 0.0000000001 * ( 1/(hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel*hydraulic_diameter_fuel) ) ) )'
+    # function = '1/bnorm + 0.00001/(hydraulic_diameter*hydraulic_diameter*hydraulic_diameter*hydraulic_diameter)'
+    function = '-bnorm - 1000000 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter'
     # function = '-1 * bnorm + 0.0001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter '
-    function = '-bnorm - 0.00001 * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter * hydraulic_diameter'
     # function = '-bnorm'
-    # function = '-(total_source - (max_temperature / 2))'
-    # function = 'max_temperature/total_source'
-    execute_on = timestep_end
+    execute_on = TIMESTEP_END
   []
-
 []
 
 # [BCs]
@@ -522,6 +403,6 @@ global_temperature = 600
 [Outputs]
   [out]
     type = Exodus
-    execute_on = 'timestep_end'
+    execute_on = 'TIMESTEP_END FINAL'
   []
 []

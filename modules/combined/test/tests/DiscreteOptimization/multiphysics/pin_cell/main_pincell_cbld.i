@@ -17,54 +17,63 @@
 [Reporters]
   [discrete_reporter]
     type = DiscreteOptimizationReporter
-    parameter_names = Materials
-    # Number of parameter names we are adjusting for. since we have materials
-    # only, so it will be 1. Or it can be the number of materials we are adjusting for?
-    num_values = 1
-    initial_material = '1'
-    assign_type = 'auto'
-    solver_type = 'random_3'
-    number_of_elements = 12
-    allowed_mateirals = '1 2'
+    allowed_mateirals = '0 1'
     excluded_materials = ' '
     outputs = "none"
+    # pp = objective
+    execute_on = "ALWAYS"
+    #execute_on = 'FORWARD'
   []
 []
 
 [Executioner]
   type = CustomOptimize
   reporter_user_object = discrete_reporter
-  solve_on = 'FORWARD'
+  #solve_on = 'FORWARD'
+  combinatorial_optimization = 1
+  quarter_symmetry = 1
+  check_density = 1 # Does not work with non-combinatorial (not easy to change solution). Mandatory for combinatorial for square?
+  check_enclaves = 1
+  check_boundaries = 1
+  number_of_runs = 1000
+  number_of_iterations = 1000
+  maximum_temperature = 10000
+  minimum_temperature = 0.00001
+  debug_on = true
 []
 
 [MultiApps]
   [forward]
     type = FullSolveMultiApp
-    input_files = simple_heat_cool.i
-    execute_on = 'TIMESTEP_BEGIN'
+    input_files = pin_th.i
+    execute_on = 'LINEAR'
   []
 []
 
 [Transfers]
   [toforward]
+    # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransfer
     to_multi_app = forward
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
+    execute_on = 'TIMESTEP_BEGIN'
   []
   [fromforward]
+    # check_multiapp_execute_on = false
     type = DiscreteOptimizationTransfer
     from_multi_app = forward
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
+    execute_on = 'TIMESTEP_BEGIN'
   []
 []
 
 [Outputs]
   print_linear_residuals = false
   console = true
+  execute_on = 'Linear'
   csv = true
 []
-

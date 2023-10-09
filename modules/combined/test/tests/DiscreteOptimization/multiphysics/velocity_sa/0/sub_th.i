@@ -277,7 +277,7 @@ t_alpha = 2e-4 # K-1, Thermal expansion coefficient
     # '50 0 0' corresponds to vel_x = 50 cm s-1 along the top boundary.
     # Change to 10, 20, 30, 40 for different velocity boundary conditions
     # at U_lid = 0.1, 0.2, 0.3, 0.4 m s-1.
-    values = '100 0 0'
+    values = '0 0 0'
   []
   [pressure_pin]
     type = DirichletBC

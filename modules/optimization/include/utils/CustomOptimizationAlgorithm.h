@@ -47,6 +47,20 @@ public:
                           const std::vector<int> & exclude_materials,
                           const std::map<int, std::vector<int>> & elem_neighbors);
 
+  /// cooling enum
+  enum Cooling
+  {
+    LinMult,
+    ExpMult,
+    LogMult,
+    QuadMult,
+    LinAdd,
+    QuadAdd,
+    ExpAdd,
+    TrigAdd,
+    trial
+  };
+
   // virtual void setConstraints(DiscreteConstraintsLibrary * constraints)
   // {
   //   mooseError("setConstraints should not be called on a CustomOptimizationAlgorithm object! "
@@ -68,6 +82,9 @@ public:
   unsigned int & maxRun() { return _num_runs; }
   Real & maxTemp() { return _temp_max; }
   Real & minTemp() { return _temp_min; }
+  Cooling & coolingEquation() { return _cooling; }
+  bool & monotonicCooling() { return _monotonic_cooling; }
+  Real & resTemp() { return _temp_res; }
   bool & debug() { return _debug_on; }
   unsigned int & counterIteration() { return _it_counter; }
   unsigned int & counterRun() { return _it_run; }
@@ -126,6 +143,15 @@ protected:
 
   /// minimum temperature
   Real _temp_min;
+
+  /// cooling schedule
+  Cooling _cooling;
+
+  /// monotonic cooling
+  bool _monotonic_cooling;
+
+  /// Restart temperature
+  Real _temp_res;
 
   /// debug flag
   bool _debug_on;

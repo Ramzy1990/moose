@@ -14,7 +14,6 @@
 
 // #include "DensityDiscreteConstraint.h"
 
-#include "CustomOptimizationAlgorithm.h"
 #include "SimulatedAnnealingAlgorithm.h"
 
 InputParameters
@@ -80,6 +79,17 @@ CustomOptimizeSolve::validParams()
                         "The minimum temperature used in the simualted annealing process. The "
                         "simulated annealing loop will stop after the number of iterations is "
                         "reached *and* the temperature is below this value. ");
+
+  params.addParam<CustomOptimizationAlgorithm::Cooling>(
+      "cooling_schedule",
+      "The cooling schedule used to cool the temperature in the annealing process.");
+
+  params.addParam<bool>("monotonic_cooling", "if cooling is monotonic or not.");
+
+  params.addParam<Real>(
+      "restart_temperature",
+      "The temperature where simulated annealing starts resetting the current state to the best "
+      "found state. This temperature is halved every-time it is reached.");
 
   params.addParam<bool>("debug_on",
                         "The debug variable to print more information during the execution. If on, "
@@ -166,6 +176,24 @@ CustomOptimizeSolve::CustomOptimizeSolve(Executioner & ex)
   else
     _min_temp = 0.001;
 
+  // Reading the cooling schedule from the input file
+  if (isParamValid("cooling_schedule"))
+    _cooling = getParam<CustomOptimizationAlgorithm::Cooling>("cooling_schedule");
+  else
+    _cooling = CustomOptimizationAlgorithm::trial;
+
+  // Reading the monotonic cooling from the input file
+  if (isParamValid("monotonic_cooling"))
+    _monotonic_cooling = getParam<bool>("monotonic_cooling");
+  else
+    _monotonic_cooling = false;
+
+  // Reading the monotonic cooling from the input file
+  if (isParamValid("restart_temperature"))
+    _res_var = getParam<Real>("restart_temperature");
+  else
+    _res_var = 1;
+
   // Reading the debug variable from the input file
   if (isParamValid("debug_on"))
     _debug = getParam<bool>("debug_on");
@@ -208,6 +236,9 @@ CustomOptimizeSolve::solve()
   sa_alg->maxIt() = _num_iterations;
   sa_alg->maxTemp() = _max_temp;
   sa_alg->minTemp() = _min_temp;
+  sa_alg->coolingEquation() = _cooling;
+  sa_alg->monotonicCooling() = _monotonic_cooling;
+  sa_alg->resTemp() = _res_var;
   sa_alg->debug() = _debug;
 
   // Here we set the initial integer configuration subdomains, as well as the execluded subdomains
