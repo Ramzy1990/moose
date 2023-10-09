@@ -26,20 +26,21 @@
     # dz = '0.126 0.126 0.126 0.126 0.126'
     # ix = '2 2 2 2 2 2 2 2 2 2'
     # iy = '2 2 2 2 2 2 2 2 2 2'
-    ix = '4 4 4 4 4 4 4 4 4 4'
-    iy = '4 4 4 4 4 4 4 4 4 4'
+    # ix = '4 4 4 4 4 4 4 4 4 4'
+    # iy = '4 4 4 4 4 4 4 4 4 4'
     subdomain_id = '
 
- 0 0 0 0 0 0 0 0 0 0
- 0 0 0 0 0 0 0 0 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 0 0 0 1 1 1 1 1 0 0
- 0 0 0 1 1 1 1 1 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+1 1 1 1 1 0 0 0 0 0
+1 1 1 1 1 1 0 0 0 0
+1 1 1 1 1 1 1 0 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+
 '
   []
 []
@@ -55,12 +56,11 @@
   eigen = true
   scaling = 1e3
 []
-
 [AuxVariables]
   [temp]
     family = LAGRANGE
     order = FIRST
-    initial_condition = 1000
+    initial_condition = 600
   []
   [heat]
     family = MONOMIAL
@@ -73,7 +73,7 @@
     type = FissionHeatSourceAux
     variable = heat
     tot_fission_heat = powernorm
-    power = 1e3
+    power = 5e2
   []
 []
 
@@ -251,12 +251,14 @@
   # print_linear_residuals = true
   [exodus]
     type = Exodus
+    execute_on = 'INITIAL TIMESTEP_BEGIN TIMESTEP_END LINEAR FINAL'
+    overwrite = true
   []
   # [csv]
   #   type = CSV
   # []
 []
 
-[Debug]
-  # show_var_residual_norms = true
-[]
+# [Debug]
+#   # show_var_residual_norms = true
+# []

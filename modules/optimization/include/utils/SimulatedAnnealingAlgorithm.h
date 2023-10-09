@@ -280,10 +280,10 @@ protected:
   Real _min_objective;
 
   /// cooling option
-  Cooling _cooling;
+  // Cooling _cooling;
 
   /// if cooling is monotonic or not
-  bool _monotonic_cooling;
+  // bool _monotonic_cooling;
 
   /**
    * the temperature where simulated annealing starts resetting the current state

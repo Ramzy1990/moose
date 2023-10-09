@@ -61,8 +61,8 @@ DiscreteOptimizationTransfer::validParams()
                         "messages during the transfer.");
 
   // Set and suppress the 'execute_on' flag.
-  params.set<ExecFlagEnum>("execute_on") = {/*EXEC_INITIAL,*/ EXEC_TIMESTEP_BEGIN};
-  params.suppressParameter<ExecFlagEnum>("execute_on");
+  // params.set<ExecFlagEnum>("execute_on") = {/*EXEC_INITIAL,*/ EXEC_TIMESTEP_BEGIN};
+  // params.suppressParameter<ExecFlagEnum>("execute_on");
 
   return params;
 }

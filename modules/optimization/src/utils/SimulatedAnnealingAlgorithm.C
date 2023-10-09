@@ -316,7 +316,7 @@ SimulatedAnnealingAlgorithm::initializeRun(
   /*the initial temperature to start resetting the current state to the best found
                          state when this temperature is reached. This temperature is halved
      every-time it is reached.*/
-  _res_var = 1.0;
+  _res_var = _temp_res;
 
   // Current temperature is set to maximum one.
   temp_current = _temp_max;

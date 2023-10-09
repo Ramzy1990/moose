@@ -1,8 +1,8 @@
 # density_f = 2.146e-3 # kg cm-3
-k_f = 0.205 # W cm-1 K-1
-k_m = 0.100 # W cm-1 K-1
-sink_htc = 100
-sink_temperature = 600
+k_f = 0.105 # W cm-1 K-1
+k_m = 0.00600 # W cm-1 K-1
+# sink_htc = 100
+# sink_temperature = 600
 
 [GlobalParams]
   #   use_exp_form = false
@@ -22,22 +22,31 @@ sink_temperature = 600
     # dz = '0.126 0.126 0.126 0.126 0.126'
     # ix = '2 2 2 2 2 2 2 2 2 2'
     # iy = '2 2 2 2 2 2 2 2 2 2'
-    ix = '4 4 4 4 4 4 4 4 4 4'
-    iy = '4 4 4 4 4 4 4 4 4 4'
+    # ix = '4 4 4 4 4 4 4 4 4 4'
+    # iy = '4 4 4 4 4 4 4 4 4 4'
     subdomain_id = '
 
- 0 0 0 0 0 0 0 0 0 0
- 0 0 0 0 0 0 0 0 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 1 1 1 1 1 1 1 1 0 0
- 0 0 0 1 1 1 1 1 0 0
- 0 0 0 1 1 1 1 1 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+1 1 1 1 1 0 0 0 0 0
+1 1 1 1 1 1 0 0 0 0
+1 1 1 1 1 1 1 0 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+1 1 1 1 1 1 1 1 0 0
+
  '
   []
+
+  [add_boundary_all]
+    type = ParsedGenerateSideset
+    combinatorial_geometry = '2 > 1'
+    input = cmg
+    new_sideset_name = all_sides
+  []
+
 []
 
 #  0 0 0 0 0 0 0 0 0 0
@@ -61,6 +70,17 @@ sink_temperature = 600
 # 0 0 0 1 1 1 1 1 0 0
 # 0 0 0 1 1 1 1 1 0 0
 
+#  0 0 0 0 0 0 0 0 0 0
+#  0 0 0 0 0 0 0 0 0 0
+#  1 1 1 1 1 0 0 0 0 0
+#  1 1 1 1 1 1 0 0 0 0
+#  1 1 1 1 1 1 1 0 0 0
+#  1 1 1 1 1 1 1 1 0 0
+#  1 1 1 1 1 1 1 1 0 0
+#  1 1 1 1 1 1 1 1 0 0
+#  1 1 1 1 1 1 1 1 0 0
+#  1 1 1 1 1 1 1 1 0 0
+
 [Problem]
   type = FEProblem
 []
@@ -79,10 +99,10 @@ sink_temperature = 600
     order = FIRST
   []
 
-  [sink_var]
-    family = MONOMIAL
-    order = CONSTANT
-  []
+  # [sink_var]
+  #   family = MONOMIAL
+  #   order = CONSTANT
+  # []
 []
 
 [Kernels]
@@ -92,14 +112,6 @@ sink_temperature = 600
     diffusion_coefficient = 'thermal_conductivity'
   []
 
-  # [temp_source]
-  #   type = HeatSourceBPD
-  #   variable = temp
-  #   power_density = heat
-  #   # source_variable = heat
-  #   # block = '0'
-  # []
-
   [heat_source]
     type = CoupledForce
     variable = temp
@@ -107,51 +119,33 @@ sink_temperature = 600
     block = '1'
   []
 
-  [sink]
-    type = CoupledForce
-    variable = temp
-    v = sink_var
-    block = '0'
-  []
-
-  # [temp_conduction]
-  #   type = ADHeatConduction
+  # [sink]
+  #   type = CoupledForce
   #   variable = temp
-  #   thermal_conductivity = 'k'
-  #   # block = '0'
+  #   v = sink_var
+  #   block = '0'
   # []
-
-  # [temp_source]
-  #   type = INSADEnergySource
-  #   variable = temp
-  #   source_variable = heat
-  #   # block = '0'
-  # []
-
-  # [temp_sink]
-  #   type = INSADEnergyAmbientConvection
-  #   variable = temp
-  #   # alpha is the heat transfer coefficient.
-  #   alpha = ${gamma}
-  #   T_ambient = 900
-  #   block = '1'
-  # []
-
 []
 
 [AuxKernels]
-  [sink_aux]
-    type = ParsedAux
-    variable = sink_var
-    coupled_variables = 'temp'
-    expression = '-${sink_htc} * (temp - ${sink_temperature})'
-    block = 0
-  []
+  # [sink_aux]
+  #   type = ParsedAux
+  #   variable = sink_var
+  #   coupled_variables = 'temp'
+  #   expression = '-${sink_htc} * (temp - ${sink_temperature})'
+  #   block = 0
+  # []
 []
 
-# [BCs]
-
-# []
+[BCs]
+  [convective]
+    type = CoupledConvectiveHeatFluxBC_Mod
+    variable = temp
+    htc = 1000
+    T_infinity = 600
+    boundary = all_sides
+  []
+[]
 
 [Materials]
 
@@ -190,19 +184,36 @@ sink_temperature = 600
     type = ElementExtremeValue
     value_type = max
     variable = temp
+    execute_on = 'Linear TIMESTEP_END'
   []
 
   [bnorm_th]
     type = Receiver
   []
 
+  [elem_90]
+    type = ElementalVariableValue
+    variable = heat
+    elementid = 90
+  []
+
   [cost_function]
     type = ParsedPostprocessor
-    pp_names = 'bnorm_th max_temperature'
-    function = '-bnorm_th + 2.4e-06 * max_temperature'
+    pp_names = 'bnorm_th elem_90 '
+    function = '-1*(bnorm_th * if(elem_90 < 100, 1, 0.01))'
+    # function = '-1*(bnorm_th * if(elem_90 = 0.000e+00, 1, 0.1))'
+    # function = '(-bnorm_th + elem_90) * if(elem_90 = 0.0, 1, 0.0001)'
+    # function = '-bnorm_th + 2.4e-06 * max_temperature'
     # function = '-bnorm_th'
-    execute_on = TIMESTEP_END
+    execute_on = 'TIMESTEP_END'
   []
+
+  [elem_91]
+    type = ElementalVariableValue
+    variable = heat
+    elementid = 91
+  []
+
 []
 
 [MultiApps]
@@ -224,6 +235,7 @@ sink_temperature = 600
     to_multi_app = ntsApp
     source_variable = temp
     variable = temp
+    execute_on = 'TIMESTEP_BEGIN LINEAR TIMESTEP_END'
   []
 
   [from_sub]
@@ -233,13 +245,15 @@ sink_temperature = 600
     from_multi_app = ntsApp
     source_variable = heat
     variable = heat
+    execute_on = 'TIMESTEP_BEGIN LINEAR TIMESTEP_END'
   []
 
   [mesh_transfer]
     type = MultiAppMeshTransfer
     to_multi_app = ntsApp
     # from_multi_app = forward1
-    execute_on = 'TIMESTEP_BEGIN'
+    # execute_on = 'TIMESTEP_BEGIN'
+    execute_on = 'TIMESTEP_BEGIN LINEAR TIMESTEP_END'
   []
 
   [pp_transfer]
@@ -248,6 +262,7 @@ sink_temperature = 600
     reduction_type = maximum
     from_postprocessor = bnorm
     to_postprocessor = bnorm_th
+    execute_on = 'TIMESTEP_BEGIN LINEAR TIMESTEP_END'
   []
 
 []
@@ -255,7 +270,8 @@ sink_temperature = 600
 [Outputs]
   [exodus]
     type = Exodus
-    execute_on = 'Linear'
+    execute_on = 'INITIAL TIMESTEP_BEGIN TIMESTEP_END LINEAR FINAL'
+    overwrite = true
   []
 []
 

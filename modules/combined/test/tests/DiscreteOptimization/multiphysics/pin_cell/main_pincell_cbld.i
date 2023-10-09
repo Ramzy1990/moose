@@ -22,7 +22,7 @@
     outputs = "none"
     # pp = objective
     execute_on = "ALWAYS"
-    #execute_on = 'FORWARD'
+    # execute_on = 'FORWARD'
   []
 []
 
@@ -35,10 +35,10 @@
   check_density = 1 # Does not work with non-combinatorial (not easy to change solution). Mandatory for combinatorial for square?
   check_enclaves = 1
   check_boundaries = 1
-  number_of_runs = 1000
-  number_of_iterations = 1000
-  maximum_temperature = 10000
-  minimum_temperature = 0.00001
+  number_of_runs = 100
+  number_of_iterations = 30
+  maximum_temperature = 100
+  minimum_temperature = 0.1
   debug_on = true
 []
 
@@ -46,7 +46,7 @@
   [forward]
     type = FullSolveMultiApp
     input_files = pin_th.i
-    execute_on = 'LINEAR'
+    execute_on = 'FORWARD' # This is important as it gives a previous computed objective function with a previous mesh to the current one!
   []
 []
 
@@ -58,7 +58,7 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    execute_on = 'TIMESTEP_BEGIN'
+    execute_on = 'initial FORWARD'
   []
   [fromforward]
     # check_multiapp_execute_on = false
@@ -67,13 +67,21 @@
     user_object = 'discrete_reporter'
     debug = 0
     objective_name = 'cost_function'
-    execute_on = 'TIMESTEP_BEGIN'
+    execute_on = 'initial FORWARD'
   []
 []
 
 [Outputs]
-  print_linear_residuals = false
-  console = true
-  execute_on = 'Linear'
-  csv = true
+  # print_linear_residuals = false
+  # exodus = true
+  # console = true
+  # execute_on = 'ALWAYS'
+  # csv = true
+
+  # [exodus]
+  #   type = Exodus
+  #   execute_on = 'INITIAL TIMESTEP_BEGIN TIMESTEP_END LINEAR FINAL'
+  #   overwrite = true
+  # []
+
 []
