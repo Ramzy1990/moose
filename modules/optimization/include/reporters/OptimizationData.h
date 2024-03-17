@@ -24,17 +24,6 @@ public:
   virtual void execute() override;
   virtual void finalize() override {}
 
-  /**
-   * Compute misfit vectors from the simulations and measurement values.
-   */
-  void computeMisfit();
-
-  /**
-   * Compute half the sum of the misfit (squared) values
-   * @return 1/2 of the sum of the misfit values.
-   */
-  Real computeMisfitValue();
-
 protected:
   ///@{
   /// x,y,z,t and value measurement data
@@ -48,9 +37,6 @@ protected:
   std::vector<Real> & _simulation_values;
   /// difference between simulation and measurment values at measurment xyzt
   std::vector<Real> & _misfit_values;
-
-  /// Reporter value that will hold the objective value
-  Real & _objective_val;
 
 private:
   /// parse measurement data from csv file

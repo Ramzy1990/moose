@@ -2,14 +2,14 @@
 
 # MOOSE Optimization Module
 
-## Optimization Code
+## Inverse Optimization Code
 
-The MOOSE optimization module provides functionality for solving optimization
-problems in moose. It uses the TAO optimization interface from PETSc for solving PDE-constrained optimization problems.
+The MOOSE optimization module provides functionality for solving inverse optimization
+problems in moose. It is based on PDE constrained optimization using the PETSC TAO optimization solver.
 
 !row!
 !col! small=12 medium=4 large=4 icon=toys
-### [Inverse Optimization Theory](theory/InvOptTheory.md) class=center style=font-weight:200;
+### [Theory](theory/InvOptTheory.md) class=center style=font-weight:200;
 
 Learn the theory behind PDE constrained optimization as implemented in the MOOSE optimization module.
 !col-end!

@@ -62,7 +62,7 @@ RegionInterfaceAreaPostprocessor::execute()
 }
 
 Real
-RegionInterfaceAreaPostprocessor::getValue()
+RegionInterfaceAreaPostprocessor::getValue() const 
 {
   return _area;
 }
