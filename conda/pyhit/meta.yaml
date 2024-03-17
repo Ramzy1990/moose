@@ -1,5 +1,4 @@
-{% set build = 0 %}
-{% set version = "2023.05.10" %}
+{% set version = "2024.03.15" %}
 
 package:
   name: moose-pyhit
@@ -9,7 +8,8 @@ source:
   git_url: https://github.com/milljm/moose-pyhit.git
 
 build:
-  number: {{ build }}  # [linux,osx]
+  number: 0
+  string: build_0
   skip: true           # [win]
   pin_depends: record
 
@@ -17,15 +17,18 @@ requirements:
   build:
     - {{ compiler('cxx') }}
     - {{ moose_python }}
+    - {{ moose_wasp }}
     - cython
     - setuptools
 
   host:
     - {{ compiler('cxx') }}
     - {{ moose_python }}
+    - make
     - cython
 
   run:
+    - {{ moose_wasp }}
     - setuptools
     - python
 

@@ -240,7 +240,7 @@ offset = 0.00
     friction_coefficient = 0.4
     secondary_variable = disp_x
     penalty = 1e8
-    penalty_friction = 2e6
+    penalty_friction = 5e6
   []
 []
 

@@ -37,6 +37,7 @@
 #include "SolutionInvalidInterface.h"
 
 #define usingMaterialBaseMembers                                                                   \
+  usingMooseObjectMembers;                                                                         \
   usingTransientInterfaceMembers;                                                                  \
   using MaterialBase::_subproblem;                                                                 \
   using MaterialBase::_fe_problem;                                                                 \
@@ -85,8 +86,12 @@ public:
 
   /**
    * Initialize stateful properties (if material has some)
+   *
+   * This is _only_ called if this material has properties that are
+   * requested as stateful
    */
   virtual void initStatefulProperties(unsigned int n_points);
+
   virtual bool isInterfaceMaterial() { return false; };
 
   /**
@@ -215,7 +220,7 @@ public:
    * @return The IDs corresponding to the material properties that
    * MUST be reinited before evaluating this object
    */
-  virtual const std::set<unsigned int> & getMatPropDependencies() const = 0;
+  virtual const std::unordered_set<unsigned int> & getMatPropDependencies() const = 0;
 
   /**
    * @return Whether this material has stateful properties
@@ -240,6 +245,22 @@ public:
   buildRequiredMaterials(const Consumers & mat_consumers,
                          const std::vector<std::shared_ptr<MaterialBase>> & mats,
                          const bool allow_stateful);
+
+  /**
+   * Set active properties of this material
+   * Note: This function is called by FEProblemBase::setActiveMaterialProperties in an element loop
+   *       typically when switching subdomains.
+   */
+  void setActiveProperties(const std::unordered_set<unsigned int> & needed_props);
+
+  /**
+   * @return Whether or not this material should forcefully call
+   * initStatefulProperties() even if it doesn't produce properties
+   * that needs state.
+   *
+   * Please don't set this to true :(
+   */
+  bool forceStatefulInit() const { return _force_stateful_init; }
 
 protected:
   /**
@@ -266,6 +287,9 @@ protected:
    * and an older property named "_diffusivity_old".  You only need to initialize diffusivity.
    * MOOSE will use
    * copy that initial value to the old and older values as necessary.
+   *
+   * This is _only_ called if this material has properties that are
+   * requested as stateful
    */
   virtual void initQpStatefulProperties();
 
@@ -276,6 +300,14 @@ protected:
   virtual FEProblemBase & miProblem() { return _fe_problem; }
 
   virtual const QBase & qRule() const = 0;
+
+  /**
+   * Check whether a material property is active
+   */
+  bool isPropertyActive(const unsigned int prop_id) const
+  {
+    return _active_prop_ids.count(prop_id) > 0;
+  }
 
   SubProblem & _subproblem;
 
@@ -309,6 +341,9 @@ protected:
   /// the name strings each time.
   std::set<unsigned int> _supplied_prop_ids;
 
+  /// The ids of the current active supplied properties
+  std::unordered_set<unsigned int> _active_prop_ids;
+
   /// If False MOOSE does not compute this property
   const bool _compute;
 
@@ -340,6 +375,9 @@ protected:
 
 private:
   const MaterialPropertyName _declare_suffix;
+
+  /// Whether or not to force stateful init; see forceStatefulInit()
+  const bool _force_stateful_init;
 };
 
 template <typename T>

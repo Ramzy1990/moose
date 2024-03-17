@@ -15,41 +15,37 @@ registerMooseObject("StochasticToolsApp", SolutionContainer);
 InputParameters
 SolutionContainer::validParams()
 {
-  InputParameters params = GeneralReporter::validParams();
+  InputParameters params = SnapshotContainerBase::validParams();
   params.addClassDescription(
       "Class responsible for collecting distributed solution vectors into a container. We append "
       "a new distributed solution vector (containing all variables) at every execution.");
+  MooseEnum system_type("nonlinear aux", "nonlinear");
+  params.addParam<MooseEnum>(
+      "system", system_type, "The system whose solution should be collected.");
+
   return params;
 }
 
 SolutionContainer::SolutionContainer(const InputParameters & parameters)
-  : GeneralReporter(parameters),
-    _accumulated_solutions(
-        declareRestartableData<std::vector<std::unique_ptr<NumericVector<Number>>>>(
-            "accumulated_solution"))
+  : SnapshotContainerBase(parameters), _system_type(getParam<MooseEnum>("system"))
 {
+  if (isParamSetByUser("nonlinear_system_name") && _system_type == "aux")
+    paramError("nonlinear_system_name",
+               "This should not be set when 'system_type' is 'aux'. This parameter is only "
+               "applicable to nonlinear systems.");
 }
 
-void
-SolutionContainer::initialSetup()
+std::unique_ptr<NumericVector<Number>>
+SolutionContainer::collectSnapshot()
 {
-  _accumulated_solutions.clear();
-}
+  std::unique_ptr<NumericVector<Number>> cloned_solution;
 
-const std::unique_ptr<NumericVector<Number>> &
-SolutionContainer::getSolution(unsigned int local_i) const
-{
-  mooseAssert(local_i < _accumulated_solutions.size(),
-              "The container only has (" + std::to_string(_accumulated_solutions.size()) +
-                  ") solutions so we cannot find any with index (" + std::to_string(local_i) +
-                  ")!");
-  return _accumulated_solutions[local_i];
-}
+  // Clone the current solution
+  if (_system_type == "nonlinear")
+    cloned_solution =
+        _fe_problem.getNonlinearSystemBase(_nonlinear_system_number).solution().clone();
+  else
+    cloned_solution = _fe_problem.systemBaseAuxiliary().solution().clone();
 
-void
-SolutionContainer::execute()
-{
-  // Clone the current solution and append it to the vector
-  auto cloned_solution = _fe_problem.getNonlinearSystemBase().solution().clone();
-  _accumulated_solutions.push_back(std::move(cloned_solution));
+  return cloned_solution;
 }

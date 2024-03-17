@@ -69,6 +69,7 @@ CommonOutputAction::validParams()
       "Output the scalar and postprocessor results using the default settings for GNUPlot output");
   params.addParam<bool>(
       "solution_history", false, "Print a solution history file (.slh) using the default settings");
+  params.addParam<bool>("progress", false, "Print a progress bar");
   params.addParam<bool>("dofmap", false, "Create the dof map .json output file");
   params.addParam<bool>("controls", false, "Enable the screen output of Control systems.");
 
@@ -84,7 +85,12 @@ CommonOutputAction::validParams()
                                             "strings.  This is helpful in outputting only a subset "
                                             "of outputs when using MultiApps.");
   params.addParam<unsigned int>(
-      "interval", 1, "The interval at which timesteps are output to the solution file.");
+      "time_step_interval", 1, "The interval (number of time steps) at which output occurs");
+  params.addDeprecatedParam<unsigned int>(
+      "interval",
+      "The interval (number of time steps) at which output occurs",
+      "Deprecated, use time_step_interval");
+  params.deprecateParam("interval", "time_step_interval", "02/01/2025");
   params.addParam<std::vector<Real>>("sync_times",
                                      std::vector<Real>(),
                                      "Times at which the output and solution is forced to occur");
@@ -99,10 +105,12 @@ CommonOutputAction::validParams()
 
   params.addParam<std::vector<VariableName>>(
       "hide",
+      {},
       "A list of the variables and postprocessors that should NOT be output to the Exodus "
       "file (may include Variables, ScalarVariables, and Postprocessor names).");
   params.addParam<std::vector<VariableName>>(
       "show",
+      {},
       "A list of the variables and postprocessors that should be output to the Exodus file "
       "(may include Variables, ScalarVariables, and Postprocessor names).");
 
@@ -219,6 +227,9 @@ CommonOutputAction::act()
 
     if (getParam<bool>("solution_history"))
       create("SolutionHistory");
+
+    if (getParam<bool>("progress"))
+      create("Progress");
 
     if (getParam<bool>("dofmap"))
       create("DOFMap");

@@ -21,6 +21,7 @@
 #include "FsiApp.h"
 #include "FunctionalExpansionToolsApp.h"
 #include "GeochemistryApp.h"
+#include "HeatTransferApp.h"
 #include "HeatConductionApp.h"
 #include "LevelSetApp.h"
 #include "MiscApp.h"
@@ -36,7 +37,7 @@
 #include "ScalarTransportApp.h"
 #include "SolidPropertiesApp.h"
 #include "StochasticToolsApp.h"
-#include "TensorMechanicsApp.h"
+#include "SolidMechanicsApp.h"
 #include "ThermalHydraulicsApp.h"
 #include "XFEMApp.h"
 
@@ -64,6 +65,34 @@ void
 CombinedApp::registerApps()
 {
   registerApp(CombinedApp);
+
+  ChemicalReactionsApp::registerApps();
+  ContactApp::registerApps();
+  ElectromagneticsApp::registerApps();
+  ExternalPetscSolverApp::registerApps();
+  FluidPropertiesApp::registerApps();
+  FsiApp::registerApps();
+  FunctionalExpansionToolsApp::registerApps();
+  GeochemistryApp::registerApps();
+  HeatTransferApp::registerApps();
+  HeatConductionApp::registerApps();
+  LevelSetApp::registerApps();
+  MiscApp::registerApps();
+  NavierStokesApp::registerApps();
+  OptimizationApp::registerApps();
+  PeridynamicsApp::registerApps();
+  PhaseFieldApp::registerApps();
+  PorousFlowApp::registerApps();
+  RayTracingApp::registerApps();
+  RdgApp::registerApps();
+  ReactorApp::registerApps();
+  RichardsApp::registerApps();
+  ScalarTransportApp::registerApps();
+  SolidMechanicsApp::registerApps();
+  SolidPropertiesApp::registerApps();
+  StochasticToolsApp::registerApps();
+  ThermalHydraulicsApp::registerApps();
+  XFEMApp::registerApps();
 }
 
 void
@@ -93,9 +122,9 @@ CombinedApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   ReactorApp::registerAll(f, af, s);
   RichardsApp::registerAll(f, af, s);
   ScalarTransportApp::registerAll(f, af, s);
+  SolidMechanicsApp::registerAll(f, af, s);
   SolidPropertiesApp::registerAll(f, af, s);
   StochasticToolsApp::registerAll(f, af, s);
-  TensorMechanicsApp::registerAll(f, af, s);
   ThermalHydraulicsApp::registerAll(f, af, s);
   XFEMApp::registerAll(f, af, s);
 }

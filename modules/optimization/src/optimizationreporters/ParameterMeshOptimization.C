@@ -153,13 +153,6 @@ ParameterMeshOptimization::computeGradient(libMesh::PetscVector<Number> & gradie
 }
 
 Real
-ParameterMeshOptimization::getLowerBound(dof_id_type i) const
-{
-  return _lower_bounds.empty() ? -std::numeric_limits<Real>::max()
-                               : _lower_bounds[getParameterIndex(i)];
-}
-
-Real
 ParameterMeshOptimization::getUpperBound(dof_id_type i) const
 {
   return _upper_bounds.empty() ? std::numeric_limits<Real>::max()

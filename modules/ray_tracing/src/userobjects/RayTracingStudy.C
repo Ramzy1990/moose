@@ -253,8 +253,8 @@ RayTracingStudy::initialSetup()
                  "\nIn this case, the study must use the execute_on = PRE_KERNELS");
 
   // Build 1D quadrature rule for along a segment
-  _segment_qrule =
-      QBase::build(QGAUSS, 1, _fe_problem.getNonlinearSystemBase().getMinQuadratureOrder());
+  _segment_qrule = QBase::build(
+      QGAUSS, 1, _fe_problem.getNonlinearSystemBase(_sys.number()).getMinQuadratureOrder());
 }
 
 void
@@ -631,7 +631,7 @@ RayTracingStudy::segmentSubdomainSetup(const SubdomainID subdomain,
   _fe_problem.subdomainSetup(subdomain, tid);
 
   std::set<MooseVariableFEBase *> needed_moose_vars;
-  std::set<unsigned int> needed_mat_props;
+  std::unordered_set<unsigned int> needed_mat_props;
 
   // Get RayKernels and their dependencies and call subdomain setup
   getRayKernels(_threaded_current_ray_kernels[tid], subdomain, tid, ray_id);
@@ -652,8 +652,7 @@ RayTracingStudy::segmentSubdomainSetup(const SubdomainID subdomain,
       var->prepareAux();
 
   _fe_problem.setActiveElementalMooseVariables(needed_moose_vars, tid);
-  _fe_problem.setActiveMaterialProperties(needed_mat_props, tid);
-  _fe_problem.prepareMaterials(subdomain, tid);
+  _fe_problem.prepareMaterials(needed_mat_props, subdomain, tid);
 }
 
 void
@@ -686,7 +685,7 @@ RayTracingStudy::reinitSegment(
     std::vector<Real> weights;
     buildSegmentQuadrature(start, end, length, points, weights);
     _fe_problem.reinitElemPhys(elem, points, tid);
-    _fe_problem.assembly(tid).modifyArbitraryWeights(weights);
+    _fe_problem.assembly(tid, _sys.number()).modifyArbitraryWeights(weights);
 
     _fe_problem.reinitMaterials(elem->subdomain_id(), tid);
   }

@@ -104,14 +104,20 @@ PatternedCartesianMeshGenerator::validParams()
   params.addParam<bool>("deform_non_circular_region",
                         true,
                         "Whether the non-circular region (outside the rings) can be deformed.");
-  params.addParam<std::string>("id_name", "Name of extra integer ID set");
+  params.addParam<std::vector<std::string>>("id_name", "List of extra integer ID set names");
   params.addParam<std::vector<MeshGeneratorName>>(
       "exclude_id", "Name of input meshes to be excluded in ID generation");
-  MooseEnum option("cell pattern manual", "cell");
-  params.addParam<MooseEnum>("assign_type", option, "Type of integer ID assignment");
-  params.addParam<std::vector<std::vector<dof_id_type>>>(
+  std::vector<MooseEnum> option = {MooseEnum("cell pattern manual", "cell")};
+  params.addParam<std::vector<MooseEnum>>(
+      "assign_type", option, "List of integer ID assignment types");
+  params.addParam<std::vector<std::vector<std::vector<dof_id_type>>>>(
       "id_pattern",
-      "User-defined element IDs. A double-indexed array starting with the upper-left corner");
+      "User-defined element IDs. A double-indexed array starting with the upper-left corner. When "
+      "providing multiple patterns, each pattern should be separated using '|'");
+  params.addParam<std::vector<std::vector<boundary_id_type>>>(
+      "interface_boundary_id_shift_pattern",
+      "User-defined shift values for each pattern cell. A double-indexed array starting with the "
+      "upper-left corner.");
   params.addParamNamesToGroup(
       "pattern_boundary background_block_id background_block_name duct_block_ids duct_block_names "
       "external_boundary_id external_boundary_name create_inward_interface_boundaries "
@@ -162,9 +168,8 @@ PatternedCartesianMeshGenerator::PatternedCartesianMeshGenerator(const InputPara
     _create_outward_interface_boundaries(getParam<bool>("create_outward_interface_boundaries")),
     _deform_non_circular_region(getParam<bool>("deform_non_circular_region")),
     _use_reporting_id(isParamValid("id_name")),
-    _assign_type(
-        getParam<MooseEnum>("assign_type").getEnum<ReportingIDGeneratorUtils::AssignType>()),
-    _use_exclude_id(isParamValid("exclude_id"))
+    _use_exclude_id(isParamValid("exclude_id")),
+    _use_interface_boundary_id_shift(isParamValid("interface_boundary_id_shift_pattern"))
 {
   declareMeshProperty("pattern_pitch_meta", 0.0);
   declareMeshProperty("input_pitch_meta", 0.0);
@@ -252,16 +257,75 @@ PatternedCartesianMeshGenerator::PatternedCartesianMeshGenerator(const InputPara
                  "This parameter must not be provided when pattern_boundary is none.");
   }
 
+  if (_use_interface_boundary_id_shift)
+  {
+    // check "interface_boundary_id_shift_pattern" parameter
+    _interface_boundary_id_shift_pattern =
+        getParam<std::vector<std::vector<boundary_id_type>>>("interface_boundary_id_shift_pattern");
+    if (_interface_boundary_id_shift_pattern.size() != _pattern.size())
+    {
+      std::string shape_pattern =
+          "(" + std::to_string(_pattern.size()) + ", " + std::to_string(_pattern[0].size()) + ") ";
+      paramError("interface_boundary_id_shift_pattern",
+                 "This parameter, if provided, should have the same two-dimensional array shape " +
+                     shape_pattern +
+                     "as "
+                     "the 'pattern' parameter. First dimension '" +
+                     std::to_string(_interface_boundary_id_shift_pattern.size()) +
+                     "' does not match.");
+    }
+    for (const auto i : make_range(_pattern.size()))
+      if (_interface_boundary_id_shift_pattern[i].size() != _pattern[i].size())
+      {
+        std::string shape_pattern = "(" + std::to_string(_pattern.size()) + ", " +
+                                    std::to_string(_pattern[0].size()) + ") ";
+        paramError(
+            "interface_boundary_id_shift_pattern",
+            "This parameter, if provided, should have the same two-dimensional array shape " +
+                shape_pattern +
+                "as "
+                "the 'pattern' parameter. Second dimension '" +
+                std::to_string(_interface_boundary_id_shift_pattern[i].size()) +
+                "' does not match.");
+      }
+  }
+  // declare metadata for internal interface boundaries
+  declareMeshProperty<bool>("interface_boundaries", false);
+  declareMeshProperty<std::set<boundary_id_type>>("interface_boundary_ids", {});
+
   if (_use_reporting_id)
   {
-    if (_use_exclude_id && _assign_type != ReportingIDGeneratorUtils::AssignType::cell)
-      paramError("exclude_id", "works only when \"assign_type\" is equal 'cell'");
-    if (!isParamValid("id_pattern") &&
-        _assign_type == ReportingIDGeneratorUtils::AssignType::manual)
-      paramError("id_pattern", "required when \"assign_type\" is equal to 'manual'");
-
-    if (_assign_type == ReportingIDGeneratorUtils::AssignType::manual)
-      _id_pattern = getParam<std::vector<std::vector<dof_id_type>>>("id_pattern");
+    // get reporting id name input
+    _reporting_id_names = getParam<std::vector<std::string>>("id_name");
+    const unsigned int num_reporting_ids = _reporting_id_names.size();
+    // get reporting id assign type input
+    const auto input_assign_types = getParam<std::vector<MooseEnum>>("assign_type");
+    if (input_assign_types.size() != num_reporting_ids)
+      paramError("assign_type", "This parameter must have a length equal to length of id_name.");
+    // list of reporting id names using manual id patterns;
+    std::vector<std::string> manual_ids;
+    for (const auto i : make_range(num_reporting_ids))
+    {
+      _assign_types.push_back(
+          input_assign_types[i].getEnum<ReportingIDGeneratorUtils::AssignType>());
+      if (_assign_types[i] == ReportingIDGeneratorUtils::AssignType::manual)
+        manual_ids.push_back(_reporting_id_names[i]);
+    }
+    // processing "id_pattern" input parameter
+    if (manual_ids.size() > 0 && !isParamValid("id_pattern"))
+      paramError("id_pattern", "required when 'manual' is defined in \"assign_type\"");
+    if (isParamValid("id_pattern"))
+    {
+      const auto input_id_patterns =
+          getParam<std::vector<std::vector<std::vector<dof_id_type>>>>("id_pattern");
+      if (input_id_patterns.size() != manual_ids.size())
+        paramError("id_pattern",
+                   "The number of patterns must be equal to the number of 'manual' types defined "
+                   "in \"assign_type\".");
+      for (unsigned int i = 0; i < manual_ids.size(); ++i)
+        _id_patterns[manual_ids[i]] = input_id_patterns[i];
+    }
+    // processing exlude id
     _exclude_ids.resize(_input_names.size());
     // in case of using 'exclude_id', create a vector containg flag for each input tile to indicate
     // whether it is excluded from reporting id assignment
@@ -466,6 +530,30 @@ PatternedCartesianMeshGenerator::generate()
 
   setMeshProperty("pattern_pitch_meta", _pattern_pitch);
 
+  // create a list of interface boundary ids for each input mesh
+  // NOTE: list of interface boundary ids is stored in mesh metadata
+  std::vector<std::set<boundary_id_type>> input_interface_boundary_ids;
+  input_interface_boundary_ids.resize(_input_names.size());
+  if (_use_interface_boundary_id_shift)
+  {
+    for (const auto i : make_range(_input_names.size()))
+    {
+      if (!hasMeshProperty<bool>("interface_boundaries", _input_names[i]))
+        mooseError("Metadata 'interface_boundaries' could not be found on the input mesh: ",
+                   _input_names[i]);
+      if (!getMeshProperty<bool>("interface_boundaries", _input_names[i]))
+        mooseError("Interface boundary ids were not constructed in the input mesh",
+                   _input_names[i]);
+      if (!hasMeshProperty<std::set<boundary_id_type>>("interface_boundary_ids", _input_names[i]))
+        mooseError("Metadata 'interface_boundary_ids' could not be found on the input mesh: ",
+                   _input_names[i]);
+    }
+  }
+  for (const auto i : make_range(_input_names.size()))
+    if (hasMeshProperty<std::set<boundary_id_type>>("interface_boundary_ids", _input_names[i]))
+      input_interface_boundary_ids[i] =
+          getMeshProperty<std::set<boundary_id_type>>("interface_boundary_ids", _input_names[i]);
+
   const Real input_pitch((_pattern_boundary == "expanded" || !_generate_core_metadata)
                              ? pitch_array.front()
                              : _pattern_pitch);
@@ -504,6 +592,11 @@ PatternedCartesianMeshGenerator::generate()
                 "control_drum_id",
                 true,
                 is_control_drum_array[pattern] ? control_drum_azimuthals.size() : 0);
+          // shift interface boundary ids
+          if (_use_interface_boundary_id_shift)
+            reassignBoundaryIDs(*out_mesh,
+                                _interface_boundary_id_shift_pattern[i][j],
+                                input_interface_boundary_ids[pattern]);
           continue;
         }
       }
@@ -582,6 +675,12 @@ PatternedCartesianMeshGenerator::generate()
             cutOffPolyDeform(
                 *tmp_peripheral_mesh, orientation, y_max_0, y_max_n, y_min, mesh_type, 90.0);
 
+          // Reassign interface boundary ids
+          if (_use_interface_boundary_id_shift)
+            reassignBoundaryIDs(*tmp_peripheral_mesh,
+                                _interface_boundary_id_shift_pattern[i][j],
+                                input_interface_boundary_ids[pattern]);
+
           if (i == 0 && j == 0)
             out_mesh = std::move(tmp_peripheral_mesh);
           else
@@ -627,6 +726,11 @@ PatternedCartesianMeshGenerator::generate()
         main_subdomain_map_name_list.emplace(id_name_pair.second);
       if (main_subdomain_map.size() != main_subdomain_map_name_list.size())
         paramError("inputs", "The input meshes contain subdomain name maps with conflicts.");
+      // Reassign interface boundary ids
+      if (_use_interface_boundary_id_shift)
+        reassignBoundaryIDs(pattern_mesh,
+                            _interface_boundary_id_shift_pattern[i][j],
+                            input_interface_boundary_ids[pattern]);
 
       out_mesh->stitch_meshes(pattern_mesh,
                               OUTER_SIDESET_ID,
@@ -638,6 +742,12 @@ PatternedCartesianMeshGenerator::generate()
       // Translate back now that we've stitched so that anyone else that uses this mesh has it at
       // the origin
       MeshTools::Modification::translate(pattern_mesh, -(deltax + j * input_pitch), -deltay, 0);
+      // Roll back the changes in interface boundary ids for the same reason
+      if (_use_interface_boundary_id_shift)
+        reassignBoundaryIDs(pattern_mesh,
+                            _interface_boundary_id_shift_pattern[i][j],
+                            input_interface_boundary_ids[pattern],
+                            true);
     }
   }
 
@@ -777,6 +887,11 @@ PatternedCartesianMeshGenerator::generate()
     }
   }
 
+  // add reporting IDs if _use_reporting_id is set true
+  // NOTE: addReportingIDs should be called before applying customized peripheral block ids
+  if (_use_reporting_id)
+    addReportingIDs(*out_mesh, meshes);
+
   // Assign customized peripheral block ids and names
   if (!_peripheral_block_ids.empty())
     for (const auto & elem : out_mesh->active_element_ptr_range())
@@ -818,11 +933,24 @@ PatternedCartesianMeshGenerator::generate()
     new_nodeset_map.insert(input_nodeset_map.begin(), input_nodeset_map.end());
   }
 
+  // set mesh metadata related with interface boundary ids
+  const std::set<boundary_id_type> boundary_ids = out_mesh->get_boundary_info().get_boundary_ids();
+  const std::set<boundary_id_type> interface_boundary_ids = getInterfaceBoundaryIDs(
+      _pattern,
+      _interface_boundary_id_shift_pattern,
+      boundary_ids,
+      input_interface_boundary_ids,
+      _use_interface_boundary_id_shift,
+      _create_inward_interface_boundaries || _create_outward_interface_boundaries,
+      extra_dist.size());
+  if (interface_boundary_ids.size() > 0)
+  {
+    setMeshProperty("interface_boundaries", true);
+    setMeshProperty("interface_boundary_ids", interface_boundary_ids);
+  }
+
   out_mesh->set_isnt_prepared();
   auto mesh = dynamic_pointer_cast<MeshBase>(out_mesh);
-  // before return, add reporting IDs if _use_reporting_id is set true
-  if (_use_reporting_id)
-    addReportingIDs(mesh, meshes);
   return mesh;
 }
 
@@ -949,32 +1077,42 @@ PatternedCartesianMeshGenerator::positionSetup(
 
 void
 PatternedCartesianMeshGenerator::addReportingIDs(
-    std::unique_ptr<MeshBase> & mesh,
-    const std::vector<std::unique_ptr<ReplicatedMesh>> & from_meshes) const
+    MeshBase & mesh, const std::vector<std::unique_ptr<ReplicatedMesh>> & from_meshes) const
 {
-  unsigned int extra_id_index;
-  const std::string element_id_name = getParam<std::string>("id_name");
-  if (!mesh->has_elem_integer(element_id_name))
-    extra_id_index = mesh->add_elem_integer(element_id_name);
-  else
+  const unsigned int num_reporting_ids = _reporting_id_names.size();
+  for (unsigned int i = 0; i < num_reporting_ids; ++i)
   {
-    extra_id_index = mesh->get_elem_integer_index(element_id_name);
-    paramWarning(
-        "id_name", "An element integer with the name '", element_id_name, "' already exists");
-  }
+    const std::string element_id_name = _reporting_id_names[i];
+    unsigned int extra_id_index;
+    if (!mesh.has_elem_integer(element_id_name))
+      extra_id_index = mesh.add_elem_integer(element_id_name);
+    else
+    {
+      extra_id_index = mesh.get_elem_integer_index(element_id_name);
+      paramWarning(
+          "id_name", "An element integer with the name '", element_id_name, "' already exists");
+    }
 
-  // asssign reporting IDs to individual elements
-  std::set<subdomain_id_type> background_block_ids;
-  if (isParamValid("background_block_id"))
-    background_block_ids.insert(getParam<subdomain_id_type>("background_block_id"));
-  ReportingIDGeneratorUtils::assignReportingIDs(mesh,
-                                                extra_id_index,
-                                                _assign_type,
-                                                _use_exclude_id,
-                                                _exclude_ids,
-                                                _pattern_boundary == "expanded",
-                                                background_block_ids,
-                                                from_meshes,
-                                                _pattern,
-                                                _id_pattern);
+    // assign reporting IDs to individual elements
+    // NOTE: background block id should be set "PERIPHERAL_ID_SHIFT" because this function is called
+    // before assigning the user-defined background block id
+    std::set<subdomain_id_type> background_block_ids =
+        (isParamValid("background_block_id")) ? std::set<subdomain_id_type>({PERIPHERAL_ID_SHIFT})
+                                              : std::set<subdomain_id_type>();
+
+    const bool using_manual_id =
+        (_assign_types[i] == ReportingIDGeneratorUtils::AssignType::manual);
+    ReportingIDGeneratorUtils::assignReportingIDs(mesh,
+                                                  extra_id_index,
+                                                  _assign_types[i],
+                                                  _use_exclude_id,
+                                                  _exclude_ids,
+                                                  _pattern_boundary == "expanded",
+                                                  background_block_ids,
+                                                  from_meshes,
+                                                  _pattern,
+                                                  (using_manual_id)
+                                                      ? _id_patterns.at(element_id_name)
+                                                      : std::vector<std::vector<dof_id_type>>());
+  }
 }

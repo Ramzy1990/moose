@@ -1,5 +1,11 @@
 # Evanescent Wave Decay Benchmark
 
+!! TODO: We only want 'tag' to run on the full MOOSE website build, so skip if a moose submodule
+!! exists (implying an app). Remove this if statement when the tagging extension is not "experimental".
+
+!if function=!hasSubmodule('moose')
+!tag name=evanescent_wave pairs=example_type:benchmark simulation_type:vector fiscal_year:2022
+
 This document describes the evanescent wave decay benchmark / validation test
 for the electromagnetics module. Below is a summary of the test, along with
 relevant background theory, results, and the test input file for review.
@@ -37,7 +43,7 @@ where
 - $\vec{J}$ is the external current density in A/$\text{m}^2$, and
 - $j$ is the imaginary unit ($j^2 = -1$).
 
-In the EM module, these terms are represented by the [CurlCurlField.md],
+These terms are represented by the [CurlCurlField.md],
 [VectorFunctionReaction.md], and [VectorCurrentSource.md] objects, respectively. The
 current source in this study is applied in the $y$-direction and only on the real
 component, so in 2D we have

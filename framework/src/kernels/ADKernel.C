@@ -67,7 +67,7 @@ ADKernelTempl<T>::ADKernelTempl(const InputParameters & parameters)
   {
     MooseVariable * var = &_subproblem.getStandardVariable(_tid, _save_in_strings[i]);
 
-    if (_fe_problem.getNonlinearSystemBase().hasVariable(_save_in_strings[i]))
+    if (_fe_problem.getNonlinearSystemBase(_sys.number()).hasVariable(_save_in_strings[i]))
       paramError("save_in", "cannot use solution variable as save-in variable");
 
     if (var->feType() != _var.feType())
@@ -87,7 +87,7 @@ ADKernelTempl<T>::ADKernelTempl(const InputParameters & parameters)
   {
     MooseVariable * var = &_subproblem.getStandardVariable(_tid, _diag_save_in_strings[i]);
 
-    if (_fe_problem.getNonlinearSystemBase().hasVariable(_diag_save_in_strings[i]))
+    if (_fe_problem.getNonlinearSystemBase(_sys.number()).hasVariable(_diag_save_in_strings[i]))
       paramError("diag_save_in", "cannot use solution variable as diag save-in variable");
 
     if (var->feType() != _var.feType())
@@ -102,12 +102,6 @@ ADKernelTempl<T>::ADKernelTempl(const InputParameters & parameters)
   }
 
   _has_diag_save_in = _diag_save_in.size() > 0;
-
-  if (_use_displaced_mesh && _displacements.empty())
-    mooseError("ADKernel ",
-               name(),
-               "has been asked to act on the displaced mesh, but no displacements have been "
-               "coupled in. Your Jacobian will be wrong without that coupling");
 }
 
 template <typename T>

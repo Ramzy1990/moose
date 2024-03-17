@@ -48,67 +48,6 @@ extraSparsity(SparsityPattern::Graph & sparsity,
   sys->augmentSparsity(sparsity, n_nz, n_oz);
 }
 
-template <>
-void
-dataStore(std::ostream & stream, SystemBase & system_base, void * context)
-{
-  System & libmesh_system = system_base.system();
-
-  NumericVector<Real> & solution = *(libmesh_system.solution.get());
-
-  dataStore(stream, solution, context);
-
-  // Need an l-value reference to pass to dataStore
-  unsigned int num_vectors = libmesh_system.n_vectors();
-  dataStore(stream, num_vectors, context);
-
-  for (System::vectors_iterator it = libmesh_system.vectors_begin();
-       it != libmesh_system.vectors_end();
-       it++)
-  {
-    // Store the vector name. A map iterator will have a const Key, so we need to make a copy
-    // because dataStore expects a non-const reference
-    auto vector_name = it->first;
-    dataStore(stream, vector_name, context);
-
-    // Store the vector
-    dataStore(stream, *(it->second), context);
-  }
-}
-
-template <>
-void
-dataLoad(std::istream & stream, SystemBase & system_base, void * context)
-{
-  System & libmesh_system = system_base.system();
-
-  NumericVector<Real> & solution = *(libmesh_system.solution.get());
-
-  dataLoad(stream, solution, context);
-
-  unsigned int num_vectors;
-  dataLoad(stream, num_vectors, context);
-
-  // Can't do a range based for loop because we don't actually use the index, resulting in an unused
-  // variable warning. So we make a dumb index variable and use it in the loop termination check
-  for (unsigned int vec_num = 0; vec_num < num_vectors; ++vec_num)
-  {
-    std::string vector_name;
-    dataLoad(stream, vector_name, context);
-
-    if (!libmesh_system.have_vector(vector_name))
-      mooseError("Trying to load vector name ",
-                 vector_name,
-                 " but that vector doesn't exist in the system.");
-
-    auto & vector = libmesh_system.get_vector(vector_name);
-
-    dataLoad(stream, vector, context);
-  }
-
-  system_base.update();
-}
-
 SystemBase::SystemBase(SubProblem & subproblem,
                        const std::string & name,
                        Moose::VarKindType var_kind)
@@ -230,6 +169,20 @@ void
 SystemBase::addVariableToZeroOnJacobian(std::string var_name)
 {
   _vars_to_be_zeroed_on_jacobian.push_back(var_name);
+}
+
+void
+SystemBase::setVariableGlobalDoFs(const std::string & var_name)
+{
+  AllLocalDofIndicesThread aldit(_subproblem, {var_name});
+  ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+  Threads::parallel_reduce(elem_range, aldit);
+
+  // Gather the dof indices across procs to get all the dof indices for var_name
+  aldit.dofIndicesSetUnion();
+
+  const auto & all_dof_indices = aldit.getDofIndices();
+  _var_all_dof_indices.assign(all_dof_indices.begin(), all_dof_indices.end());
 }
 
 void
@@ -778,7 +731,7 @@ SystemBase::addVariable(const std::string & var_type,
   if (var_type == "ArrayMooseVariable")
   {
     if (fe_type.family == NEDELEC_ONE || fe_type.family == LAGRANGE_VEC ||
-        fe_type.family == MONOMIAL_VEC)
+        fe_type.family == MONOMIAL_VEC || fe_type.family == RAVIART_THOMAS)
       mooseError("Vector family type cannot be used in an array variable");
 
     // Build up the variable names
@@ -886,10 +839,29 @@ SystemBase::isScalarVariable(unsigned int var_num) const
 unsigned int
 SystemBase::nVariables() const
 {
+  unsigned int n = nFieldVariables();
+  n += _vars[0].scalars().size();
+
+  return n;
+}
+
+unsigned int
+SystemBase::nFieldVariables() const
+{
   unsigned int n = 0;
   for (auto & var : _vars[0].fieldVariables())
     n += var->count();
-  n += _vars[0].scalars().size();
+
+  return n;
+}
+
+unsigned int
+SystemBase::nFVVariables() const
+{
+  unsigned int n = 0;
+  for (auto & var : _vars[0].fieldVariables())
+    if (var->isFV())
+      n += var->count();
 
   return n;
 }
@@ -1240,24 +1212,12 @@ SystemBase::update(const bool update_libmesh_system)
 {
   if (update_libmesh_system)
     system().update();
-  std::vector<VariableName> std_field_variables;
-  getStandardFieldVariableNames(std_field_variables);
-  cacheVarIndicesByFace(std_field_variables);
 }
 
 void
 SystemBase::solve()
 {
   system().solve();
-}
-
-void
-SystemBase::getStandardFieldVariableNames(std::vector<VariableName> & std_field_variables) const
-{
-  std_field_variables.clear();
-  for (auto & p : _vars[0].fieldVariables())
-    if (p->fieldType() == 0)
-      std_field_variables.push_back(p->name());
 }
 
 /**
@@ -1268,12 +1228,15 @@ SystemBase::copySolutionsBackwards()
 {
   system().update();
 
+  // Copying the solutions backward so the current solution will become the old, and the old will
+  // become older. The same applies to the nonlinear iterates.
   for (const auto iteration_index : index_range(_solution_states))
   {
     const auto states = _solution_states[iteration_index].size();
     if (states > 1)
-      for (unsigned int i = 1; i <= states - 1; ++i)
-        solutionState(i) = solutionState(0);
+      for (unsigned int i = states - 1; i > 0; --i)
+        solutionState(i, Moose::SolutionIterationType(iteration_index)) =
+            solutionState(i - 1, Moose::SolutionIterationType(iteration_index));
   }
 
   if (solutionUDotOld())
@@ -1463,16 +1426,21 @@ SystemBase::applyScalingFactors(const std::vector<Real> & inverse_scaling_factor
   for (MooseIndex(_vars) thread = 0; thread < _vars.size(); ++thread)
   {
     auto & field_variables = _vars[thread].fieldVariables();
-    for (MooseIndex(field_variables) i = 0; i < field_variables.size(); ++i)
-      field_variables[i]->scalingFactor(1. / inverse_scaling_factors[i] *
-                                        field_variables[i]->scalingFactor());
+    for (MooseIndex(field_variables) i = 0, p = 0; i < field_variables.size(); ++i)
+    {
+      auto factors = field_variables[i]->arrayScalingFactor();
+      for (unsigned int j = 0; j < field_variables[i]->count(); ++j, ++p)
+        factors[j] /= inverse_scaling_factors[p];
+
+      field_variables[i]->scalingFactor(factors);
+    }
 
     auto offset = field_variables.size();
 
     auto & scalar_variables = _vars[thread].scalars();
     for (MooseIndex(scalar_variables) i = 0; i < scalar_variables.size(); ++i)
-      scalar_variables[i]->scalingFactor(1. / inverse_scaling_factors[offset + i] *
-                                         scalar_variables[i]->scalingFactor());
+      scalar_variables[i]->scalingFactor(
+          {1. / inverse_scaling_factors[offset + i] * scalar_variables[i]->scalingFactor()});
 
     if (thread == 0 && _verbose)
     {
@@ -1483,8 +1451,13 @@ SystemBase::applyScalingFactors(const std::vector<Real> & inverse_scaling_factor
       _console.precision(6);
 
       for (const auto & field_variable : field_variables)
-        _console << "  " << field_variable->name() << ": " << field_variable->scalingFactor()
-                 << "\n";
+      {
+        const auto & factors = field_variable->arrayScalingFactor();
+        _console << "  " << field_variable->name() << ":";
+        for (const auto i : make_range(field_variable->count()))
+          _console << " " << factors[i];
+        _console << "\n";
+      }
       for (const auto & scalar_variable : scalar_variables)
         _console << "  " << scalar_variable->name() << ": " << scalar_variable->scalingFactor()
                  << "\n";
@@ -1498,34 +1471,10 @@ SystemBase::applyScalingFactors(const std::vector<Real> & inverse_scaling_factor
 }
 
 void
-SystemBase::cacheVarIndicesByFace(const std::vector<VariableName> & vars)
-{
-  if (!_subproblem.haveFV())
-    return;
-
-  // prepare a vector of MooseVariables from names
-  std::vector<const MooseVariableFieldBase *> moose_vars;
-  for (auto & v : vars)
-  {
-    // first make sure this is not a scalar variable
-    if (hasScalarVariable(v))
-      mooseError("Variable ", v, " is a scalar variable");
-
-    // now make sure this is a standard variable [not array/vector]
-    if (getVariable(0, v).fieldType() != 0)
-      mooseError("Variable ", v, " not a standard field variable [either VECTOR or ARRAY].");
-    moose_vars.push_back(static_cast<MooseVariableFieldBase *>(&getVariable(0, v)));
-  }
-
-  _mesh.cacheVarIndicesByFace(moose_vars);
-  _mesh.computeFaceInfoFaceCoords();
-}
-
-void
 SystemBase::addScalingVector()
 {
   addVector("scaling_factors", /*project=*/false, libMesh::ParallelType::GHOSTED);
-  _subproblem.hasScalingVector();
+  _subproblem.hasScalingVector(number());
 }
 
 bool

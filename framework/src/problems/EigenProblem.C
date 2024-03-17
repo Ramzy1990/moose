@@ -42,12 +42,15 @@ EigenProblem::validParams()
       "active_eigen_index",
       0,
       "Which eigenvector is used to compute residual and also associated to nonlinear variable");
+  params.addParam<PostprocessorName>("bx_norm", "A postprocessor describing the norm of Bx");
 
   return params;
 }
 
 EigenProblem::EigenProblem(const InputParameters & parameters)
-  : FEProblemBase(parameters),
+  : FEProblemBase(parameters)
+#ifdef LIBMESH_HAVE_SLEPC
+    ,
     // By default, we want to compute an eigenvalue only (smallest or largest)
     _n_eigen_pairs_required(1),
     _generalized_eigenvalue_problem(false),
@@ -60,7 +63,11 @@ EigenProblem::EigenProblem(const InputParameters & parameters)
     _constant_matrices(false),
     _has_normalization(false),
     _normal_factor(1.0),
-    _first_solve(declareRestartableData<bool>("first_solve", true))
+    _first_solve(declareRestartableData<bool>("first_solve", true)),
+    _bx_norm_name(isParamValid("bx_norm")
+                      ? std::make_optional(getParam<PostprocessorName>("bx_norm"))
+                      : std::nullopt)
+#endif
 {
 #ifdef LIBMESH_HAVE_SLEPC
   if (_nl_sys_names.size() > 1)
@@ -82,7 +89,7 @@ EigenProblem::EigenProblem(const InputParameters & parameters)
 
   FEProblemBase::initNullSpaceVectors(parameters, _nl);
 
-  _eq.parameters.set<EigenProblem *>("_eigen_problem") = this;
+  es().parameters.set<EigenProblem *>("_eigen_problem") = this;
 #else
   mooseError("Need to install SLEPc to solve eigenvalue problems, please reconfigure\n");
 #endif /* LIBMESH_HAVE_SLEPC */
@@ -165,7 +172,7 @@ EigenProblem::computeJacobianTag(const NumericVector<Number> & soln,
   // specific system tags that we need for this instance
   _nl_eigen->disassociateDefaultMatrixTags();
 
-  // Clear FE tags and first add the specific tag assoicated with the Jacobian
+  // Clear FE tags and first add the specific tag associated with the Jacobian
   _fe_matrix_tags.clear();
   _fe_matrix_tags.insert(tag);
 
@@ -249,7 +256,7 @@ EigenProblem::computeJacobianAB(const NumericVector<Number> & soln,
   // specific system tags that we need for this instance
   _nl_eigen->disassociateDefaultMatrixTags();
 
-  // Clear FE tags and first add the specific tags assoicated with the Jacobian
+  // Clear FE tags and first add the specific tags associated with the Jacobian
   _fe_matrix_tags.clear();
   _fe_matrix_tags.insert(tagA);
   _fe_matrix_tags.insert(tagB);
@@ -416,7 +423,7 @@ EigenProblem::preScaleEigenVector(const std::pair<Real, Real> & eig)
   // Eigenvalue magnitude
   Real v = std::sqrt(eig.first * eig.first + eig.second * eig.second);
   // Scaling factor
-  Real factor = 1 / v / _nl_eigen->residualVectorBX().l2_norm();
+  Real factor = 1 / v / (bxNormProvided() ? formNorm() : _nl_eigen->residualVectorBX().l2_norm());
   // Scale eigenvector
   if (!MooseUtils::absoluteFuzzyEqual(factor, 1))
     scaleEigenvector(factor);
@@ -452,7 +459,7 @@ EigenProblem::postScaleEigenVector()
 
     unsigned int itr = 0;
 
-    while (!MooseUtils::absoluteFuzzyEqual(v, c))
+    while (!MooseUtils::relativeFuzzyEqual(v, c))
     {
       // If postprocessor is not defined on eigen variables, scaling might not work
       if (itr > 10)
@@ -618,7 +625,10 @@ EigenProblem::init()
 bool
 EigenProblem::nlConverged(unsigned int)
 {
-  return _nl_eigen->converged();
+  if (_solve)
+    return _nl_eigen->converged();
+  else
+    return true;
 }
 
 bool
@@ -632,9 +642,16 @@ EigenProblem::isNonlinearEigenvalueSolver() const
 }
 
 void
-EigenProblem::initPetscOutput()
+EigenProblem::initPetscOutputAndSomeSolverSettings()
 {
   _app.getOutputWarehouse().solveSetup();
 }
 
+Real
+EigenProblem::formNorm()
+{
+  mooseAssert(_bx_norm_name,
+              "We should not get here unless a bx_norm postprocessor has been provided");
+  return getPostprocessorValueByName(*_bx_norm_name);
+}
 #endif

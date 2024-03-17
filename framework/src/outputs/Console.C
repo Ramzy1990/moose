@@ -40,7 +40,13 @@ Console::validParams()
 
   // Screen and file output toggles
   params.addParam<bool>("output_screen", true, "Output to the screen");
-  params.addParam<bool>("output_file", false, "Output to the file");
+  params.addParam<bool>("output_file",
+                        false,
+                        "Output to the file. The default behavior is to write to file only from "
+                        "the head processor. If \"--keep-cout\" is passed to the executable, then "
+                        "each processor will write to its own file. The same parallel behaviour "
+                        "can also be achieved by passing \"--keep-cout --redirect-stdout\" to the "
+                        "executable without setting this parameter to true.");
   params.addParam<bool>(
       "show_multiapp_name", false, "Indent multiapp output using the multiapp name");
 
@@ -188,6 +194,7 @@ Console::Console(const InputParameters & parameters)
     _outlier_multiplier(getParam<std::vector<Real>>("outlier_multiplier")),
     _precision(isParamValid("time_precision") ? getParam<unsigned int>("time_precision") : 0),
     _time_format(getParam<MooseEnum>("time_format").getEnum<TimeFormatEnum>()),
+    _write_all_procs_to_files(_app.getParam<bool>("keep_cout")),
     _console_buffer(_app.getOutputWarehouse().consoleBuffer()),
     _old_linear_norm(std::numeric_limits<Real>::max()),
     _old_nonlinear_norm(std::numeric_limits<Real>::max()),
@@ -246,7 +253,6 @@ Console::~Console()
   writeStreamToFile();
 
   // Disable logging so that the destructor in libMesh doesn't print
-  Moose::perf_log.disable_logging();
   libMesh::perflog.disable_logging();
 }
 
@@ -297,7 +303,15 @@ Console::initialSetup()
 std::string
 Console::filename()
 {
-  return _file_base + ".txt";
+  std::string file_name;
+  if (_write_all_procs_to_files)
+  {
+    std::string pid = std::to_string(processor_id());
+    file_name = _file_base + "_" + pid + ".txt";
+  }
+  else
+    file_name = _file_base + ".txt";
+  return file_name;
 }
 
 void
@@ -362,11 +376,7 @@ Console::output()
 
   // Write variable norms
   else if (type == EXEC_TIMESTEP_END)
-  {
-    if (_perf_log_interval && _t_step % _perf_log_interval == 0)
-      write(Moose::perf_log.get_perf_info(), false);
     writeVariableNorms();
-  }
 
   if (wantOutput("postprocessors", type))
     outputPostprocessors();
@@ -386,7 +396,7 @@ Console::output()
 void
 Console::writeStreamToFile(bool append)
 {
-  if (!_write_file)
+  if (!_write_file || (!_write_all_procs_to_files && processor_id() > 0))
     return;
 
   // Create the stream
@@ -539,57 +549,60 @@ Console::writeVariableNorms()
   // String stream for variable norm information
   std::ostringstream oss;
 
-  // Get a references to the NonlinearSystem and libMesh system
-  NonlinearSystemBase & nl = _problem_ptr->getNonlinearSystemBase();
-  System & sys = nl.system();
-
-  // Storage for norm outputs
-  std::map<std::string, Real> other;
-  std::map<std::string, Real> outlier;
-
-  // Average norm
-  unsigned int n_vars = sys.n_vars();
-  Real avg_norm = (nl.nonlinearNorm() * nl.nonlinearNorm()) / n_vars;
-
-  // Compute the norms for each of the variables
-  for (unsigned int i = 0; i < n_vars; i++)
+  for (const auto i : make_range(_problem_ptr->numNonlinearSystems()))
   {
-    // Compute the norm and extract the variable name
-    Real var_norm = sys.calculate_norm(nl.RHS(), i, DISCRETE_L2);
-    var_norm *= var_norm; // use the norm squared
-    std::string var_name = sys.variable_name(i);
+    // Get a references to the NonlinearSystem and libMesh system
+    NonlinearSystemBase & nl = _problem_ptr->getNonlinearSystemBase(i);
+    System & sys = nl.system();
 
-    // Outlier if the variable norm is greater than twice (default) of the average norm
-    if (_outlier_variable_norms && (var_norm > _outlier_multiplier[1] * avg_norm))
+    // Storage for norm outputs
+    std::map<std::string, Real> other;
+    std::map<std::string, Real> outlier;
+
+    // Average norm
+    unsigned int n_vars = sys.n_vars();
+    Real avg_norm = (nl.nonlinearNorm() * nl.nonlinearNorm()) / n_vars;
+
+    // Compute the norms for each of the variables
+    for (unsigned int i = 0; i < n_vars; i++)
     {
-      // Print the header
-      if (!header)
+      // Compute the norm and extract the variable name
+      Real var_norm = sys.calculate_norm(nl.RHS(), i, DISCRETE_L2);
+      var_norm *= var_norm; // use the norm squared
+      std::string var_name = sys.variable_name(i);
+
+      // Outlier if the variable norm is greater than twice (default) of the average norm
+      if (_outlier_variable_norms && (var_norm > _outlier_multiplier[1] * avg_norm))
       {
-        oss << "\nOutlier Variable Residual Norms:\n";
-        header = true;
+        // Print the header
+        if (!header)
+        {
+          oss << "\nOutlier Variable Residual Norms:\n";
+          header = true;
+        }
+
+        // Set the color, RED if the variable norm is 0.8 (default) of the total norm
+        std::string color = COLOR_YELLOW;
+        if (_outlier_variable_norms && (var_norm > _outlier_multiplier[0] * avg_norm * n_vars))
+          color = COLOR_RED;
+
+        // Display the residual
+        oss << "  " << var_name << ": " << std::scientific << color << std::sqrt(var_norm)
+            << COLOR_DEFAULT << '\n';
       }
 
-      // Set the color, RED if the variable norm is 0.8 (default) of the total norm
-      std::string color = COLOR_YELLOW;
-      if (_outlier_variable_norms && (var_norm > _outlier_multiplier[0] * avg_norm * n_vars))
-        color = COLOR_RED;
-
-      // Display the residual
-      oss << "  " << var_name << ": " << std::scientific << color << std::sqrt(var_norm)
-          << COLOR_DEFAULT << '\n';
-    }
-
-    // GREEN
-    else if (_all_variable_norms)
-    {
-      // Print the header if it doesn't already exist
-      if (!header)
+      // GREEN
+      else if (_all_variable_norms)
       {
-        oss << "\nVariable Residual Norms:\n";
-        header = true;
+        // Print the header if it doesn't already exist
+        if (!header)
+        {
+          oss << "\nVariable Residual Norms:\n";
+          header = true;
+        }
+        oss << "  " << var_name << ": " << std::scientific << COLOR_GREEN << std::sqrt(var_norm)
+            << COLOR_DEFAULT << '\n';
       }
-      oss << "  " << var_name << ": " << std::scientific << COLOR_GREEN << std::sqrt(var_norm)
-          << COLOR_DEFAULT << '\n';
     }
   }
 
@@ -623,8 +636,8 @@ Console::outputInput()
     return;
 
   std::ostringstream oss;
-  oss << "--- " << _app.getInputFileName()
-      << " ------------------------------------------------------";
+  for (const auto & filename : _app.getInputFileNames())
+    oss << "--- " << filename << "\n";
   _app.actionWarehouse().printInputFile(oss);
   _console << oss.str() << std::endl;
 }
@@ -693,9 +706,15 @@ Console::outputSystemInformation()
 
   if (_system_info_flags.contains("nonlinear"))
   {
-    std::string output = ConsoleUtils::outputNonlinearSystemInformation(*_problem_ptr);
-    if (!output.empty())
-      _console << "Nonlinear System:\n" << output;
+    for (const auto i : make_range(_problem_ptr->numNonlinearSystems()))
+    {
+      std::string output = ConsoleUtils::outputNonlinearSystemInformation(*_problem_ptr, i);
+      if (!output.empty())
+        _console << "Nonlinear System" +
+                        (_problem_ptr->numNonlinearSystems() > 1 ? (" " + std::to_string(i)) : "") +
+                        ":\n"
+                 << output;
+    }
   }
 
   if (_system_info_flags.contains("aux"))
@@ -731,9 +750,16 @@ Console::meshChanged()
   {
     _console << ConsoleUtils::outputMeshInformation(*_problem_ptr, /*verbose = */ false);
 
-    std::string output = ConsoleUtils::outputNonlinearSystemInformation(*_problem_ptr);
-    if (!output.empty())
-      _console << "Nonlinear System:\n" << output;
+    std::string output;
+    for (const auto i : make_range(_problem_ptr->numNonlinearSystems()))
+    {
+      output = ConsoleUtils::outputNonlinearSystemInformation(*_problem_ptr, i);
+      if (!output.empty())
+        _console << "Nonlinear System" +
+                        (_problem_ptr->numNonlinearSystems() > 1 ? (" " + std::to_string(i)) : "") +
+                        ":\n"
+                 << output;
+    }
 
     output = ConsoleUtils::outputAuxiliarySystemInformation(*_problem_ptr);
     if (!output.empty())

@@ -1,5 +1,11 @@
 # Waveguide Transmission Benchmark
 
+!! TODO: We only want 'tag' to run on the full MOOSE website build, so skip if a moose submodule
+!! exists (implying an app). Remove this if statement when the tagging extension is not "experimental".
+
+!if function=!hasSubmodule('moose')
+!tag name=waveguide_2D pairs=example_type:benchmark simulation_type:scalar fiscal_year:2022
+
 This section summarizes and describes the single frequency two-dimensional
 waveguide benchmark and verification test for the electromagnetics module.
 
@@ -141,7 +147,7 @@ A comparison of the real component results to compared to that in [cheng-solutio
 is shown in [waveguide-benchmark-comparison]. This data is taken down the centerline
 of the waveguide geometry ($y = 5$). There is decent agreement between the two
 solutions, but note the increasing phase error along the length of the waveguide.
-This is known as "numerical disperson" or "numerical phase error" in the literature,
+This is known as "numerical dispersion" or "numerical phase error" in the literature,
 and is a byproduct of the numerical discretization, where the velocity of the
 calculated wave differs from that of the exact velocity due to lower resolution.
 Jin as well as Warren and Scott showed that the use of higher order elements as

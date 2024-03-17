@@ -147,7 +147,7 @@ Transient::Transient(const InputParameters & parameters)
   : Executioner(parameters),
     _problem(_fe_problem),
     _feproblem_solve(*this),
-    _nl(_fe_problem.getNonlinearSystemBase()),
+    _nl(_fe_problem.getNonlinearSystemBase(/*nl_sys=*/0)),
     _aux(_fe_problem.getAuxiliarySystem()),
     _check_aux(getParam<bool>("check_aux")),
     _time_scheme(getParam<MooseEnum>("scheme").getEnum<Moose::TimeIntegratorType>()),
@@ -208,7 +208,7 @@ Transient::Transient(const InputParameters & parameters)
 
   setupTimeIntegrator();
 
-  if (_app.halfTransient()) // Cut timesteps and end_time in half...
+  if (_app.testCheckpointHalfTransient()) // Cut timesteps and end_time in half...
   {
     _end_time = (_start_time + _end_time) / 2.0;
     _num_steps /= 2.0;
@@ -225,22 +225,6 @@ Transient::init()
   _problem.initialSetup();
 
   mooseAssert(getTimeStepper(), "No time stepper was set");
-
-  /**
-   * If this is a restart run, the user may want to override the start time, which we already set in
-   * the constructor. "_time" however will have been "restored" from the restart file. We need to
-   * honor the original request of the developer now that the restore has been completed. This must
-   * occur before we init the time stepper (since that prints out the start time). The multiapp case
-   * is also bit complicated. If we didn't set a start time, the app won't have it yet, so we just
-   * restart the old time from the current time.
-   */
-  if (_app.isRestarting())
-  {
-    if (_app.hasStartTime())
-      _time = _time_old = _app.getStartTime();
-    else
-      _time_old = _time;
-  }
 
   _time_stepper->init();
 
@@ -331,7 +315,7 @@ Transient::execute()
     }
   }
 
-  if (!_app.halfTransient())
+  if (!_app.testCheckpointHalfTransient())
   {
     TIME_SECTION("final", 1, "Executing Final Objects");
     _problem.execMultiApps(EXEC_FINAL);

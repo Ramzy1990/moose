@@ -35,13 +35,16 @@ MoosePreconditioner::validParams()
       "associated with an off-diagonal column from the same position in off_diag_column.");
   params.addParam<std::vector<NonlinearVariableName>>(
       "off_diag_column",
-      "The variable names for the off-diagonal columns you want to add into the matrix; they will "
-      "be associated with an off-diagonal row from the same position in off_diag_row.");
+      "The variable names for the off-diagonal columns you want to add into the matrix; they "
+      "will be associated with an off-diagonal row from the same position in off_diag_row.");
   params.addParam<bool>("full",
                         false,
                         "Set to true if you want the full set of couplings between variables "
                         "simply for convenience so you don't have to set every off_diag_row "
                         "and off_diag_column combination.");
+  params.addParam<NonlinearSystemName>(
+      "nl_sys",
+      "The nonlinear system whose linearization this preconditioner should be applied to.");
 
   params += Moose::PetscSupport::getPetscValidParams();
 
@@ -52,11 +55,14 @@ MoosePreconditioner::MoosePreconditioner(const InputParameters & params)
   : MooseObject(params),
     Restartable(this, "Preconditioners"),
     PerfGraphInterface(this),
-    _fe_problem(*params.getCheckedPointerParam<FEProblemBase *>("_fe_problem_base"))
+    _fe_problem(*params.getCheckedPointerParam<FEProblemBase *>("_fe_problem_base")),
+    _nl_sys_num(
+        isParamValid("nl_sys") ? _fe_problem.nlSysNum(getParam<NonlinearSystemName>("nl_sys")) : 0),
+    _nl(_fe_problem.getNonlinearSystemBase(_nl_sys_num))
 {
-  _fe_problem.getNonlinearSystemBase().setPCSide(getParam<MooseEnum>("pc_side"));
+  _nl.setPCSide(getParam<MooseEnum>("pc_side"));
 
-  _fe_problem.getNonlinearSystemBase().setMooseKSPNormType(getParam<MooseEnum>("ksp_norm"));
+  _nl.setMooseKSPNormType(getParam<MooseEnum>("ksp_norm"));
 
   bool full = getParam<bool>("full");
 

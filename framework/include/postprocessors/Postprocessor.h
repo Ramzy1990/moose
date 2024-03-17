@@ -30,24 +30,13 @@ public:
   Postprocessor(const MooseObject * moose_object);
 
   /**
-   * This will get called to actually grab the final value the postprocessor has calculated
-   *
-   * Note that this should only be called by internal methods, namely the problem that
-   * actually sets the value globally for other things to use. If you want the value
-   * outside of one of these external methods, you should use getCurrentValue().
-   *
-   * This method will be removed in favor of the const version.
-   */
-  virtual PostprocessorValue getValue();
-
-  /**
    * This will get called to actually grab the final value the postprocessor has calculated.
    *
    * Note that this should only be called by internal methods, namely the problem that
    * actually sets the value globally for other things to use. If you want the value
    * outside of one of these external methods, you should use getCurrentValue().
    */
-  virtual PostprocessorValue getValue() const;
+  virtual PostprocessorValue getValue() const = 0;
 
   /**
    * @return The "current" value of this Postprocessor.
@@ -92,6 +81,7 @@ private:
   using ElemSideQpArg = Moose::ElemSideQpArg;
   using FaceArg = Moose::FaceArg;
   using ElemPointArg = Moose::ElemPointArg;
+  using NodeArg = Moose::NodeArg;
 
   ValueType evaluate(const ElemArg & elem, const Moose::StateArg & state) const override final;
   ValueType evaluate(const FaceArg & face, const Moose::StateArg & state) const override final;
@@ -100,6 +90,7 @@ private:
                      const Moose::StateArg & state) const override final;
   ValueType evaluate(const ElemPointArg & elem_point,
                      const Moose::StateArg & state) const override final;
+  ValueType evaluate(const NodeArg & node, const Moose::StateArg & state) const override final;
 
   GradientType evaluateGradient(const ElemArg & elem,
                                 const Moose::StateArg & state) const override final;
@@ -111,6 +102,8 @@ private:
                                 const Moose::StateArg & state) const override final;
   GradientType evaluateGradient(const ElemPointArg & elem_point,
                                 const Moose::StateArg & state) const override final;
+  GradientType evaluateGradient(const NodeArg & node,
+                                const Moose::StateArg & state) const override final;
 
   DotType evaluateDot(const ElemArg & elem, const Moose::StateArg & state) const override final;
   DotType evaluateDot(const FaceArg & face, const Moose::StateArg & state) const override final;
@@ -119,6 +112,7 @@ private:
                       const Moose::StateArg & state) const override final;
   DotType evaluateDot(const ElemPointArg & elem_point,
                       const Moose::StateArg & state) const override final;
+  DotType evaluateDot(const NodeArg & node, const Moose::StateArg & state) const override final;
 
   /**
    * Internal method for giving a one-time warning for calling an \c evaluateDot() method.

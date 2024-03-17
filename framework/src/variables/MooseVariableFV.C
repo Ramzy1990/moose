@@ -51,6 +51,11 @@ MooseVariableFV<OutputType>::validParams()
                                       "Switch that can select between face interpoaltion methods.");
   params.template addParam<bool>(
       "cache_cell_gradients", true, "Whether to cache cell gradients or re-compute them.");
+  // Just evaluating finite volume variables at an arbitrary location in a cell requires a layer of
+  // ghosting since we will use two term expansions
+  params.addRelationshipManager("ElementSideNeighborLayers",
+                                Moose::RelationshipManagerType::GEOMETRIC |
+                                    Moose::RelationshipManagerType::ALGEBRAIC);
   return params;
 }
 
@@ -141,6 +146,13 @@ void
 MooseVariableFV<OutputType>::insert(NumericVector<Number> & residual)
 {
   _element_data->insert(residual);
+}
+
+template <typename OutputType>
+void
+MooseVariableFV<OutputType>::insertLower(NumericVector<Number> &)
+{
+  lowerDError();
 }
 
 template <typename OutputType>
@@ -336,7 +348,7 @@ MooseVariableFV<OutputType>::computeFaceValues(const FaceInfo & fi)
   _element_data->setGeometry(Moose::Face);
   _neighbor_data->setGeometry(Moose::Face);
 
-  auto facetype = fi.faceType(_var_name);
+  const auto facetype = fi.faceType(std::make_pair(this->number(), this->sys().number()));
   if (facetype == FaceInfo::VarFaceNeighbors::NEITHER)
     return;
   else if (facetype == FaceInfo::VarFaceNeighbors::BOTH)
@@ -388,6 +400,13 @@ void
 MooseVariableFV<OutputType>::setDofValues(const DenseVector<OutputData> & values)
 {
   _element_data->setDofValues(values);
+}
+
+template <typename OutputType>
+void
+MooseVariableFV<OutputType>::setLowerDofValues(const DenseVector<OutputData> &)
+{
+  lowerDError();
 }
 
 template <typename OutputType>
@@ -538,8 +557,11 @@ MooseVariableFV<OutputType>::getExtrapolatedBoundaryFaceValue(const FaceInfo & f
                                                               const Elem * elem_to_extrapolate_from,
                                                               const StateArg & state) const
 {
-  mooseAssert(isExtrapolatedBoundaryFace(fi, elem_to_extrapolate_from, state),
-              "This function should only be called on extrapolated boundary faces");
+  mooseAssert(
+      isExtrapolatedBoundaryFace(fi, elem_to_extrapolate_from, state) || !two_term_expansion,
+      "We allow Dirichlet boundary conditions to call this method. However, the only way to "
+      "ensure we don't have infinite recursion, with Green Gauss gradients calling back to the "
+      "Dirichlet boundary condition calling back to this method, is to do a one term expansion");
 
   ADReal boundary_value;
   bool elem_to_extrapolate_from_is_fi_elem;
@@ -683,7 +705,7 @@ MooseVariableFV<OutputType>::adGradSln(const FaceInfo & fi,
   // scheme to approximate it.
   auto face_grad = ((side_two_value - side_one_value) / delta) * fi.eCN();
 
-  // We only need nonorthogonal correctors in 2+ dimensions
+  // We only need non-orthogonal correctors in 2+ dimensions
   if (this->_mesh.dimension() > 1)
   {
     // We are using an orthogonal approach for the non-orthogonal correction, for more information
@@ -743,7 +765,7 @@ MooseVariableFV<OutputType>::evaluate(const FaceArg & face, const StateArg & sta
   if (isDirichletBoundaryFace(*fi, face.face_side, state))
   {
     mooseAssert(state.state == 0,
-                "We have not yet added support for evaluting Dirichlet boundary conditions at "
+                "We have not yet added support for evaluating Dirichlet boundary conditions at "
                 "states other than the current solution state (e.g. current time)");
     return getDirichletBoundaryFaceValue(*fi, face.face_side, state);
   }
@@ -763,6 +785,30 @@ MooseVariableFV<OutputType>::evaluate(const FaceArg & face, const StateArg & sta
                 "We must be either Dirichlet, extrapolated, or internal");
     return Moose::FV::interpolate(*this, face, state);
   }
+}
+
+template <typename OutputType>
+typename MooseVariableFV<OutputType>::ValueType
+MooseVariableFV<OutputType>::evaluate(const NodeArg & node_arg, const StateArg & state) const
+{
+  const auto & node_to_elem_map = this->_mesh.nodeToElemMap();
+  const auto & elem_ids = libmesh_map_find(node_to_elem_map, node_arg.node->id());
+  ValueType sum = 0;
+  Real total_weight = 0;
+  mooseAssert(elem_ids.size(), "There should always be at least one element connected to a node");
+  for (const auto elem_id : elem_ids)
+  {
+    const Elem * const elem = this->_mesh.queryElemPtr(elem_id);
+    mooseAssert(elem, "We should have this element available");
+    if (!this->hasBlocks(elem->subdomain_id()))
+      continue;
+    const ElemPointArg elem_point{
+        elem, *node_arg.node, _face_interp_method == Moose::FV::InterpMethod::SkewCorrectedAverage};
+    const auto weight = 1 / (*node_arg.node - elem->vertex_average()).norm();
+    sum += weight * (*this)(elem_point, state);
+    total_weight += weight;
+  }
+  return sum / total_weight;
 }
 
 template <typename OutputType>
@@ -803,6 +849,39 @@ MooseVariableFV<Real>::evaluateDot(const ElemArg & elem_arg, const StateArg & st
   }
   else
     return (*_sys.solutionUDot())(dof_index);
+}
+
+template <>
+ADReal
+MooseVariableFV<Real>::evaluateDot(const FaceArg & face, const StateArg & state) const
+{
+  const FaceInfo * const fi = face.fi;
+  mooseAssert(fi, "The face information must be non-null");
+  if (isDirichletBoundaryFace(*fi, face.face_side, state))
+    return ADReal(0.0); // No time derivative if boundary value is set
+  else if (isExtrapolatedBoundaryFace(*fi, face.face_side, state))
+  {
+    mooseAssert(face.face_side && this->hasBlocks(face.face_side->subdomain_id()),
+                "If we are an extrapolated boundary face, then our FunctorBase::checkFace method "
+                "should have assigned a non-null element that we are defined on");
+    const auto elem_arg = ElemArg({face.face_side, face.correct_skewness});
+    // For extrapolated boundary faces, note that we take the value of the time derivative at the
+    // cell in contact with the face
+    return evaluateDot(elem_arg, state);
+  }
+  else
+  {
+    mooseAssert(this->isInternalFace(*fi),
+                "We must be either Dirichlet, extrapolated, or internal");
+    return Moose::FV::interpolate<ADReal, FunctorEvaluationKind::Dot>(*this, face, state);
+  }
+}
+
+template <>
+ADReal
+MooseVariableFV<Real>::evaluateDot(const ElemQpArg & elem_qp, const StateArg & state) const
+{
+  return evaluateDot(ElemArg({elem_qp.elem, /*correct_skewness*/ false}), state);
 }
 
 template <typename OutputType>

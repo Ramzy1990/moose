@@ -172,7 +172,7 @@ setSolverOptions(const SolverParams & solver_params)
 }
 
 void
-petscSetupDM(NonlinearSystemBase & nl)
+petscSetupDM(NonlinearSystemBase & nl, const std::string & dm_name)
 {
   PetscErrorCode ierr;
   PetscBool ismoose;
@@ -196,7 +196,7 @@ petscSetupDM(NonlinearSystemBase & nl)
     if (ismoose)
       return;
   }
-  ierr = DMCreateMoose(nl.comm().get(), nl, &dm);
+  ierr = DMCreateMoose(nl.comm().get(), nl, dm_name, &dm);
   CHKERRABORT(nl.comm().get(), ierr);
   ierr = DMSetFromOptions(dm);
   CHKERRABORT(nl.comm().get(), ierr);
@@ -454,19 +454,24 @@ getPetscKSPNormType(Moose::MooseKSPNormType kspnorm)
 void
 petscSetDefaultKSPNormType(FEProblemBase & problem, KSP ksp)
 {
-  NonlinearSystemBase & nl = problem.getNonlinearSystemBase();
-
-  KSPSetNormType(ksp, getPetscKSPNormType(nl.getMooseKSPNormType()));
+  for (const auto i : make_range(problem.numNonlinearSystems()))
+  {
+    NonlinearSystemBase & nl = problem.getNonlinearSystemBase(i);
+    KSPSetNormType(ksp, getPetscKSPNormType(nl.getMooseKSPNormType()));
+  }
 }
 
 void
 petscSetDefaultPCSide(FEProblemBase & problem, KSP ksp)
 {
-  NonlinearSystemBase & nl = problem.getNonlinearSystemBase();
+  for (const auto i : make_range(problem.numNonlinearSystems()))
+  {
+    NonlinearSystemBase & nl = problem.getNonlinearSystemBase(i);
 
-  // PETSc 3.2.x+
-  if (nl.getPCSide() != Moose::PCS_DEFAULT)
-    KSPSetPCSide(ksp, getPetscPCSide(nl.getPCSide()));
+    // PETSc 3.2.x+
+    if (nl.getPCSide() != Moose::PCS_DEFAULT)
+      KSPSetPCSide(ksp, getPetscPCSide(nl.getPCSide()));
+  }
 }
 
 void
@@ -502,9 +507,14 @@ petscSetDefaults(FEProblemBase & problem)
         dynamic_cast<PetscNonlinearSolver<Number> *>(nl.nonlinearSolver());
     SNES snes = petsc_solver->snes();
     KSP ksp;
-    SNESGetKSP(snes, &ksp);
+    auto ierr = SNESGetKSP(snes, &ksp);
+    CHKERRABORT(nl.comm().get(), ierr);
 
-    SNESSetMaxLinearSolveFailures(snes, 1000000);
+    ierr = SNESSetMaxLinearSolveFailures(snes, 1000000);
+    CHKERRABORT(nl.comm().get(), ierr);
+
+    ierr = SNESSetCheckJacobianDomainError(snes, PETSC_TRUE);
+    CHKERRABORT(nl.comm().get(), ierr);
 
     // In 3.0.0, the context pointer must actually be used, and the
     // final argument to KSPSetConvergenceTest() is a pointer to a
@@ -512,8 +522,7 @@ petscSetDefaults(FEProblemBase & problem)
     // we use the default context provided by PETSc in addition to
     // a few other tests.
     {
-      auto ierr =
-          SNESSetConvergenceTest(snes, petscNonlinearConverged, &problem, LIBMESH_PETSC_NULLPTR);
+      ierr = SNESSetConvergenceTest(snes, petscNonlinearConverged, &problem, LIBMESH_PETSC_NULLPTR);
       CHKERRABORT(nl.comm().get(), ierr);
     }
 
@@ -652,6 +661,10 @@ processPetscPairs(const std::vector<std::pair<MooseEnumItem, std::string>> & pet
   bool matptap_found = false;
   bool hmg_strong_threshold_found = false;
 #endif
+#if !PETSC_VERSION_LESS_THAN(3, 19, 2)
+  // Check for if users have set the options_left option
+  bool options_left_set = false;
+#endif
   std::vector<std::pair<std::string, std::string>> new_options;
 
   for (const auto & option : petsc_pair_options)
@@ -721,6 +734,11 @@ processPetscPairs(const std::vector<std::pair<MooseEnumItem, std::string>> & pet
         fact_pattern_found = true;
       if (option.first == "-mat_superlu_dist_replacetinypivot")
         tiny_pivot_found = true;
+#endif
+
+#if !PETSC_VERSION_LESS_THAN(3, 19, 2)
+      if (option.first == "-options_left")
+        options_left_set = true;
 #endif
 
       if (!new_options.empty())
@@ -801,7 +819,14 @@ processPetscPairs(const std::vector<std::pair<MooseEnumItem, std::string>> & pet
   }
 #endif
   // Set Preconditioner description
-  po.pc_description = pc_description;
+  po.pc_description += pc_description;
+
+  // Turn off default options_left warnings added in 3.19.3 pre-release for all PETSc builds
+  // (PETSc commit: 59f199a7), unless the user has set a preference.
+#if !PETSC_VERSION_LESS_THAN(3, 19, 2)
+  if (!options_left_set && !po.flags.contains("-options_left"))
+    po.pairs.emplace_back("-options_left", "0");
+#endif
 }
 
 std::set<std::string>

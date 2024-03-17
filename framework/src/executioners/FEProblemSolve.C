@@ -26,6 +26,7 @@ FEProblemSolve::validParams()
   InputParameters params = emptyInputParameters();
 
   params.addParam<std::vector<std::string>>("splitting",
+                                            {},
                                             "Top-level splitting defining a "
                                             "hierarchical decomposition into "
                                             "subsystems to help the solver.");
@@ -57,7 +58,7 @@ FEProblemSolve::validParams()
                         "be looser than the standard linear tolerance");
 
   params += Moose::PetscSupport::getPetscValidParams();
-  params.addParam<Real>("l_tol", 1.0e-5, "Linear Tolerance");
+  params.addParam<Real>("l_tol", 1.0e-5, "Linear Relative Tolerance");
   params.addParam<Real>("l_abs_tol", 1.0e-50, "Linear Absolute Tolerance");
   params.addParam<unsigned int>("l_max_its", 10000, "Max Linear Iterations");
   params.addParam<unsigned int>("nl_max_its", 50, "Max Nonlinear Iterations");
@@ -78,7 +79,7 @@ FEProblemSolve::validParams()
   params.addParam<unsigned int>(
       "n_max_nonlinear_pingpong",
       100,
-      "The maximum number of times the non linear residual can ping pong "
+      "The maximum number of times the nonlinear residual can ping pong "
       "before requesting halting the current evaluation and requesting timestep cut");
   params.addParam<bool>(
       "snesmf_reuse_base",
@@ -163,7 +164,7 @@ FEProblemSolve::validParams()
 }
 
 FEProblemSolve::FEProblemSolve(Executioner & ex)
-  : SolveObject(ex),
+  : NonlinearSolveObject(ex),
     _splitting(getParam<std::vector<std::string>>("splitting")),
     _num_grid_steps(getParam<unsigned int>("num_grids") - 1)
 {
@@ -281,11 +282,11 @@ FEProblemSolve::solve()
   // This loop is for nonlinear multigrids (developed by Alex)
   for (MooseIndex(_num_grid_steps) grid_step = 0; grid_step <= _num_grid_steps; ++grid_step)
   {
-    _problem.solve();
+    _problem.solve(_nl.number());
 
     if (_problem.shouldSolve())
     {
-      if (_problem.converged())
+      if (_problem.converged(_nl.number()))
         _console << COLOR_GREEN << " Solve Converged!" << COLOR_DEFAULT << std::endl;
       else
       {
@@ -299,5 +300,5 @@ FEProblemSolve::solve()
     if (grid_step != _num_grid_steps)
       _problem.uniformRefine();
   }
-  return _problem.converged();
+  return _problem.converged(_nl.number());
 }

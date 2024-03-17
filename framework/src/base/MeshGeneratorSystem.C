@@ -15,6 +15,10 @@
 
 #include "libmesh/mesh_tools.h"
 
+const std::string MeshGeneratorSystem::data_driven_generator_param = "data_driven_generator";
+const std::string MeshGeneratorSystem::allow_data_driven_param =
+    "allow_data_driven_mesh_generation";
+
 MeshGeneratorSystem::MeshGeneratorSystem(MooseApp & app)
   : PerfGraphInterface(app.perfGraph(), "MeshGeneratorSystem"),
     ParallelObject(app),
@@ -151,19 +155,57 @@ MeshGeneratorSystem::createAddedMeshGenerators()
                MooseUtils::join(e.getCyclicDependencies(), " <- "));
   }
 
+  const auto & moose_mesh = _app.actionWarehouse().getMesh();
+
+  // If we're using data-driven generation, find that requirement now
+  mooseAssert(!_data_driven_generator_name, "Should not be set");
+  if (moose_mesh->parameters().get<bool>("_mesh_generator_mesh") &&
+      moose_mesh->isParamValid(data_driven_generator_param))
+  {
+    if (!hasDataDrivenAllowed())
+      moose_mesh->paramError(
+          data_driven_generator_param,
+          "This application does not support data-driven mesh generation.\n\nThis generation is an "
+          "advanced feature and must be enabled on the application via the '",
+          allow_data_driven_param,
+          "' parameter.");
+
+    mooseAssert(moose_mesh->type() == "MeshGeneratorMesh",
+                "Assumption for mesh type is now invalid");
+
+    _data_driven_generator_name = moose_mesh->getParam<std::string>(data_driven_generator_param);
+    if (!_mesh_generator_params.count(*_data_driven_generator_name))
+      moose_mesh->paramError(data_driven_generator_param,
+                             "The data driven generator '",
+                             *_data_driven_generator_name,
+                             "' does not exist");
+  }
+
   // Construct all of the mesh generators that we know exist
   for (const auto & generator_names : ordered_generators)
     for (const auto & generator_name : generator_names)
-      if (_mesh_generator_params.count(generator_name))
+      if (auto it = _mesh_generator_params.find(generator_name); it != _mesh_generator_params.end())
+      {
+        auto & params = it->second.second;
+
+        // Determine now if we need to run this in data only mode
+        const bool data_only = _data_driven_generator_name &&
+                               getDataDrivenGeneratorName() != generator_name &&
+                               resolver.dependsOn(getDataDrivenGeneratorName(), generator_name);
+        params.set<bool>(MeshGenerator::data_only_param) = data_only;
+
         createMeshGenerator(generator_name);
+
+        mooseAssert(data_only == getMeshGenerator(generator_name).isDataOnly(),
+                    "Inconsistent data only");
+      }
 
   mooseAssert(_mesh_generator_params.empty(), "Should be empty");
   mooseAssert(_final_generator_name.empty(), "Should be unset at this point");
 
   // Set the final generator if we have one set by the user
   // and if so make sure it also exists
-  const auto & moose_mesh = _app.actionWarehouse().getMesh();
-  if (moose_mesh->parameters().have_parameter<std::string>("final_generator") &&
+  if (moose_mesh->parameters().get<bool>("_mesh_generator_mesh") &&
       moose_mesh->isParamValid("final_generator"))
   {
     mooseAssert(moose_mesh->type() == "MeshGeneratorMesh",
@@ -325,9 +367,8 @@ MeshGeneratorSystem::executeMeshGenerators()
   // Order the generators
   createMeshGeneratorOrder();
 
+  // Save all meshes marked to to_save_in_meshes and save in error checking
   std::map<std::string, std::unique_ptr<MeshBase> *> to_save_in_meshes;
-
-  // Loop over the MeshGenerators and save all meshes marked to to_save_in_meshes
   for (const auto & generator_set : _ordered_mesh_generators)
     for (const auto & generator : generator_set)
       if (generator->hasSaveMesh())
@@ -338,7 +379,6 @@ MeshGeneratorSystem::executeMeshGenerators()
         to_save_in_meshes.emplace(generator->getSavedMeshName(),
                                   &getMeshGeneratorOutput(generator->name()));
       }
-
   // Grab the outputs from the final generator so MeshGeneratorMesh can pick it up
   to_save_in_meshes.emplace(mainMeshGeneratorName(),
                             &getMeshGeneratorOutput(_final_generator_name));
@@ -351,6 +391,14 @@ MeshGeneratorSystem::executeMeshGenerators()
       const auto & name = generator->name();
 
       auto current_mesh = generator->generateInternal();
+
+      // Only generating data for this generator
+      if (generator->isDataOnly())
+      {
+        mooseAssert(!current_mesh, "Should not have a mesh");
+        continue;
+      }
+
 #ifdef DEBUG
       // Assert that the mesh is either marked as not prepared or if it is marked as prepared,
       // that it's *actually* prepared
@@ -566,7 +614,7 @@ MeshGeneratorSystem::getSavedMesh(const std::string & name)
   if (!mesh_unique_ptr)
     mooseError("While getting the saved mesh generator '",
                name,
-               "', said mesh has already been retreived");
+               "', said mesh has already been retrieved");
 
   return std::move(mesh_unique_ptr);
 }
@@ -575,4 +623,31 @@ bool
 MeshGeneratorSystem::appendingMeshGenerators() const
 {
   return _app.actionWarehouse().getCurrentTaskName() == "append_mesh_generator";
+}
+
+bool
+MeshGeneratorSystem::hasDataDrivenAllowed() const
+{
+  return _app.parameters().get<bool>(allow_data_driven_param);
+}
+
+const std::string &
+MeshGeneratorSystem::getDataDrivenGeneratorName() const
+{
+  mooseAssert(_data_driven_generator_name, "Not set");
+  return *_data_driven_generator_name;
+}
+
+void
+MeshGeneratorSystem::dataDrivenError(const MeshGenerator & generator,
+                                     const std::string & message) const
+{
+  const auto & moose_mesh = _app.actionWarehouse().getMesh();
+  moose_mesh->paramError(data_driven_generator_param,
+                         "The generator '",
+                         getDataDrivenGeneratorName(),
+                         "' cannot be used in data-driven mode because the parent ",
+                         generator.typeAndName(),
+                         " ",
+                         message);
 }

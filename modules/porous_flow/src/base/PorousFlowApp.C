@@ -9,7 +9,7 @@
 
 #include "PorousFlowApp.h"
 #include "Moose.h"
-#include "TensorMechanicsApp.h"
+#include "SolidMechanicsApp.h"
 #include "AppFactory.h"
 #include "MooseSyntax.h"
 #include "FluidPropertiesApp.h"
@@ -39,6 +39,10 @@ void
 PorousFlowApp::registerApps()
 {
   registerApp(PorousFlowApp);
+
+  SolidMechanicsApp::registerApps();
+  FluidPropertiesApp::registerApps();
+  ChemicalReactionsApp::registerApps();
 }
 
 static void
@@ -82,7 +86,7 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 void
 PorousFlowApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
 {
-  TensorMechanicsApp::registerAll(f, af, s);
+  SolidMechanicsApp::registerAll(f, af, s);
   FluidPropertiesApp::registerAll(f, af, s);
   ChemicalReactionsApp::registerAll(f, af, s);
   Registry::registerObjectsTo(f, {"PorousFlowApp"});
@@ -94,7 +98,7 @@ void
 PorousFlowApp::registerObjectDepends(Factory & factory)
 {
   mooseDeprecated("use registerAll instead of registerObjectsDepends");
-  TensorMechanicsApp::registerObjects(factory);
+  SolidMechanicsApp::registerObjects(factory);
   FluidPropertiesApp::registerObjects(factory);
   ChemicalReactionsApp::registerObjects(factory);
 }
@@ -110,7 +114,7 @@ void
 PorousFlowApp::associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory)
 {
   mooseDeprecated("use registerAll instead of associateSyntaxDepends");
-  TensorMechanicsApp::associateSyntax(syntax, action_factory);
+  SolidMechanicsApp::associateSyntax(syntax, action_factory);
   FluidPropertiesApp::associateSyntax(syntax, action_factory);
   ChemicalReactionsApp::associateSyntax(syntax, action_factory);
 }

@@ -61,18 +61,6 @@ Postprocessor::declareValue(const MooseObject & moose_object)
   return fe_problem.getReporterData().getReporterValue<PostprocessorValue>(r_name);
 }
 
-PostprocessorValue
-Postprocessor::getValue()
-{
-  return static_cast<const Postprocessor *>(this)->getValue();
-}
-
-PostprocessorValue
-Postprocessor::getValue() const
-{
-  mooseError("getValue() (const or non-const) must be implemented.");
-}
-
 typename Postprocessor::ValueType
 Postprocessor::evaluate(const ElemArg & /*elem_arg*/, const Moose::StateArg & /*state*/) const
 {
@@ -101,6 +89,12 @@ Postprocessor::evaluate(const ElemSideQpArg & /*elem_side_qp*/,
 typename Postprocessor::ValueType
 Postprocessor::evaluate(const ElemPointArg & /*elem_point_arg*/,
                         const Moose::StateArg & /*state*/) const
+{
+  return getCurrentValue();
+}
+
+typename Postprocessor::ValueType
+Postprocessor::evaluate(const NodeArg & /*node_arg*/, const Moose::StateArg & /*state*/) const
 {
   return getCurrentValue();
 }
@@ -139,6 +133,13 @@ Postprocessor::evaluateGradient(const ElemPointArg & /*elem_point_arg*/,
   return 0;
 }
 
+typename Postprocessor::GradientType
+Postprocessor::evaluateGradient(const NodeArg & /*node_arg*/,
+                                const Moose::StateArg & /*state*/) const
+{
+  return 0;
+}
+
 typename Postprocessor::DotType
 Postprocessor::evaluateDot(const ElemArg & /*elem_arg*/, const Moose::StateArg & /*state*/) const
 {
@@ -171,6 +172,13 @@ Postprocessor::evaluateDot(const ElemSideQpArg & /*elem_side_qp*/,
 typename Postprocessor::DotType
 Postprocessor::evaluateDot(const ElemPointArg & /*elem_point_arg*/,
                            const Moose::StateArg & /*state*/) const
+{
+  evaluateDotWarning();
+  return 0;
+}
+
+typename Postprocessor::DotType
+Postprocessor::evaluateDot(const NodeArg & /*node_arg*/, const Moose::StateArg & /*state*/) const
 {
   evaluateDotWarning();
   return 0;

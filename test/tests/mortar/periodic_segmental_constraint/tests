@@ -59,6 +59,7 @@
     input = 'periodic_checker2d.i'
     csvdiff = 'periodic_checker2d_out.csv'
     requirement = "Mortar surfaces coupled with scalar variables can handle nonuniform conductivity using Lagrange multipliers."
+    strumpack = true
   []
   [testperiodicsole]
     type = 'CSVDiff'
@@ -70,6 +71,6 @@
     type = RunException
     input = 'penalty_periodic_aux.i'
     expect_err = 'Must assign auxiliary scalar variable to sigma, rather than nonlinear variable'
-    requirement = 'The system shall error if a nonlinear variable is applied for sigma instead of an auxiliary variable.'
+    requirement = 'The system shall report an error if a nonlinear variable is applied for sigma instead of an auxiliary variable.'
   []
 []

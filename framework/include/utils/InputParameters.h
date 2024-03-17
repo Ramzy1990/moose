@@ -31,6 +31,7 @@ class FunctionParserBase
 #include <tuple>
 #include <unordered_map>
 #include <mutex>
+#include <optional>
 
 // Forward declarations
 class Action;
@@ -53,6 +54,24 @@ public:
   virtual ~InputParameters() = default;
 
   virtual void clear() override;
+
+  /**
+   * Structure for storing information about a command line parameter
+   */
+  struct CommandLineMetadata
+  {
+    enum ArgumentType
+    {
+      NONE,
+      OPTIONAL,
+      REQUIRED
+    };
+
+    /// The syntax for the parameter (i.e., ["-t", "--timing"])
+    std::vector<std::string> syntax;
+    /// The type of argument
+    ArgumentType argument_type;
+  };
 
   /**
    * This method adds a description of the class that will be displayed
@@ -134,7 +153,7 @@ public:
   /**
    * This method adds a parameter and documentation string to the InputParameters
    * object that will be extracted from the input file.  If the parameter is
-   * missing in the input file, and error will be thrown
+   * missing in the input file, an error will be thrown
    */
   template <typename T>
   void addRequiredParam(const std::string & name, const std::string & doc_string);
@@ -281,9 +300,19 @@ public:
   void checkConsistentType(const std::string & name) const;
 
   /**
-   * Get the syntax for a command-line parameter
+   * @return Whether or not the parameter \p name is a command line parameter
    */
-  std::vector<std::string> getSyntax(const std::string & name) const;
+  bool isCommandLineParameter(const std::string & name) const;
+
+  /**
+   * @return The command line syntax for the parameter \p name
+   */
+  const std::vector<std::string> & getCommandLineSyntax(const std::string & name) const;
+
+  /**
+   * @return The command line argument type for the parameter \p name
+   */
+  CommandLineMetadata::ArgumentType getCommandLineArgumentType(const std::string & name) const;
 
   /**
    * Get the documentation string for a parameter
@@ -626,6 +655,15 @@ public:
     return _new_to_deprecated_coupled_vars;
   }
 
+  /// Return whether a parameter has a range check
+  bool isRangeChecked(const std::string & param_name) const;
+
+  /// Return the range check function for any parameter (empty string if it is not range checked)
+  std::string rangeCheckedFunction(const std::string & name) const;
+
+  /// Return whether a parameter has a default
+  bool hasDefault(const std::string & param_name) const;
+
   /**
    * Return whether or not the coupled variable exists
    * @param coupling_name The name of the coupled variable to test for
@@ -754,16 +792,13 @@ public:
   /*
    * These methods are here to retrieve parameters for scalar and vector types respectively. We will
    * throw errors
-   * when returning most scalar types, but will allow retrieving empty vectors.
+   * when returning most scalar and vector types.
    */
   template <typename T>
-  static const T &
-  getParamHelper(const std::string & name, const InputParameters & pars, const T * the_type);
-
-  template <typename T>
-  static const std::vector<T> & getParamHelper(const std::string & name,
-                                               const InputParameters & pars,
-                                               const std::vector<T> * the_type);
+  static const T & getParamHelper(const std::string & name,
+                                  const InputParameters & pars,
+                                  const T * the_type,
+                                  const MooseObject * moose_object = nullptr);
   ///@}
 
   using Parameters::get;
@@ -778,6 +813,11 @@ public:
                                                     MultiMooseEnum,
                                                     std::vector<R2>>::type>
   std::vector<std::pair<R1, R2>> get(const std::string & param1, const std::string & param2) const;
+
+  /**
+   * @returns list of all parameters
+   */
+  std::set<std::string> getParametersList() const;
 
   /**
    * Return list of controllable parameters
@@ -889,6 +929,7 @@ public:
    * @param old_name The old name of the parameter
    * @param new_name The new name of the parameter
    * @param new_docstring The new documentation string for the parameter
+   *                      If left empty, uses the old docstring for the renamed parameter
    */
   void renameParam(const std::string & old_name,
                    const std::string & new_name,
@@ -940,6 +981,19 @@ public:
   bool have_parameter(std::string_view name) const;
 
   /**
+   * A routine to transfer a parameter from one class' validParams to another
+   * @param source_param The parameters list holding the param we would like to transfer
+   * @param name The name of the parameter to transfer
+   * @param new_description A new description of the parameter. If unspecified, uses the
+   * source_params'
+   */
+  template <typename T>
+  void transferParam(const InputParameters & source_param,
+                     const std::string & name,
+                     const std::string & new_name = "",
+                     const std::string & new_description = "");
+
+  /**
    * Return all the aliased names associated with \p param_name. The returned container will always
    * contain \p param_name itself. Other aliases in addition to \p param_name will include the base
    * class parameter name if \p param_name is the derived class parameter name, or deprecated names
@@ -963,20 +1017,9 @@ private:
   void setParameters() {}
 
   /**
-   * Helper that uses overloading to distinguish adding commandline parameters of
-   * a scalar and a vector kind. Vector parameters are options that may appear multiple
-   * times on the command line (like -i).
+   * Appends description of what a functor is to a doc string.
    */
-  template <typename T>
-  void addCommandLineParamHelper(const std::string & name,
-                                 const std::string & syntax,
-                                 const std::string & doc_string,
-                                 T *);
-  template <typename T>
-  void addCommandLineParamHelper(const std::string & name,
-                                 const std::string & syntax,
-                                 const std::string & doc_string,
-                                 std::vector<T> *);
+  std::string appendFunctorDescription(const std::string & doc_string) const;
 
   /**
    * Private method for setting deprecated coupled variable documentation strings
@@ -993,12 +1036,15 @@ private:
                                 const std::string & docstring,
                                 const std::string & removal_date);
 
+  static void callMooseErrorHelper(const MooseObject & object, const std::string & error);
+
   struct Metadata
   {
     std::string _doc_string;
     /// The custom type that will be printed in the YAML dump for a parameter if supplied
     std::string _custom_type;
-    std::vector<std::string> _cli_flag_names;
+    /// The data pertaining to a command line parameter (empty if not a command line param)
+    std::optional<CommandLineMetadata> _cl_data;
     /// The names of the parameters organized into groups
     std::string _group;
     /// The map of functions used for range checked parameters
@@ -1075,6 +1121,17 @@ private:
    */
   template <typename T, typename S>
   void setParamHelper(const std::string & name, T & l_value, const S & r_value);
+
+  /**
+   * @return The command line metadata for the parameter \p name.
+   */
+  const CommandLineMetadata & getCommandLineMetadata(const std::string & name) const;
+
+  /**
+   * Helper for all of the addCommandLineParam() calls, which sets up _cl_data in the metadata
+   */
+  template <typename T>
+  void addCommandLineParamHelper(const std::string & name, const std::string & syntax);
 
   /// original location of input block (i.e. filename,linenum) - used for nice error messages.
   std::string _block_location;
@@ -1356,8 +1413,12 @@ InputParameters::addRequiredParam(const std::string & name, const std::string & 
   checkConsistentType<T>(name);
 
   InputParameters::insert<T>(name);
-  _params[name]._required = true;
-  _params[name]._doc_string = doc_string;
+  auto & metadata = _params[name];
+  metadata._required = true;
+  if (std::is_same_v<T, MooseFunctorName>)
+    metadata._doc_string = appendFunctorDescription(doc_string);
+  else
+    metadata._doc_string = doc_string;
 }
 
 template <typename T>
@@ -1378,7 +1439,11 @@ InputParameters::addParam(const std::string & name, const S & value, const std::
   checkConsistentType<T>(name);
 
   T & l_value = InputParameters::set<T>(name);
-  _params[name]._doc_string = doc_string;
+  auto & metadata = _params[name];
+  if (std::is_same_v<T, MooseFunctorName>)
+    metadata._doc_string = appendFunctorDescription(doc_string);
+  else
+    metadata._doc_string = doc_string;
 
   // Set the parameter now
   setParamHelper(name, l_value, value);
@@ -1386,7 +1451,7 @@ InputParameters::addParam(const std::string & name, const S & value, const std::
   /* Indicate the default value, as set via addParam, is being used. The parameter is removed from
      the list whenever
      it changes, see set_attributes */
-  _params[name]._set_by_add_param = true;
+  metadata._set_by_add_param = true;
 }
 
 template <typename T>
@@ -1397,7 +1462,10 @@ InputParameters::addParam(const std::string & name, const std::string & doc_stri
   checkConsistentType<T>(name);
 
   InputParameters::insert<T>(name);
-  _params[name]._doc_string = doc_string;
+  if (std::is_same_v<T, MooseFunctorName>)
+    _params[name]._doc_string = appendFunctorDescription(doc_string);
+  else
+    _params[name]._doc_string = doc_string;
 }
 
 template <typename T, typename S>
@@ -1405,6 +1473,21 @@ void
 InputParameters::setParamHelper(const std::string & /*name*/, T & l_value, const S & r_value)
 {
   l_value = r_value;
+}
+
+template <typename T>
+void
+InputParameters::addCommandLineParamHelper(const std::string & name, const std::string & syntax)
+{
+  auto & cl_data = at(name)._cl_data;
+  cl_data = CommandLineMetadata();
+  MooseUtils::tokenize(syntax, cl_data->syntax, 1, " \t\n\v\f\r");
+  if constexpr (std::is_same_v<T, bool>)
+    cl_data->argument_type = CommandLineMetadata::ArgumentType::NONE;
+  else if constexpr (std::is_same_v<T, MooseEnum>)
+    cl_data->argument_type = CommandLineMetadata::ArgumentType::REQUIRED;
+  else
+    cl_data->argument_type = CommandLineMetadata::ArgumentType::OPTIONAL;
 }
 
 template <typename T>
@@ -1478,9 +1561,10 @@ InputParameters::addDeprecatedCustomTypeParam(const std::string & name,
 {
   _show_deprecated_message = false;
   addParam<T>(name, doc_string);
-  _params[name]._custom_type = custom_type;
+  auto & metadata = _params[name];
+  metadata._custom_type = custom_type;
 
-  _params[name]._deprecation_message = deprecation_message;
+  metadata._deprecation_message = deprecation_message;
   _show_deprecated_message = true;
 }
 
@@ -1503,8 +1587,9 @@ InputParameters::addPrivateParam(const std::string & name, const T & value)
   checkConsistentType<T>(name);
 
   InputParameters::set<T>(name) = value;
-  _params[name]._is_private = true;
-  _params[name]._set_by_add_param = true;
+  auto & metadata = _params[name];
+  metadata._is_private = true;
+  metadata._set_by_add_param = true;
 }
 
 template <typename T>
@@ -1514,7 +1599,7 @@ InputParameters::addRequiredCommandLineParam(const std::string & name,
                                              const std::string & doc_string)
 {
   addRequiredParam<T>(name, doc_string);
-  MooseUtils::tokenize(syntax, _params[name]._cli_flag_names, 1, " \t\n\v\f\r");
+  addCommandLineParamHelper<T>(name, syntax);
 }
 
 template <typename T>
@@ -1524,7 +1609,7 @@ InputParameters::addCommandLineParam(const std::string & name,
                                      const std::string & doc_string)
 {
   addParam<T>(name, doc_string);
-  MooseUtils::tokenize(syntax, _params[name]._cli_flag_names, 1, " \t\n\v\f\r");
+  addCommandLineParamHelper<T>(name, syntax);
 }
 
 template <typename T>
@@ -1535,7 +1620,7 @@ InputParameters::addCommandLineParam(const std::string & name,
                                      const std::string & doc_string)
 {
   addParam<T>(name, value, doc_string);
-  MooseUtils::tokenize(syntax, _params[name]._cli_flag_names, 1, " \t\n\v\f\r");
+  addCommandLineParamHelper<T>(name, syntax);
 }
 
 template <typename T>
@@ -1569,9 +1654,10 @@ InputParameters::suppressParameter(const std::string & name_in)
   if (!this->have_parameter<T>(name))
     mooseError("Unable to suppress nonexistent parameter: ", name);
 
-  _params[name]._required = false;
-  _params[name]._is_private = true;
-  _params[name]._controllable = false;
+  auto & metadata = _params[name];
+  metadata._required = false;
+  metadata._is_private = true;
+  metadata._controllable = false;
 }
 
 template <typename T>
@@ -1730,12 +1816,20 @@ template <typename T>
 const T &
 InputParameters::getParamHelper(const std::string & name_in,
                                 const InputParameters & pars,
-                                const T *)
+                                const T *,
+                                const MooseObject * moose_object /* = nullptr */)
 {
   const auto name = pars.checkForRename(name_in);
 
   if (!pars.isParamValid(name))
-    mooseError("The parameter \"", name, "\" is being retrieved before being set.\n");
+  {
+    std::stringstream err;
+    err << "The parameter \"" << name << "\" is being retrieved before being set.";
+    if (moose_object)
+      callMooseErrorHelper(*moose_object, err.str());
+    else
+      mooseError(err.str());
+  }
 
   return pars.get<T>(name);
 }
@@ -1744,25 +1838,18 @@ InputParameters::getParamHelper(const std::string & name_in,
 // implementation, but the definition will be in InputParameters.C so
 // we won't need to bring in *MooseEnum header files here.
 template <>
-const MooseEnum & InputParameters::getParamHelper<MooseEnum>(const std::string & name,
-                                                             const InputParameters & pars,
-                                                             const MooseEnum *);
+const MooseEnum &
+InputParameters::getParamHelper<MooseEnum>(const std::string & name,
+                                           const InputParameters & pars,
+                                           const MooseEnum *,
+                                           const MooseObject * moose_object /* = nullptr */);
 
 template <>
-const MultiMooseEnum & InputParameters::getParamHelper<MultiMooseEnum>(const std::string & name,
-                                                                       const InputParameters & pars,
-                                                                       const MultiMooseEnum *);
-
-template <typename T>
-const std::vector<T> &
-InputParameters::getParamHelper(const std::string & name_in,
-                                const InputParameters & pars,
-                                const std::vector<T> *)
-{
-  const auto name = pars.checkForRename(name_in);
-
-  return pars.get<std::vector<T>>(name);
-}
+const MultiMooseEnum &
+InputParameters::getParamHelper<MultiMooseEnum>(const std::string & name,
+                                                const InputParameters & pars,
+                                                const MultiMooseEnum *,
+                                                const MooseObject * moose_object /* = nullptr */);
 
 template <typename R1, typename R2, typename V1, typename V2>
 std::vector<std::pair<R1, R2>>
@@ -1829,4 +1916,85 @@ InputParameters::have_parameter(std::string_view name_in) const
   const auto name = checkForRename(std::string(name_in));
 
   return Parameters::have_parameter<T>(name);
+}
+
+template <typename T>
+void
+InputParameters::transferParam(const InputParameters & source_params,
+                               const std::string & name_in,
+                               const std::string & new_name,
+                               const std::string & new_description)
+{
+  const auto name = source_params.checkForRename(std::string(name_in));
+  const auto p_name = new_name.empty() ? name_in : new_name;
+  if (!source_params.have_parameter<T>(name) && !source_params.hasCoupledValue(name))
+    mooseError("The '",
+               name_in,
+               "' parameter could not be transferred because it does not exist with type '",
+               MooseUtils::prettyCppType<T>(),
+               "' in the source parameters");
+  if (name != name_in)
+    mooseWarning("The transferred parameter " + name_in + " is deprecated in favor of " + name +
+                 " in the source parameters. The new name should likely be used for the parameter "
+                 "transfer instead.");
+  const std::string description =
+      new_description.empty() ? source_params.getDescription(name) : new_description;
+
+  if (source_params.isParamRequired(name))
+  {
+    // Check for a variable parameter
+    if (source_params.hasCoupledValue(name))
+      addRequiredCoupledVar(p_name, description);
+    // Enums parameters have a default list of options
+    else if constexpr (std::is_same_v<MooseEnum, T> || std::is_same_v<MultiMooseEnum, T>)
+      addRequiredParam<T>(p_name, source_params.get<T>(name), description);
+    else if (source_params.isRangeChecked(name))
+      addRequiredRangeCheckedParam<T>(
+          p_name, source_params.rangeCheckedFunction(name), description);
+    else
+      addRequiredParam<T>(p_name, description);
+  }
+  else
+  {
+    // Check for a variable parameter
+    if (source_params.hasCoupledValue(name))
+    {
+      if (!source_params.hasDefaultCoupledValue(name))
+        addCoupledVar(p_name, description);
+      else if (source_params.numberDefaultCoupledValues(name) == 1)
+        addCoupledVar(p_name, source_params.defaultCoupledValue(name), description);
+      else
+      {
+        std::vector<Real> coupled_values;
+        for (const auto i : make_range(source_params.numberDefaultCoupledValues(name)))
+          coupled_values.push_back(source_params.defaultCoupledValue(name, i));
+        addCoupledVar(p_name, coupled_values, description);
+      }
+    }
+    else if (source_params.isRangeChecked(name))
+    {
+      if (source_params.hasDefault(name))
+        addRangeCheckedParam<T>(p_name,
+                                source_params.get<T>(name),
+                                source_params.rangeCheckedFunction(name),
+                                description);
+      else
+        addRangeCheckedParam<T>(p_name, source_params.rangeCheckedFunction(name), description);
+    }
+    else if constexpr (std::is_same_v<MooseEnum, T> || std::is_same_v<MultiMooseEnum, T>)
+      addParam<T>(p_name, source_params.get<T>(name), description);
+    else
+    {
+      if (source_params.hasDefault(name))
+        addParam<T>(p_name, source_params.get<T>(name), description);
+      else
+        addParam<T>(p_name, description);
+    }
+  }
+
+  // Copy other attributes
+  if (source_params.isPrivate(name))
+    _params[p_name]._is_private = true;
+  if (source_params.isControllable(name))
+    _params[p_name]._controllable = true;
 }

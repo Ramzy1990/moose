@@ -8,7 +8,7 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "ContactApp.h"
-#include "TensorMechanicsApp.h"
+#include "SolidMechanicsApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
 #include "MooseSyntax.h"
@@ -37,6 +37,7 @@ static void
 associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 {
   registerSyntax("ContactAction", "Contact/*");
+  registerSyntax("ExplicitDynamicsContactAction", "ExplicitDynamicsContact/*");
 
   registerTask("output_penetration_info_vars", false);
   registerTask("add_contact_aux_variable", false);
@@ -53,13 +54,15 @@ ContactApp::registerAll(Factory & f, ActionFactory & af, Syntax & s)
   Registry::registerActionsTo(af, {"ContactApp"});
   associateSyntaxInner(s, af);
 
-  TensorMechanicsApp::registerAll(f, af, s);
+  SolidMechanicsApp::registerAll(f, af, s);
 }
 
 void
 ContactApp::registerApps()
 {
   registerApp(ContactApp);
+
+  SolidMechanicsApp::registerApps();
 }
 
 void
@@ -81,14 +84,14 @@ void
 ContactApp::registerObjectDepends(Factory & factory)
 {
   mooseDeprecated("use registerAll instead of registerObjectsDepends");
-  TensorMechanicsApp::registerObjects(factory);
+  SolidMechanicsApp::registerObjects(factory);
 }
 
 void
 ContactApp::associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory)
 {
   mooseDeprecated("use registerAll instead of registerObjectsDepends");
-  TensorMechanicsApp::associateSyntax(syntax, action_factory);
+  SolidMechanicsApp::associateSyntax(syntax, action_factory);
 }
 
 extern "C" void

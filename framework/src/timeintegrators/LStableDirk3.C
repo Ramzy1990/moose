@@ -98,7 +98,7 @@ LStableDirk3::solve()
     // This ensures that all the Output objects in the OutputWarehouse
     // have had solveSetup() called, and sets the default solver
     // parameters for PETSc.
-    _fe_problem.initPetscOutput();
+    _fe_problem.initPetscOutputAndSomeSolverSettings();
 
     _console << "Stage " << _stage << std::endl;
 
@@ -106,14 +106,14 @@ LStableDirk3::solve()
     _fe_problem.time() = time_old + _c[_stage - 1] * _dt;
 
     // Do the solve
-    _fe_problem.getNonlinearSystemBase().system().solve();
+    _nl.system().solve();
 
     // Update the iteration counts
     _n_nonlinear_iterations += getNumNonlinearIterationsLastSolve();
     _n_linear_iterations += getNumLinearIterationsLastSolve();
 
     // Abort time step immediately on stage failure - see TimeIntegrator doc page
-    if (!_fe_problem.converged())
+    if (!_fe_problem.converged(_nl.number()))
       return;
   }
 }

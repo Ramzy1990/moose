@@ -7,12 +7,13 @@
 #* Licensed under LGPL 2.1, please see LICENSE for details
 #* https://www.gnu.org/licenses/lgpl-2.1.html
 
-import platform, re, os, sys, pkgutil, shutil
+import platform, re, os, sys, pkgutil, shutil, shlex
 import mooseutils
 from TestHarness import util
 from TestHarness.StatusSystem import StatusSystem
 from FactorySystem.MooseObject import MooseObject
-from tempfile import SpooledTemporaryFile
+from tempfile import SpooledTemporaryFile, TemporaryDirectory
+from pathlib import Path
 import subprocess
 from signal import SIGTERM
 
@@ -39,6 +40,7 @@ class Tester(MooseObject):
         params.addParam('success_message', 'OK', "The successful message")
 
         params.addParam('cli_args',       [], "Additional arguments to be passed to the test.")
+        params.addParam('use_shell',          False, "Whether to use the shell as the executing program. This has the effect of prepending '/bin/sh -c ' to the command to be run.")
         params.addParam('allow_test_objects', False, "Allow the use of test objects by adding --allow-test-objects to the command line.")
 
         params.addParam('valgrind', 'NONE', "Set to (NONE, NORMAL, HEAVY) to determine which configurations where valgrind will run.")
@@ -115,6 +117,10 @@ class Tester(MooseObject):
         params.addParam("classification", 'functional', "A means for defining a requirement classification for SQA process.")
         return params
 
+    def __del__(self):
+        # Do any cleaning that we can (removes the temp dir for now if it exists)
+        self.cleanup()
+
     # This is what will be checked for when we look for valid testers
     IS_TESTER = True
 
@@ -156,6 +162,31 @@ class Tester(MooseObject):
 
         self.__failed_statuses = self.test_status.getFailingStatuses()
         self.__skipped_statuses = [self.skip, self.silent]
+
+        # A temp directory for this Tester, if requested
+        self.tmp_dir = None
+
+    def getTempDirectory(self):
+        """
+        Gets a shared temp directory that will be cleaned up for this Tester
+        """
+        if self.tmp_dir is None:
+            self.tmp_dir = TemporaryDirectory(prefix='tester_')
+        return self.tmp_dir
+
+    def cleanup(self):
+        """
+        Entry point for doing any cleaning if necessary.
+
+        Currently just cleans up the temp directory
+        """
+        if self.tmp_dir is not None:
+            # Don't let this fail
+            try:
+                self.tmp_dir.cleanup()
+            except:
+                pass
+            self.tmp_dir = None
 
     def getStatus(self):
         return self.test_status.getStatus()
@@ -308,15 +339,39 @@ class Tester(MooseObject):
         """ return the executable command that will be executed by the tester """
         return ''
 
-    def runCommand(self, cmd, cwd, timer, options):
-        """
-        Helper method for running external (sub)processes as part of the tester's execution.  This
-        uses the tester's getCommand and getTestDir methods to run a subprocess.  The timer must
-        be the same timer passed to the run method.  Results from running the subprocess is stored
-        in the tester's output and exit_code fields.
-        """
+    def hasOpenMPI(self):
+        """ return whether we have openmpi for execution
 
+        The hacky way to do this is look for "ompi_info" (which only comes
+        with openmpi), and then if it does exist make sure that "mpiexec" is
+        in the same directory.
+
+        We could probably move this somewhere so that it's not called multiple
+        times, but I don't think that's a concern because the PATH should be
+        very hot in cache and it's nice to keep this method local to where
+        it's actually used.
+        """
+        which_ompi_info = shutil.which('ompi_info')
+        if which_ompi_info is None: # no ompi_info
+            return False
+        which_mpiexec = shutil.which('mpiexec')
+        if which_mpiexec is None: # no mpiexec
+            return False
+        return Path(which_mpiexec).parent.absolute() == Path(which_ompi_info).parent.absolute()
+
+    def spawnSubprocessFromOptions(self, timer, options):
+        """
+        Spawns a subprocess based on given options, sets output and error files,
+        and starts timer.
+        """
         cmd = self.getCommand(options)
+
+        use_shell = self.specs["use_shell"]
+
+        if not use_shell:
+            # Split command into list of args to be passed to Popen
+            cmd = shlex.split(cmd)
+
         cwd = self.getTestDir()
 
         # Verify that the working directory is available right before we execute.
@@ -325,21 +380,33 @@ class Tester(MooseObject):
             timer.start()
             self.setStatus(self.fail, 'WORKING DIRECTORY NOT FOUND')
             timer.stop()
-            return
+            return 1
 
         self.process = None
         try:
             f = SpooledTemporaryFile(max_size=1000000) # 1M character buffer
             e = SpooledTemporaryFile(max_size=100000)  # 100K character buffer
 
-            # On Windows, there is an issue with path translation when the command is passed in
-            # as a list.
+            popen_args = [cmd]
+            popen_kwargs = {'stdout': f,
+                            'stderr': e,
+                            'close_fds': False,
+                            'shell': use_shell,
+                            'cwd': cwd}
+            # On Windows, there is an issue with path translation when the command
+            # is passed in as a list.
             if platform.system() == "Windows":
-                process = subprocess.Popen(cmd, stdout=f, stderr=e, close_fds=False,
-                                           shell=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP, cwd=cwd)
+                popen_kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:
-                process = subprocess.Popen(cmd, stdout=f, stderr=e, close_fds=False,
-                                           shell=True, preexec_fn=os.setsid, cwd=cwd)
+                popen_kwargs['preexec_fn'] = os.setsid
+
+            # Set this for OpenMPI so that we don't clobber state
+            if self.hasOpenMPI():
+                popen_env = os.environ.copy()
+                popen_env['OMPI_MCA_orte_tmpdir_base'] = self.getTempDirectory().name
+                popen_kwargs['env'] = popen_env
+
+            process = subprocess.Popen(*popen_args, **popen_kwargs)
         except:
             print("Error in launching a new task", cmd)
             raise
@@ -349,10 +416,18 @@ class Tester(MooseObject):
         self.errfile = e
 
         timer.start()
-        process.wait()
+        return 0
+
+    def finishAndCleanupSubprocess(self, timer):
+        """
+        Waits for the current subproccess to finish, stops the timer, and
+        cleans up.
+        """
+        self.process.wait()
+
         timer.stop()
 
-        self.exit_code = process.poll()
+        self.exit_code = self.process.poll()
         self.outfile.flush()
         self.errfile.flush()
 
@@ -360,6 +435,20 @@ class Tester(MooseObject):
         self.joined_out = util.readOutput(self.outfile, self.errfile, self)
         self.outfile.close()
         self.errfile.close()
+
+    def runCommand(self, timer, options):
+        """
+        Helper method for running external (sub)processes as part of the tester's execution.  This
+        uses the tester's getCommand and getTestDir methods to run a subprocess.  The timer must
+        be the same timer passed to the run method.  Results from running the subprocess is stored
+        in the tester's output and exit_code fields.
+        """
+
+        exit_code = self.spawnSubprocessFromOptions(timer, options)
+        if exit_code: # Something went wrong
+            return
+
+        self.finishAndCleanupSubprocess(timer)
 
     def killCommand(self):
         """
@@ -379,6 +468,9 @@ class Tester(MooseObject):
             except OSError: # Process already terminated
                 pass
 
+        # Try to clean up anything else that we can
+        self.cleanup()
+
     def run(self, timer, options):
         """
         This is a method that is the tester's main execution code.  Subclasses can override this
@@ -388,10 +480,7 @@ class Tester(MooseObject):
         if needed. The run method is responsible to call the start+stop methods on timer to record
         the time taken to run the actual test.  start+stop can be called multiple times.
         """
-        cmd = self.getCommand(options)
-        cwd = self.getTestDir()
-
-        self.runCommand(cmd, cwd, timer, options)
+        self.runCommand(timer, options)
 
     def processResultsCommand(self, moose_dir, options):
         """ method to return the commands (list) used for processing results """

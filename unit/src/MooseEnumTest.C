@@ -71,6 +71,16 @@ TEST(MooseEnum, multiTestOne)
   EXPECT_EQ(mme.contains("three"), true);
   EXPECT_EQ(mme.contains("four"), false);
 
+  // Insert another valid multi-enum
+  mme.clear();
+  mme = "one four";
+  MultiMooseEnum mme2("one two three four", "three");
+  mme.push_back(mme2);
+  EXPECT_EQ(mme.contains("one"), true);
+  EXPECT_EQ(mme.contains("two"), false);
+  EXPECT_EQ(mme.contains("three"), true);
+  EXPECT_EQ(mme.contains("four"), true);
+
   mme.clear();
   mme = "one four";
   EXPECT_EQ(mme.contains("one"), true);
@@ -224,19 +234,20 @@ TEST(MultiMooseEnum, testExecuteOn)
 
   // Checks that names are added and removed
   EXPECT_EQ(exec_enum.getRawNames(),
-            "NONE INITIAL LINEAR NONLINEAR TIMESTEP_END TIMESTEP_BEGIN MULTIAPP_FIXED_POINT_END "
-            "MULTIAPP_FIXED_POINT_BEGIN FINAL CUSTOM ALWAYS");
+            "NONE INITIAL LINEAR NONLINEAR POSTCHECK TIMESTEP_END TIMESTEP_BEGIN "
+            "MULTIAPP_FIXED_POINT_END "
+            "MULTIAPP_FIXED_POINT_BEGIN FINAL CUSTOM");
   std::vector<std::string> opts = {"NONE",
                                    "INITIAL",
                                    "LINEAR",
                                    "NONLINEAR",
+                                   "POSTCHECK",
                                    "TIMESTEP_END",
                                    "TIMESTEP_BEGIN",
                                    "MULTIAPP_FIXED_POINT_END",
                                    "MULTIAPP_FIXED_POINT_BEGIN",
                                    "FINAL",
-                                   "CUSTOM",
-                                   "ALWAYS"};
+                                   "CUSTOM"};
   EXPECT_EQ(exec_enum.getNames(), opts);
 
   // Check that added names can be used
@@ -289,9 +300,9 @@ TEST(MultiMooseEnum, testExecuteOn)
   std::string doc = exec_enum.getDocString();
   EXPECT_EQ(doc,
             "The list of flag(s) indicating when this object should be executed, the "
-            "available options include NONE, INITIAL, LINEAR, NONLINEAR, TIMESTEP_END, "
+            "available options include NONE, INITIAL, LINEAR, NONLINEAR, POSTCHECK, TIMESTEP_END, "
             "TIMESTEP_BEGIN, MULTIAPP_FIXED_POINT_END, MULTIAPP_FIXED_POINT_BEGIN, FINAL, FAILED, "
-            "CUSTOM, ALWAYS.");
+            "CUSTOM.");
 
   // Tests with ExecFlagType assignment operators
   exec_enum = EXEC_FINAL;

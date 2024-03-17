@@ -151,9 +151,9 @@ institution = {Idaho National Laboratory}
 }
 ```
 
-### Tensor Mechanics
+### Solid Mechanics
 
-If you use the multi-surface plasticity capability, `ComputeMultiPlasticityStress`, of the Tensor Mechanics module (feel free to contact Andy Wilkins if unsure) or if you just want to demonstrate MOOSE's advanced plasticity features, please cite:
+If you use the multi-surface plasticity capability, `ComputeMultiPlasticityStress`, of the Solid Mechanics module (feel free to contact Andy Wilkins if unsure) or if you just want to demonstrate MOOSE's advanced plasticity features, please cite:
 
 ```
 @article{adhikary2016robust,
@@ -180,6 +180,25 @@ journal = {International Journal for Numerical Methods in Engineering},
  number = {3},
   pages = {434--449},
     doi = {10.1002/nme.6215}
+}
+```
+
+### Thermal Hydraulics
+
+This paper gives an overview of the MOOSE Thermal Hydraulics module (THM):
+
+```
+@article{hansel2024,
+  author = {Joshua Hansel and David Andrs and Lise Charlot and Guillaume Giudicelli},
+  title = {The {MOOSE} Thermal Hydraulics Module},
+  journal = {Journal of Open Source Software},
+  publisher = {The Open Journal},
+  year = {2024},
+  volume = {9},
+  number = {94},
+  pages = {6146},
+  doi = {10.21105/joss.06146},
+  url = {https://doi.org/10.21105/joss.06146}
 }
 ```
 
@@ -347,18 +366,7 @@ journal = {Earthquake Engineering and Structural Dynamics},
 
 ### Electromagnetics Module
 
-The following PhD dissertation documents the initial development, function, verification, and validation
-of the electromagnetics module.
-
-```
-@phdthesis{icenhour2023electromagnetics,
-  author = {Icenhour, Casey T.},
-  title = {Development and Validation of Open Source Software for Electromagnetics Simulation and Multiphysics Coupling},
-  school = {North Carolina State University},
-  year = {2023},
-  url = {https://www.lib.ncsu.edu/resolver/1840.20/40985}
-}
-```
+!include modules/electromagnetics/index.md start=em-citation-start end=em-citation-end
 
 ### Stochastic Tools Module
 

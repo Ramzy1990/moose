@@ -24,7 +24,7 @@
 #include "libmesh/periodic_boundaries.h"
 
 // External includes
-#include "bitmask_operators.h"
+#include "boost/bitmask_operators.h"
 
 // Forward Declarations
 class MooseMesh;
@@ -52,7 +52,6 @@ public:
   virtual void initialize() override;
   virtual void execute() override;
   virtual void finalize() override;
-  using Postprocessor::getValue;
   virtual Real getValue() const override;
 
   /// Return the number of active features

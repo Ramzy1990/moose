@@ -36,6 +36,16 @@ INSFVWallFunctionBC::INSFVWallFunctionBC(const InputParameters & params)
     _rho(getFunctor<ADReal>(NS::density)),
     _mu(getFunctor<ADReal>("mu"))
 {
+  if (_rc_uo.segregated())
+    mooseError("Wall sheer stress enforcement based wall functions are not supported with "
+               "segregated solution approaches!");
+}
+
+ADReal
+INSFVWallFunctionBC::computeSegregatedContribution()
+{
+  mooseError("Sheer-stress-based wall function enforcement not supported for segregated solvers.");
+  return 0.0;
 }
 
 ADReal
@@ -85,7 +95,7 @@ void
 INSFVWallFunctionBC::gatherRCData(const FaceInfo & fi)
 {
   _face_info = &fi;
-  _face_type = fi.faceType(_var.name());
+  _face_type = fi.faceType(std::make_pair(_var.number(), _var.sys().number()));
   _normal = fi.normal();
 
   // Fill-in the coefficient _a (but without multiplication by A)

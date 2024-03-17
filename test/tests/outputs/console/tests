@@ -53,6 +53,30 @@
     requirement = 'The system shall support outputting console information to a file.'
     issues = '#1927'
   [../]
+  [./file_system_information_2procs_head]
+    # Test that file contains regex
+    type = CheckFiles
+    input = 'console.i'
+    cli_args = 'Outputs/screen/output_file=true Outputs/screen/file_base=console_file_system_information_out'
+    check_files = 'console_file_system_information_out.txt'
+    check_not_exists = 'console_file_system_information_out_0.txt console_file_system_information_out_1.txt'
+    recover = false
+
+    requirement = 'The system shall support outputting head processor console information to a file when run in parallel.'
+    issues = '#26174'
+  [../]
+  [./file_system_information_2procs_all]
+    # Test that file contains regex
+    type = CheckFiles
+    input = 'console.i'
+    cli_args = 'Outputs/screen/output_file=true Outputs/screen/file_base=console_file_system_information_out --keep-cout'
+    check_files = 'console_file_system_information_out_0.txt console_file_system_information_out_1.txt'
+    recover = false
+    min_parallel = 2
+
+    requirement = "The system shall support outputting all processors' console information to separate files when run in parallel with the --keep-cout command line option."
+    issues = '#26174'
+  [../]
   [./file_postprocessor]
     # Test that file contains regex
     type = CheckFiles
@@ -122,7 +146,7 @@
     # Test the transient console output with a perf log interval
     type = RunApp
     input = 'console_transient.i'
-    cli_args = 'Outputs/pgraph/type=PerfGraphOutput Outputs/pgraph/additional_execute_on=timestep_end Outputs/pgraph/interval=6'
+    cli_args = 'Outputs/pgraph/type=PerfGraphOutput Outputs/pgraph/additional_execute_on=timestep_end Outputs/pgraph/time_step_interval=6'
     expect_out = 'Time Step 6.*?Graph.*?Time Step 7'
 
     requirement = 'The system shall support outputting the Performance Log at user specified intervals.'
@@ -266,7 +290,7 @@
     cli_args = Outputs/screen/fit_mode=foo
     expect_err = "Unable to convert 'foo' to type int"
 
-    requirement = 'The system shall error when specifying an invalid table fit width option.'
+    requirement = 'The system shall report an error when specifying an invalid table fit width option.'
     issues = '#1927'
   [../]
   [./console_off]

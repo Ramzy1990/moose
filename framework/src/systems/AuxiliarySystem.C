@@ -36,7 +36,7 @@ AuxiliarySystem::AuxiliarySystem(FEProblemBase & subproblem, const std::string &
   : SystemBase(subproblem, name, Moose::VAR_AUXILIARY),
     PerfGraphInterface(subproblem.getMooseApp().perfGraph(), "AuxiliarySystem"),
     _fe_problem(subproblem),
-    _sys(subproblem.es().add_system<ExplicitSystem>(name)),
+    _sys(subproblem.es().add_system<System>(name)),
     _current_solution(_sys.current_local_solution.get()),
     _u_dot(NULL),
     _u_dotdot(NULL),
@@ -231,7 +231,7 @@ AuxiliarySystem::addVariable(const std::string & var_type,
   for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
   {
     if (fe_type.family == LAGRANGE_VEC || fe_type.family == NEDELEC_ONE ||
-        fe_type.family == MONOMIAL_VEC)
+        fe_type.family == MONOMIAL_VEC || fe_type.family == RAVIART_THOMAS)
     {
       auto * var = _vars[tid].getActualFieldVariable<RealVectorValue>(name);
       if (var)
@@ -287,7 +287,8 @@ AuxiliarySystem::addKernel(const std::string & kernel_name,
 {
   for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
   {
-    if (parameters.get<std::string>("_moose_base") == "AuxKernel")
+    if (parameters.get<std::string>("_moose_base") == "AuxKernel" ||
+        parameters.get<std::string>("_moose_base") == "Bounds")
     {
       std::shared_ptr<AuxKernel> kernel =
           _factory.create<AuxKernel>(kernel_name, name, parameters, tid);
@@ -329,6 +330,11 @@ AuxiliarySystem::addKernel(const std::string & kernel_name,
       else
         _elemental_array_aux_storage.addObject(kernel, tid);
     }
+    else
+      mooseAssert(false,
+                  "Attempting to add AuxKernel of type '" + kernel_name + "' and name '" + name +
+                      "' to the auxiliary system with invalid _moose_base: " +
+                      parameters.get<std::string>("_moose_base"));
   }
 }
 
@@ -733,13 +739,17 @@ AuxiliarySystem::computeMortarNodalVars(const ExecFlagType type)
                 _fe_problem, mortar_nodal_warehouse, bnd_id, index);
             Threads::parallel_reduce(bnd_nodes, mnabt);
           }
-          catch (MooseException & e)
-          {
-            _fe_problem.setException(e.what());
-          }
           catch (libMesh::LogicError & e)
           {
-            _fe_problem.setException("We caught a libMesh::LogicError:" + std::string(e.what()));
+            _fe_problem.setException("The following libMesh::LogicError was raised during mortar "
+                                     "nodal Auxiliary variable computation:\n" +
+                                     std::string(e.what()));
+          }
+          catch (MooseException & e)
+          {
+            _fe_problem.setException("The following MooseException was raised during mortar nodal "
+                                     "Auxiliary variable computation:\n" +
+                                     std::string(e.what()));
           }
           catch (MetaPhysicL::LogicError & e)
           {
@@ -838,7 +848,9 @@ AuxiliarySystem::computeElementalVarsHelper(const MooseObjectWarehouse<AuxKernel
       }
       catch (MooseException & e)
       {
-        _fe_problem.setException(e.what());
+        _fe_problem.setException("The following MooseException was raised during elemental "
+                                 "Auxiliary variable computation:\n" +
+                                 std::string(e.what()));
       }
     }
     PARALLEL_CATCH;
@@ -864,7 +876,9 @@ AuxiliarySystem::computeElementalVarsHelper(const MooseObjectWarehouse<AuxKernel
       }
       catch (MooseException & e)
       {
-        _fe_problem.setException(e.what());
+        _fe_problem.setException("The following MooseException was raised during boundary "
+                                 "elemental Auxiliary variable computation:\n" +
+                                 std::string(e.what()));
       }
     }
     PARALLEL_CATCH;

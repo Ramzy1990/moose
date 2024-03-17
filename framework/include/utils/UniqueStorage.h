@@ -83,7 +83,7 @@ public:
    * Note that the underlying data may not necessarily be initialized,
    * in which case this will throw an assertion or dereference a nullptr.
    *
-   * You can check whether or not the underlying data is intialized
+   * You can check whether or not the underlying data is initialized
    * with hasValue(i).
    */
   ///@{
@@ -140,6 +140,15 @@ protected:
   {
     mooseAssert(size() > i, "Invalid size");
     _values[i] = std::move(ptr);
+  }
+
+  /**
+   * Adds the given object in \p ptr to the storage.
+   */
+  T & addPointer(std::unique_ptr<T> && ptr)
+  {
+    mooseAssert(ptr, "Null object");
+    return *_values.emplace_back(std::move(ptr));
   }
 
   /**

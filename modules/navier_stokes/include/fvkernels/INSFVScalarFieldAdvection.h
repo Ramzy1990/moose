@@ -22,5 +22,19 @@ public:
   INSFVScalarFieldAdvection(const InputParameters & params);
 
 protected:
-  ADReal computeQpResidual() override;
+  virtual ADReal computeQpResidual() override;
+  virtual bool hasMaterialTimeDerivative() const override { return true; }
+
+  /// The dimension of the simulation
+  const unsigned int _dim;
+
+  /// slip velocity in direction x
+  const Moose::Functor<ADReal> * const _u_slip;
+  /// slip velocity in direction y
+  const Moose::Functor<ADReal> * const _v_slip;
+  /// slip velocity in direction z
+  const Moose::Functor<ADReal> * const _w_slip;
+
+  /// Boolean to determine if slip velocity is available
+  bool _add_slip_model;
 };

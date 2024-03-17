@@ -71,13 +71,21 @@ public:
   using DoFValue = typename MooseVariableField<OutputType>::DoFValue;
 
   using FieldVariablePhiValue = typename MooseVariableField<OutputType>::FieldVariablePhiValue;
+  using FieldVariablePhiDivergence =
+      typename MooseVariableField<OutputType>::FieldVariablePhiDivergence;
   using FieldVariablePhiGradient =
       typename MooseVariableField<OutputType>::FieldVariablePhiGradient;
   using FieldVariablePhiSecond = typename MooseVariableField<OutputType>::FieldVariablePhiSecond;
   using ElemQpArg = Moose::ElemQpArg;
+  using ElemSideQpArg = Moose::ElemSideQpArg;
   using ElemArg = Moose::ElemArg;
   using FaceArg = Moose::FaceArg;
   using StateArg = Moose::StateArg;
+  using NodeArg = Moose::NodeArg;
+  using ElemPointArg = Moose::ElemPointArg;
+  using typename MooseVariableField<OutputType>::ValueType;
+  using typename MooseVariableField<OutputType>::DotType;
+  using typename MooseVariableField<OutputType>::GradientType;
 
   static InputParameters validParams();
 
@@ -86,7 +94,7 @@ public:
   virtual bool isFV() const override { return true; }
 
   // TODO: many of these functions are not relevant to FV variables but are
-  // still called at various points from existing moose codepaths.  Ideally we
+  // still called at various points from existing moose code paths.  Ideally we
   // would figure out how to remove calls to these functions and then allow
   // throwing mooseError's from them instead of silently doing nothing (e.g.
   // reinitNodes, reinitAux, prepareLowerD, etc.).
@@ -190,6 +198,10 @@ public:
   {
     mooseError("nodalVectorTagValue not implemented for finite volume variables.");
   }
+  const DoFValue & nodalMatrixTagValue(TagID) const override
+  {
+    mooseError("nodalMatrixTagValue not implemented for finite volume variables.");
+  }
 
   const FieldVariableValue & vectorTagValue(TagID tag) const override
   {
@@ -199,7 +211,7 @@ public:
   {
     return _element_data->vectorTagDofValue(tag);
   }
-  const FieldVariableValue & matrixTagValue(TagID tag)
+  const FieldVariableValue & matrixTagValue(TagID tag) const override
   {
     return _element_data->matrixTagValue(tag);
   }
@@ -371,7 +383,8 @@ public:
   /**
    * Set local DOF values and evaluate the values on quadrature points
    */
-  void setDofValues(const DenseVector<OutputData> & values) override;
+  virtual void setDofValues(const DenseVector<OutputData> & values) override;
+  virtual void setLowerDofValues(const DenseVector<OutputData> & values) override;
 
   /// Get the current value of this variable on an element
   /// @param[in] elem   Element at which to get value
@@ -389,8 +402,9 @@ public:
   /// @return Variable value
   OutputData getElementalValueOlder(const Elem * elem, unsigned int idx = 0) const;
 
-  virtual void insert(NumericVector<Number> & residual) override;
-  virtual void add(NumericVector<Number> & residual) override;
+  virtual void insert(NumericVector<Number> & vector) override;
+  virtual void insertLower(NumericVector<Number> & vector) override;
+  virtual void add(NumericVector<Number> & vector) override;
 
   const DoFValue & dofValues() const override;
   const DoFValue & dofValuesOld() const override;
@@ -456,11 +470,6 @@ public:
    */
   ADReal getElemValue(const Elem * elem, const StateArg & state) const;
 
-  using FunctorArg = typename Moose::ADType<OutputType>::type;
-  using typename Moose::FunctorBase<FunctorArg>::ValueType;
-  using typename Moose::FunctorBase<FunctorArg>::DotType;
-  using typename Moose::FunctorBase<FunctorArg>::GradientType;
-
   void setActiveTags(const std::set<TagID> & vtags) override;
 
   /**
@@ -468,9 +477,8 @@ public:
    * default for this base class but derived variable classes may choose not to unless this API is
    * called
    */
-  virtual void requireQpComputations() {}
+  virtual void requireQpComputations() const {}
 
-protected:
   /**
    * Determine whether a specified face side is a Dirichlet boundary face. In the base
    * implementation we only inspect the face information object for whether there are Dirichlet
@@ -487,6 +495,7 @@ protected:
                                        const Elem * elem,
                                        const Moose::StateArg & state) const;
 
+protected:
   /**
    * Retrieves a Dirichlet boundary value for the provided face. Callers of this method should be
    * sure that \p isDirichletBoundaryFace returns true. In the base implementation we only inspect
@@ -523,33 +532,6 @@ protected:
                                   const Elem * elem,
                                   const Moose::StateArg & state) const override;
 
-  /**
-   * Retrieves an extrapolated boundary value for the provided face. Callers of this method should
-   * be sure that \p isExtrapolatedBoundaryFace returns true. In the base implementation we only
-   * inspect the face information object for the extrapolated value. However, derived classes may
-   * allow discontinuities between + and - side face values, e.g. one side may have a Dirichlet
-   * condition and the other side may perform extrapolation to determine its value. This is the
-   * reason for the existence of the \p elem parameter, to indicate sidedness
-   * @param fi The face information object
-   * @param two_term_expansion Whether to use the cell gradient in addition to the cell center value
-   * to compute the extrapolated boundary face value. If this is false, then the cell center value
-   * will be used
-   * @param correct_skewness Whether to perform skew corrections. This is relevant when performing
-   * two term expansions as the gradient evaluation may involve evaluating face values on internal
-   * skewed faces
-   * @param elem_side_to_extrapolate_from An element that can be used to indicate sidedness of the
-   * face
-   * @param state State argument which describes at what time / solution iteration  state we want to
-   * evaluate the variable
-   * @return The extrapolated value on the boundary face associated with \p fi (and potentially \p
-   * elem_side_to_extrapolate_from)
-   */
-  virtual ADReal getExtrapolatedBoundaryFaceValue(const FaceInfo & fi,
-                                                  bool two_term_expansion,
-                                                  bool correct_skewness,
-                                                  const Elem * elem_side_to_extrapolate_from,
-                                                  const StateArg & state) const;
-
 private:
   using MooseVariableField<OutputType>::evaluate;
   using MooseVariableField<OutputType>::evaluateGradient;
@@ -557,10 +539,17 @@ private:
 
   ValueType evaluate(const ElemArg & elem, const StateArg &) const override final;
   ValueType evaluate(const FaceArg & face, const StateArg &) const override final;
+  ValueType evaluate(const NodeArg & node, const StateArg &) const override final;
+  ValueType evaluate(const ElemPointArg & elem_point, const StateArg & state) const override final;
+  ValueType evaluate(const ElemQpArg & elem_qp, const StateArg & state) const override final;
+  ValueType evaluate(const ElemSideQpArg & elem_side_qp,
+                     const StateArg & state) const override final;
   GradientType evaluateGradient(const ElemQpArg & qp_arg, const StateArg &) const override final;
   GradientType evaluateGradient(const ElemArg & elem_arg, const StateArg &) const override final;
   GradientType evaluateGradient(const FaceArg & face, const StateArg &) const override final;
   DotType evaluateDot(const ElemArg & elem, const StateArg &) const override final;
+  DotType evaluateDot(const FaceArg & face, const StateArg &) const override final;
+  DotType evaluateDot(const ElemQpArg & elem_qp, const StateArg &) const override final;
 
   /**
    * Setup the boundary to Dirichlet BC map
@@ -586,6 +575,7 @@ public:
 
   bool computingSecond() const override final { return false; }
   bool computingCurl() const override final { return false; }
+  bool computingDiv() const override final { return false; }
   bool usesSecondPhiNeighbor() const override final { return false; }
 
   const FieldVariablePhiValue & phi() const override final { return _phi; }
@@ -597,6 +587,10 @@ public:
   const FieldVariablePhiValue & curlPhi() const override final
   {
     mooseError("We don't currently implement curl for FV");
+  }
+  const FieldVariablePhiDivergence & divPhi() const override final
+  {
+    mooseError("We don't currently implement divergence for FV");
   }
 
   const FieldVariablePhiValue & phiFace() const override final { return _phi_face; }
@@ -633,13 +627,40 @@ public:
 
   unsigned int oldestSolutionStateRequested() const override final;
 
+  /**
+   * Retrieves an extrapolated boundary value for the provided face. Callers of this method should
+   * be sure that \p isExtrapolatedBoundaryFace returns true. In the base implementation we only
+   * inspect the face information object for the extrapolated value. However, derived classes may
+   * allow discontinuities between + and - side face values, e.g. one side may have a Dirichlet
+   * condition and the other side may perform extrapolation to determine its value. This is the
+   * reason for the existence of the \p elem parameter, to indicate sidedness
+   * @param fi The face information object
+   * @param two_term_expansion Whether to use the cell gradient in addition to the cell center value
+   * to compute the extrapolated boundary face value. If this is false, then the cell center value
+   * will be used
+   * @param correct_skewness Whether to perform skew corrections. This is relevant when performing
+   * two term expansions as the gradient evaluation may involve evaluating face values on internal
+   * skewed faces
+   * @param elem_side_to_extrapolate_from An element that can be used to indicate sidedness of the
+   * face
+   * @param state State argument which describes at what time / solution iteration  state we want to
+   * evaluate the variable
+   * @return The extrapolated value on the boundary face associated with \p fi (and potentially \p
+   * elem_side_to_extrapolate_from)
+   */
+  virtual ADReal getExtrapolatedBoundaryFaceValue(const FaceInfo & fi,
+                                                  bool two_term_expansion,
+                                                  bool correct_skewness,
+                                                  const Elem * elem_side_to_extrapolate_from,
+                                                  const StateArg & state) const;
+
 protected:
   /**
    * clear finite volume caches
    */
   void clearCaches();
 
-  usingMooseVariableBaseMembers;
+  usingMooseVariableFieldMembers;
 
   /// Holder for all the data associated with the "main" element
   std::unique_ptr<MooseVariableDataFV<OutputType>> _element_data;
@@ -670,6 +691,11 @@ private:
   /// Map from boundary ID to Dirichlet boundary conditions. Added to speed up Dirichlet BC lookups
   /// in \p getDirichletBC
   std::unordered_map<BoundaryID, const FVDirichletBCBase *> _boundary_id_to_dirichlet_bc;
+
+  /**
+   * Emit an error message for unsupported lower-d ops
+   */
+  [[noreturn]] void lowerDError() const;
 
 protected:
   /// A cache for storing gradients on elements
@@ -715,11 +741,42 @@ MooseVariableFV<OutputType>::evaluate(const ElemArg & elem_arg, const StateArg &
 }
 
 template <typename OutputType>
+typename MooseVariableFV<OutputType>::ValueType
+MooseVariableFV<OutputType>::evaluate(const ElemPointArg & elem_point, const StateArg & state) const
+{
+  return (*this)(elem_point.makeElem(), state) +
+         (elem_point.point - elem_point.elem->vertex_average()) *
+             this->gradient(elem_point.makeElem(), state);
+}
+
+template <typename OutputType>
+typename MooseVariableFV<OutputType>::ValueType
+MooseVariableFV<OutputType>::evaluate(const ElemQpArg & elem_qp, const StateArg & state) const
+{
+  return (*this)(ElemPointArg{elem_qp.elem,
+                              elem_qp.point,
+                              _face_interp_method == Moose::FV::InterpMethod::SkewCorrectedAverage},
+                 state);
+}
+
+template <typename OutputType>
+typename MooseVariableFV<OutputType>::ValueType
+MooseVariableFV<OutputType>::evaluate(const ElemSideQpArg & elem_side_qp,
+                                      const StateArg & state) const
+{
+  return (*this)(ElemPointArg{elem_side_qp.elem,
+                              elem_side_qp.point,
+                              _face_interp_method == Moose::FV::InterpMethod::SkewCorrectedAverage},
+                 state);
+}
+
+template <typename OutputType>
 typename MooseVariableFV<OutputType>::GradientType
 MooseVariableFV<OutputType>::evaluateGradient(const ElemQpArg & qp_arg,
                                               const StateArg & state) const
 {
-  return adGradSln(qp_arg.elem, state, false);
+  return adGradSln(
+      qp_arg.elem, state, _face_interp_method == Moose::FV::InterpMethod::SkewCorrectedAverage);
 }
 
 template <typename OutputType>
@@ -775,7 +832,14 @@ template <typename OutputType>
 const typename MooseVariableFV<OutputType>::FieldVariablePhiValue &
 MooseVariableFV<OutputType>::phiLower() const
 {
-  mooseError("Not defined for finite volume variables");
+  lowerDError();
+}
+
+template <typename OutputType>
+void
+MooseVariableFV<OutputType>::lowerDError() const
+{
+  mooseError("Lower dimensional element support not implemented for finite volume variables");
 }
 
 template <>

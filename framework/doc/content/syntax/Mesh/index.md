@@ -187,7 +187,7 @@ Calculations can take place in either the initial mesh configuration or, when re
 "displaced" configuration. To enable displacements, provide a vector of displacement variable names
 for each spatial dimension in the 'displacements' parameters within the Mesh block.
 
-!listing modules/tensor_mechanics/test/tests/truss/truss_2d.i block=Mesh
+!listing modules/solid_mechanics/test/tests/truss/truss_2d.i block=Mesh
 
 Once enabled, the any object that should operate on the displaced configuration should set the
 "use_displaced_mesh" to true. For example, the following snippet enables the computation of a
@@ -265,6 +265,9 @@ the creation of the mesh into many individual steps. To debug this process, one 
   by default using the [Exodus.md] format with the name `<mesh_generator_name>_in.e`, so you may visualize it
   before it gets acted upon by the next mesh generator(s).
 
+For a narrow selection of mesh issues, listed in its documentation, the [MeshDiagnosticsGenerator.md] may be used to detect
+unsupported features in meshes.
+
 ## Examining meshes id=examination
 
 The results of finite element/volume simulations are highly dependent on the quality of the mesh(es) used.
@@ -276,7 +279,7 @@ We point out in this section a few things to look for.
   the flux will depend on the orientation of the sideset.
 - MOOSE generally does not support non-conformal meshes for regular kernels, except when they arise from online mesh refinement.
   When inspecting your mesh, you should not see any hanging nodes or surfaces not exactly touching. If you are using such
-  a mesh, you **MUST** use interface kernels, mortar or other advanced numerical treatments.
+  a mesh, you +MUST+ use interface kernels, mortar or other advanced numerical treatments.
 - Many physics will give better results with high element quality and smooth distributions of element volumes.
   You may examine the spatial distribution of these quantities using the [ElementQualityAux.md] and [VolumeAux.md]
   respectively.

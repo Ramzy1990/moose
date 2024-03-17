@@ -22,10 +22,11 @@ ParsedFunctorMaterialTempl<is_ad>::validParams()
       "Computes a functor material from a parsed expression of other functors.");
   params.addRequiredCustomTypeParam<std::string>(
       "expression", "FunctionExpression", "Expression to parse for the new functor material");
-  params.addParam<std::vector<std::string>>("functor_names",
-                                            "Functors to use in the parsed expression");
+  params.addParam<std::vector<std::string>>(
+      "functor_names", {}, "Functors to use in the parsed expression");
   params.addParam<std::vector<std::string>>(
       "functor_symbols",
+      {},
       "Symbolic name to use for each functor in 'functor_names' in the parsed expression. If not "
       "provided, then the actual functor names must be used in the parsed expression.");
   params.addRequiredParam<std::string>("property_name",
@@ -64,6 +65,7 @@ ParsedFunctorMaterialTempl<is_ad>::ParsedFunctorMaterialTempl(const InputParamet
   buildParsedFunction();
 
   // Add the functor material property
+  const std::set<ExecFlagType> clearance_schedule(_execute_enum.begin(), _execute_enum.end());
   addFunctorProperty<GenericReal<is_ad>>(
       _property_name,
       [this](const auto & r, const auto & t) -> GenericReal<is_ad>
@@ -80,7 +82,8 @@ ParsedFunctorMaterialTempl<is_ad>::ParsedFunctorMaterialTempl(const InputParamet
 
         // Evaluate the parsed function
         return evaluate(_parsed_function, _name);
-      });
+      },
+      clearance_schedule);
 }
 
 template <bool is_ad>
@@ -99,10 +102,10 @@ ParsedFunctorMaterialTempl<is_ad>::buildParsedFunction()
   std::vector<std::string> symbols(_functor_symbols);
   std::string symbols_str = Moose::stringify(symbols);
   if (Moose::dim == 3)
-    symbols_str += ",x,y,z";
+    symbols_str += symbols_str.empty() ? "x,y,z" : ",x,y,z";
   else
     mooseError("ParsedFunctorMaterial assumes the dimension is always equal to 3.");
-  symbols_str += ",t";
+  symbols_str += symbols_str.empty() ? "t" : ",t";
 
   // Parse the expression
   if (_parsed_function->Parse(_expression, symbols_str) >= 0)

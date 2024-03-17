@@ -18,11 +18,13 @@
 
 #include <vector>
 #include <memory>
+#include <typeinfo>
 
 class MaterialPropertyStorage;
 class MooseObject;
 class Material;
 class XFEM;
+class MaterialBase;
 
 /**
  * Proxy for accessing MaterialPropertyStorage.
@@ -204,7 +206,10 @@ private:
   /// The underlying property data
   std::array<MaterialProperties, max_state + 1> _props;
 
-  unsigned int addPropertyHelper(const std::string & prop_name, const unsigned int state);
+  unsigned int addPropertyHelper(const std::string & prop_name,
+                                 const std::type_info & type,
+                                 const unsigned int state,
+                                 const MaterialBase * const declarer);
 
   template <typename T, bool is_ad, bool declare>
   GenericMaterialProperty<T, is_ad> & getPropertyHelper(const std::string & prop_name,
@@ -213,12 +218,20 @@ private:
 
   static void mooseErrorHelper(const MooseObject & object, const std::string_view & error);
 
+  /**
+   * Helper for casting \p requestor to a MaterialBase in addPropertyHelper() (templated)
+   */
+  const MaterialBase & castRequestorToDeclarer(const MooseObject & requestor) const;
+
   /// Status of storage swapping (calling swap sets this to true; swapBack sets it to false)
   bool _swapped;
 
   /// Use non-destructive resize of material data (calling resize() will not reduce size).
   /// Default is false (normal resize behaviour)
   bool _resize_only_if_smaller;
+
+  /// maximum state id requested for a property
+  unsigned int getMaxStateRequested(const unsigned int prop_id) const;
 };
 
 inline const MaterialProperties &
@@ -263,21 +276,24 @@ MaterialData::getPropertyHelper(const std::string & prop_name,
     mooseAssert(state == 0, "Cannot declare properties for states other than zero");
 
   // Register/get the ID of the property
-  const auto prop_id = addPropertyHelper(prop_name, state);
+  const auto prop_id = addPropertyHelper(
+      prop_name, typeid(T), state, declare ? &castRequestorToDeclarer(requestor) : nullptr);
+  const auto size = prop_id + 1;
 
   // Initialize the states that we need
-  const auto size = prop_id + 1;
-  for (const auto state_i : make_range(state + 1))
+  for (const auto state_i : make_range(getMaxStateRequested(prop_id) + 1))
   {
     auto & entry = props(state_i);
     if (entry.size() < size)
       entry.resize(size, {});
-    if (!entry.hasValue(prop_id))
+    // if we are not declaring the property we initialize only what we need (the requested state)
+    if (!entry.hasValue(prop_id) && (declare || state_i == state))
     {
-      std::unique_ptr<PropertyValue> value =
-          state_i == 0 ? std::make_unique<GenericMaterialProperty<T, is_ad>>(prop_id)
-                       : _props[0][prop_id].clone(0);
-      entry.setPointer(prop_id, std::move(value), {});
+      if (state_i == 0)
+        entry.setPointer(
+            prop_id, std::move(std::make_unique<GenericMaterialProperty<T, is_ad>>(prop_id)), {});
+      else
+        entry.setPointer(prop_id, std::move(std::make_unique<MaterialProperty<T>>(prop_id)), {});
     }
   }
 

@@ -86,7 +86,8 @@ testReconstruction(const Moose::CoordinateSystemType coord_type)
     mooseAssert(mesh->getAxisymmetricRadialCoord() == 0,
                 "This should be 0 because we haven't set anything.");
     const auto & all_fi = mesh->allFaceInfo();
-    mesh->computeFaceInfoFaceCoords();
+    mesh->buildFiniteVolumeInfo();
+    mesh->computeFiniteVolumeCoords();
     std::vector<const FaceInfo *> faces(all_fi.size());
     for (const auto i : index_range(all_fi))
       faces[i] = &all_fi[i];
@@ -94,7 +95,7 @@ testReconstruction(const Moose::CoordinateSystemType coord_type)
     auto & lm_mesh = mesh->getMesh();
 
     CellCenteredMapFunctor<RealVectorValue, std::unordered_map<dof_id_type, RealVectorValue>> u(
-        *mesh, "u");
+        *mesh, "u", /*extrapoalted_bd=*/true);
     for (auto * const elem : lm_mesh.active_element_ptr_range())
     {
       const auto centroid = elem->vertex_average();
@@ -104,11 +105,11 @@ testReconstruction(const Moose::CoordinateSystemType coord_type)
     }
 
     CellCenteredMapFunctor<RealVectorValue, std::unordered_map<dof_id_type, RealVectorValue>>
-        up_weller(*mesh, "up_weller");
+        up_weller(*mesh, "up_weller", /*extrapoalted_bd=*/true);
     CellCenteredMapFunctor<RealVectorValue, std::unordered_map<dof_id_type, RealVectorValue>>
-        up_moukalled(*mesh, "up_moukalled");
+        up_moukalled(*mesh, "up_moukalled", /*extrapoalted_bd=*/true);
     CellCenteredMapFunctor<RealVectorValue, std::unordered_map<dof_id_type, RealVectorValue>>
-        up_tano(*mesh, "up_tano");
+        up_tano(*mesh, "up_tano", /*extrapoalted_bd=*/true);
 
     for (const auto & fi : all_fi)
     {
@@ -191,7 +192,7 @@ testReconstruction(const Moose::CoordinateSystemType coord_type)
     tano_errors_twice.push_back(tano_error);
 
     CellCenteredMapFunctor<Real, std::unordered_map<dof_id_type, Real>> unrestricted_error_test(
-        *mesh, "not_restricted");
+        *mesh, "not_restricted", /*extrapoalted_bd=*/true);
     try
     {
       unrestricted_error_test(Moose::ElemArg({lm_mesh.elem_ptr(0), false}), Moose::currentState());
@@ -204,7 +205,7 @@ testReconstruction(const Moose::CoordinateSystemType coord_type)
     }
 
     CellCenteredMapFunctor<Real, std::unordered_map<dof_id_type, Real>> restricted_error_test(
-        *mesh, {1}, "is_restricted");
+        *mesh, {1}, "is_restricted", /*extrapoalted_bd=*/true);
     try
     {
       restricted_error_test(Moose::ElemArg({lm_mesh.elem_ptr(0), false}), Moose::currentState());

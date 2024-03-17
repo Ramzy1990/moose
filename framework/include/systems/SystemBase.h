@@ -61,18 +61,6 @@ void extraSparsity(SparsityPattern::Graph & sparsity,
                    void * context);
 
 /**
- * IO Methods for restart, backup and restore.
- */
-template <>
-void dataStore(std::ostream & stream, SystemBase & system_base, void * context);
-
-/**
- * IO Methods for restart, backup and restore.
- */
-template <>
-void dataLoad(std::istream & stream, SystemBase & system_base, void * context);
-
-/**
  * Information about variables that will be copied
  */
 struct VarCopyInfo
@@ -556,6 +544,18 @@ public:
   virtual unsigned int nVariables() const;
 
   /**
+   * Get the number of field variables in this system
+   * @return the number of field variables
+   */
+  unsigned int nFieldVariables() const;
+
+  /**
+   * Get the number of finite volume variables in this system
+   * @return the number of finite volume variables
+   */
+  unsigned int nFVVariables() const;
+
+  /**
    * Gets the maximum number of dofs used by any one variable on any one element
    *
    * @return The max
@@ -816,6 +816,14 @@ public:
    */
   void removeVector(TagID tag_id);
 
+  /// set all the global dof indices for a variable
+  ///  @param var_name The name of the variable
+  void setVariableGlobalDoFs(const std::string & var_name);
+
+  /// Get the global dof indices of a variable, this needs to be called
+  /// after the indices have been set by `setVariableGlobalDoFs`
+  const std::vector<dof_id_type> & getVariableGlobalDoFs() { return _var_all_dof_indices; }
+
   /**
    * Adds a matrix with a given tag
    *
@@ -862,9 +870,6 @@ public:
   const TimeIntegrator * getTimeIntegrator() const { return _time_integrator.get(); }
 
   std::shared_ptr<TimeIntegrator> getSharedTimeIntegrator() { return _time_integrator; }
-
-  /// caches the dof indices of provided variables in MooseMesh's FaceInfo data structure
-  void cacheVarIndicesByFace(const std::vector<VariableName> & vars);
 
   /// Whether or not there are variables to be restarted from an Exodus mesh file
   bool hasVarCopy() const { return _var_to_copy.size() > 0; }
@@ -978,6 +983,9 @@ protected:
 
   /// Whether or not the solution states have been initialized
   bool _solution_states_initialized;
+
+  /// Container for the dof indices of a given variable
+  std::vector<dof_id_type> _var_all_dof_indices;
 
 private:
   /**

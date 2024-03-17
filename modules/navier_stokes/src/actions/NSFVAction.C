@@ -8,6 +8,7 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "NSFVAction.h"
+#include "Executioner.h"
 
 registerMooseAction("NavierStokesApp", NSFVAction, "add_navier_stokes_variables");
 registerMooseAction("NavierStokesApp", NSFVAction, "add_navier_stokes_user_objects");
@@ -19,6 +20,7 @@ registerMooseAction("NavierStokesApp", NSFVAction, "add_navier_stokes_pps");
 registerMooseAction("NavierStokesApp", NSFVAction, "add_navier_stokes_materials");
 registerMooseAction("NavierStokesApp", NSFVAction, "navier_stokes_check_copy_nodal_vars");
 registerMooseAction("NavierStokesApp", NSFVAction, "navier_stokes_copy_nodal_vars");
+registerMooseAction("NavierStokesApp", NSFVAction, "setup_executioner_complete");
 
 InputParameters
 NSFVAction::validParams()
@@ -26,7 +28,7 @@ NSFVAction::validParams()
   InputParameters params = NSFVBase<Action>::validParams();
 
   params.addParam<std::vector<SubdomainName>>(
-      "block", "The list of blocks on which NS equations are defined on");
+      "block", {}, "The list of blocks on which NS equations are defined on");
 
   params.addClassDescription("This class allows us to set up Navier-Stokes equations for porous "
                              "medium or clean fluid flows using incompressible or weakly "
@@ -71,6 +73,12 @@ NSFVAction::act()
 
   if (_current_task == "navier_stokes_copy_nodal_vars")
     copyNSNodalVariables();
+
+  if (_current_task == "setup_executioner_complete")
+  {
+    if (!_app.getExecutioner()->parameters().isParamSetByUser("residual_and_jacobian_together"))
+      setResidualAndJacobianTogether();
+  }
 }
 
 void

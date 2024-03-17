@@ -78,14 +78,20 @@ protected:
   std::vector<SubdomainName> _peripheral_block_names;
   /// Whether reporting ID is added to mesh
   const bool _use_reporting_id;
+  /// names of reporting ID
+  std::vector<std::string> _reporting_id_names;
   /// reporting ID assignment type
-  const ReportingIDGeneratorUtils::AssignType _assign_type;
+  std::vector<ReportingIDGeneratorUtils::AssignType> _assign_types;
   /// flag to indicate if exclude_id is defined
   const bool _use_exclude_id;
   /// vector indicating which ids in the pattern to exclude (true at pattern positions to exclude)
   std::vector<bool> _exclude_ids;
-  /// hold reporting ID for each input pattern cell
-  std::vector<std::vector<dof_id_type>> _id_pattern;
+  /// hold ID patterns for each manual reporting ID. Individual ID pattern contains ID values for each pattern cell.
+  std::map<std::string, std::vector<std::vector<dof_id_type>>> _id_patterns;
+  /// whether the interface boundary ids from input meshes are shifted, using a user-defined pattern of values for each pattern cell
+  const bool _use_interface_boundary_id_shift;
+  /// hold user-defined shift values for each pattern cell
+  std::vector<std::vector<boundary_id_type>> _interface_boundary_id_shift_pattern;
 
   /**
    * Adds background and duct region mesh to each part outer part of stitched square meshes. Note
@@ -131,6 +137,6 @@ protected:
    * @param  mesh input mesh to add the reporting IDs onto
    * @param from_meshes meshes to take reporting IDs from
    */
-  void addReportingIDs(std::unique_ptr<MeshBase> & mesh,
+  void addReportingIDs(MeshBase & mesh,
                        const std::vector<std::unique_ptr<ReplicatedMesh>> & from_meshes) const;
 };

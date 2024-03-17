@@ -87,7 +87,6 @@ public:
   /**
    * Set the scaling factor for this variable
    */
-  void scalingFactor(Real factor);
   void scalingFactor(const std::vector<Real> & factor);
 
   /**
@@ -178,7 +177,17 @@ public:
    */
   bool isArray() const { return _is_array; }
 
+  /**
+   * @return whether this variable lives on lower dimensional blocks
+   */
+  bool isLowerD() const { return _is_lower_d; }
+
 protected:
+  /**
+   * @returns whether we should insert derivatives
+   */
+  bool doDerivatives() const;
+
   /// System this variable is part of
   SystemBase & _sys;
 
@@ -232,6 +241,9 @@ protected:
 
   /// Whether this is an array variable
   const bool _is_array;
+
+  /// Whether this variable lives on lower dimensional blocks
+  bool _is_lower_d;
 };
 
 inline void

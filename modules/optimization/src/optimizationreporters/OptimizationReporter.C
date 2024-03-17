@@ -35,15 +35,16 @@ OptimizationReporter::validParams()
 }
 
 OptimizationReporter::OptimizationReporter(const InputParameters & parameters)
-  : OptimizationReporterBase(parameters),
-    _parameter_names(getParam<std::vector<ReporterValueName>>("parameter_names")),
-    _nparam(_parameter_names.size()),
-    _nvalues(getParam<std::vector<dof_id_type>>("num_values")),
-    _ndof(std::accumulate(_nvalues.begin(), _nvalues.end(), 0)),
-    _lower_bounds(getParam<std::vector<Real>>("lower_bounds")),
-    _upper_bounds(getParam<std::vector<Real>>("upper_bounds")),
-    _adjoint_data(declareValueByName<std::vector<Real>>("adjoint", REPORTER_MODE_REPLICATED))
+  : OptimizationDataTempl<OptimizationReporterBase>(parameters)
 {
+}
+void
+OptimizationReporter::setICsandBounds()
+{
+  _nvalues = getParam<std::vector<dof_id_type>>("num_values");
+  _ndof = std::accumulate(_nvalues.begin(), _nvalues.end(), 0);
+
+  // size checks
   if (_parameter_names.size() != _nvalues.size())
     paramError("num_parameters",
                "There should be a number in 'num_parameters' for each name in 'parameter_names'.");

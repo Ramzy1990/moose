@@ -26,6 +26,15 @@ As mentioned above, the `AssemblyMeshGenerator` object will tag all elements (th
 
 The `AssemblyMeshGenerator` object also automatically tags all elements in the mesh with the [!param](/Mesh/AssemblyMeshGenerator/assembly_type) using the extra_integer name "assembly_type_id" and, if extruded, elements in each axial layer are tagged the axial layers using the name "plane_id". The pins composing the assembly are also tagged via [`PatternedCartesianMeshGenerator`](PatternedCartesianMeshGenerator.md) or [`PatternedHexMeshGenerator`](PatternedHexMeshGenerator.md), using the "cell" assignment type, with the extra integer name "pin_id".
 
+## Depletion ID Information
+
+The `AssemblyMeshGenerator` object can optionally assign a depletion ID, with the extra integer name "depletion_id", only if they are the final mesh generator.
+The depletion ID generation option can be enabled by setting the  [!param](/Mesh/AssemblyMeshGenerator/generate_depletion_id) to true.
+The level of detail needed for depletion zones is specified in the input parameter [!param](/Mesh/AssemblyMeshGenerator/depletion_id_type).
+[!param](/Mesh/AssemblyMeshGenerator/depletion_id_type) can be either `pin` and `pin_type`.
+All pins in the assembly have separate depletion ID values by setting [!param](/Mesh/AssemblyMeshGenerator/depletion_id_type) to `pin`.
+By setting that option to `pin_type`, unique ID values are assigned to individual pin types in assemblies.
+
 ## Exterior Boundary ID Information
 
 The `AssemblyMeshGenerator` objects automatically assigns boundary information derived from the [!param](/Mesh/AssemblyMeshGenerator/assembly_type) parameter. The exterior assembly boundary is assigned the ID equal to 2000 + the assembly type ID and is named "outer_assembly_<assembly_type_id>" (for example an assembly with an assembly type ID of 1 will have a boundary ID of 2001 and boundary name of "outer_assembly_1").
@@ -57,6 +66,8 @@ If instead the assembly is represented as a lattice of pins, the following metad
 For each of the pins listed in `pin_names`, the pin-level metadata is also displayed when [!param](/Mesh/AssemblyMeshGenerator/show_rgmb_metadata) is set to true. A list of pin-level metadata that is defined on the assembly mesh can be found in [PinMeshGenerator](PinMeshGenerator.md).
 
 In addition, the value of the `reactor_params_name` metadata can be used to retrieve global metadata defined by [ReactorMeshParams](ReactorMeshParams.md). Please refer to [ReactorMeshParams](ReactorMeshParams.md) to see a list of metadata defined by this mesh generator.
+
+For applications where an output mesh does not need to be created and meshing routines can consist entirely of defining reactor-based metadata, the parameter `[Mesh]`/[!param](/Mesh/MeshGeneratorMesh/data_driven_generator) can be set to the mesh generator that would generate an output mesh from RGMB metadata.
 
 ## Example Syntax
 

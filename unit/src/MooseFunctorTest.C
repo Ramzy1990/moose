@@ -16,6 +16,7 @@
 #include "MeshGeneratorMesh.h"
 #include "GeneratedMeshGenerator.h"
 #include "AppFactory.h"
+#include "MooseMain.h"
 #include "PiecewiseByBlockLambdaFunctor.h"
 #include "ADWrapperFunctor.h"
 #include "RawValueFunctor.h"
@@ -43,6 +44,7 @@ private:
   ValueType evaluate(const ElemQpArg &, const StateArg &) const override final { return 0; }
   ValueType evaluate(const ElemSideQpArg &, const StateArg &) const override final { return 0; }
   ValueType evaluate(const ElemPointArg &, const StateArg &) const override final { return 0; }
+  ValueType evaluate(const NodeArg &, const StateArg &) const override final { return 0; }
 };
 
 template <typename T>
@@ -70,6 +72,16 @@ private:
   GradientType evaluateGradient(const FaceArg & face, const StateArg & time) const override final
   {
     return greenGaussGradient(face, time, *this, true, _mesh);
+  }
+  using TestFunctor<T>::evaluateGradDot;
+  GradientType evaluateGradDot(const ElemArg &, const StateArg &) const override final
+  {
+    return {};
+  }
+
+  GradientType evaluateGradDot(const FaceArg &, const StateArg &) const override final
+  {
+    return {};
   }
 
   const MooseMesh & _mesh;
@@ -121,6 +133,7 @@ TEST(MooseFunctorTest, testArgs)
   auto elem_qp = ElemQpArg({elem.get(), 0, &qrule, Point(0)});
   auto elem_side_qp = ElemSideQpArg({elem.get(), 0, 0, &qrule, Point(0)});
   auto elem_point = ElemPointArg({elem.get(), Point(0), false});
+  auto node_arg = NodeArg({&node0, 0});
   const auto current_time = Moose::currentState();
 
   // Test not-implemented errors
@@ -143,6 +156,7 @@ TEST(MooseFunctorTest, testArgs)
     test_dot(elem_qp);
     test_dot(elem_side_qp);
     test_dot(elem_point);
+    test_dot(node_arg);
 
     auto test_gradient = [&test, &current_time](const auto & arg)
     {
@@ -162,11 +176,21 @@ TEST(MooseFunctorTest, testArgs)
     test_gradient(elem_qp);
     test_gradient(elem_side_qp);
     test_gradient(elem_point);
+    test_gradient(node_arg);
   }
 
   auto zero_gradient_test = [&current_time](const auto & functor, const auto & arg)
   {
     const auto result = functor.gradient(arg, current_time);
+    for (const auto i : make_range(unsigned(LIBMESH_DIM)))
+      EXPECT_EQ(result(i), 0);
+  };
+
+  auto zero_gradient_and_grad_dot_test =
+      [&current_time, zero_gradient_test](const auto & functor, const auto & arg)
+  {
+    zero_gradient_test(functor, arg);
+    const auto result = functor.gradDot(arg, current_time);
     for (const auto i : make_range(unsigned(LIBMESH_DIM)))
       EXPECT_EQ(result(i), 0);
   };
@@ -179,18 +203,21 @@ TEST(MooseFunctorTest, testArgs)
     EXPECT_EQ(cf(elem_qp, current_time), 2);
     EXPECT_EQ(cf(elem_side_qp, current_time), 2);
     EXPECT_EQ(cf(elem_point, current_time), 2);
+    EXPECT_EQ(cf(node_arg, current_time), 2);
 
-    zero_gradient_test(cf, elem_arg);
-    zero_gradient_test(cf, face);
-    zero_gradient_test(cf, elem_qp);
-    zero_gradient_test(cf, elem_side_qp);
-    zero_gradient_test(cf, elem_point);
+    zero_gradient_and_grad_dot_test(cf, elem_arg);
+    zero_gradient_and_grad_dot_test(cf, face);
+    zero_gradient_and_grad_dot_test(cf, elem_qp);
+    zero_gradient_and_grad_dot_test(cf, elem_side_qp);
+    zero_gradient_and_grad_dot_test(cf, elem_point);
+    zero_gradient_and_grad_dot_test(cf, node_arg);
 
     EXPECT_EQ(cf.dot(elem_arg, current_time), 0);
     EXPECT_EQ(cf.dot(face, current_time), 0);
     EXPECT_EQ(cf.dot(elem_qp, current_time), 0);
     EXPECT_EQ(cf.dot(elem_side_qp, current_time), 0);
     EXPECT_EQ(cf.dot(elem_point, current_time), 0);
+    EXPECT_EQ(cf.dot(node_arg, current_time), 0);
 
     // Test AD up-type
     ADWrapperFunctor<ADReal> ad_cf(cf);
@@ -201,6 +228,7 @@ TEST(MooseFunctorTest, testArgs)
     EXPECT_EQ(cf(elem_qp, current_time), MetaPhysicL::raw_value(ad_cf(elem_qp, current_time)));
     EXPECT_EQ(cf(elem_side_qp, current_time),
               MetaPhysicL::raw_value(ad_cf(elem_side_qp, current_time)));
+    EXPECT_EQ(cf(node_arg, current_time), MetaPhysicL::raw_value(ad_cf(node_arg, current_time)));
     EXPECT_EQ(cf.gradient(elem_arg, current_time)(0),
               MetaPhysicL::raw_value(ad_cf.gradient(elem_arg, current_time)(0)));
     EXPECT_EQ(cf.gradient(face, current_time)(0),
@@ -211,6 +239,8 @@ TEST(MooseFunctorTest, testArgs)
               MetaPhysicL::raw_value(ad_cf.gradient(elem_qp, current_time)(0)));
     EXPECT_EQ(cf.gradient(elem_side_qp, current_time)(0),
               MetaPhysicL::raw_value(ad_cf.gradient(elem_side_qp, current_time)(0)));
+    EXPECT_EQ(cf.gradient(node_arg, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradient(node_arg, current_time)(0)));
     EXPECT_EQ(cf.dot(elem_arg, current_time),
               MetaPhysicL::raw_value(ad_cf.dot(elem_arg, current_time)));
     EXPECT_EQ(cf.dot(face, current_time), MetaPhysicL::raw_value(ad_cf.dot(face, current_time)));
@@ -220,6 +250,20 @@ TEST(MooseFunctorTest, testArgs)
               MetaPhysicL::raw_value(ad_cf.dot(elem_qp, current_time)));
     EXPECT_EQ(cf.dot(elem_side_qp, current_time),
               MetaPhysicL::raw_value(ad_cf.dot(elem_side_qp, current_time)));
+    EXPECT_EQ(cf.dot(node_arg, current_time),
+              MetaPhysicL::raw_value(ad_cf.dot(node_arg, current_time)));
+    EXPECT_EQ(cf.gradDot(elem_arg, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(elem_arg, current_time)(0)));
+    EXPECT_EQ(cf.gradDot(face, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(face, current_time)(0)));
+    EXPECT_EQ(cf.gradDot(elem_point, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(elem_point, current_time)(0)));
+    EXPECT_EQ(cf.gradDot(elem_qp, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(elem_qp, current_time)(0)));
+    EXPECT_EQ(cf.gradDot(elem_side_qp, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(elem_side_qp, current_time)(0)));
+    EXPECT_EQ(cf.gradDot(node_arg, current_time)(0),
+              MetaPhysicL::raw_value(ad_cf.gradDot(node_arg, current_time)(0)));
 
     // Test AD down-type
     RawValueFunctor<Real> raw_ad_cf(ad_cf);
@@ -228,6 +272,7 @@ TEST(MooseFunctorTest, testArgs)
     EXPECT_EQ(cf(elem_point, current_time), raw_ad_cf(elem_point, current_time));
     EXPECT_EQ(cf(elem_qp, current_time), raw_ad_cf(elem_qp, current_time));
     EXPECT_EQ(cf(elem_side_qp, current_time), raw_ad_cf(elem_side_qp, current_time));
+    EXPECT_EQ(cf(node_arg, current_time), raw_ad_cf(node_arg, current_time));
     EXPECT_EQ(cf.gradient(elem_arg, current_time)(0),
               raw_ad_cf.gradient(elem_arg, current_time)(0));
     EXPECT_EQ(cf.gradient(face, current_time)(0), raw_ad_cf.gradient(face, current_time)(0));
@@ -236,11 +281,22 @@ TEST(MooseFunctorTest, testArgs)
     EXPECT_EQ(cf.gradient(elem_qp, current_time)(0), raw_ad_cf.gradient(elem_qp, current_time)(0));
     EXPECT_EQ(cf.gradient(elem_side_qp, current_time)(0),
               raw_ad_cf.gradient(elem_side_qp, current_time)(0));
+    EXPECT_EQ(cf.gradient(node_arg, current_time)(0),
+              raw_ad_cf.gradient(node_arg, current_time)(0));
     EXPECT_EQ(cf.dot(elem_arg, current_time), raw_ad_cf.dot(elem_arg, current_time));
     EXPECT_EQ(cf.dot(face, current_time), raw_ad_cf.dot(face, current_time));
     EXPECT_EQ(cf.dot(elem_point, current_time), raw_ad_cf.dot(elem_point, current_time));
     EXPECT_EQ(cf.dot(elem_qp, current_time), raw_ad_cf.dot(elem_qp, current_time));
     EXPECT_EQ(cf.dot(elem_side_qp, current_time), raw_ad_cf.dot(elem_side_qp, current_time));
+    EXPECT_EQ(cf.dot(node_arg, current_time), raw_ad_cf.dot(node_arg, current_time));
+    EXPECT_EQ(cf.gradDot(elem_arg, current_time)(0), raw_ad_cf.gradDot(elem_arg, current_time)(0));
+    EXPECT_EQ(cf.gradDot(face, current_time)(0), raw_ad_cf.gradDot(face, current_time)(0));
+    EXPECT_EQ(cf.gradDot(elem_point, current_time)(0),
+              raw_ad_cf.gradDot(elem_point, current_time)(0));
+    EXPECT_EQ(cf.gradDot(elem_qp, current_time)(0), raw_ad_cf.gradDot(elem_qp, current_time)(0));
+    EXPECT_EQ(cf.gradDot(elem_side_qp, current_time)(0),
+              raw_ad_cf.gradDot(elem_side_qp, current_time)(0));
+    EXPECT_EQ(cf.gradDot(node_arg, current_time)(0), raw_ad_cf.gradDot(node_arg, current_time)(0));
   }
 
   const char * argv[2] = {"foo", "\0"};
@@ -248,7 +304,7 @@ TEST(MooseFunctorTest, testArgs)
   MultiMooseEnum coord_type_enum("XYZ RZ RSPHERICAL", "XYZ");
 
   const auto nx = 2;
-  auto app = AppFactory::createAppShared("MooseUnitApp", 1, (char **)argv);
+  std::shared_ptr<MooseApp> app = Moose::createMooseApp("MooseUnitApp", 1, (char **)argv);
   auto * factory = &app->getFactory();
   std::string mesh_type = "MeshGeneratorMesh";
 
@@ -275,8 +331,9 @@ TEST(MooseFunctorTest, testArgs)
   mesh->prepare(nullptr);
   mesh->setCoordSystem({}, coord_type_enum);
   // Build the face info
+  mesh->buildFiniteVolumeInfo();
+  mesh->computeFiniteVolumeCoords();
   const auto & all_fi = mesh->allFaceInfo();
-  mesh->computeFaceInfoFaceCoords();
 
   // Test VectorComponentFunctor
   {
@@ -287,6 +344,7 @@ TEST(MooseFunctorTest, testArgs)
     EXPECT_EQ(vec_comp(elem_qp, current_time), 0);
     EXPECT_EQ(vec_comp(elem_side_qp, current_time), 0);
     EXPECT_EQ(vec_comp(elem_point, current_time), 0);
+    EXPECT_EQ(vec_comp(node_arg, current_time), 0);
 
     bool found_internal = false;
     for (const auto & mesh_fi : all_fi)
@@ -297,9 +355,9 @@ TEST(MooseFunctorTest, testArgs)
       auto vec_face_arg = FaceArg({&mesh_fi, LimiterType::CentralDifference, true, false, nullptr});
       const auto vec_elem_arg = vec_face_arg.makeElem();
       const auto vec_neighbor_arg = vec_face_arg.makeNeighbor();
-      zero_gradient_test(vec_comp, vec_elem_arg);
-      zero_gradient_test(vec_comp, vec_neighbor_arg);
-      zero_gradient_test(vec_comp, vec_face_arg);
+      zero_gradient_and_grad_dot_test(vec_comp, vec_elem_arg);
+      zero_gradient_and_grad_dot_test(vec_comp, vec_neighbor_arg);
+      zero_gradient_and_grad_dot_test(vec_comp, vec_face_arg);
 
       found_internal = true;
       break;
@@ -329,6 +387,7 @@ TEST(MooseFunctorTest, testArgs)
     test_null_error(elem_qp);
     test_null_error(elem_side_qp);
     test_null_error(elem_point);
+    test_null_error(node_arg);
   }
 
   // Test PiecewiseByBlockLambdaFunctor
@@ -363,6 +422,7 @@ TEST(MooseFunctorTest, testArgs)
       test_sub_error(elem_qp);
       test_sub_error(elem_side_qp);
       test_sub_error(elem_point);
+      test_sub_error(node_arg);
       EXPECT_EQ(errorfree(elem_point, current_time), 2);
     }
 

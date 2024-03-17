@@ -9,6 +9,7 @@
 
 #include "GenericFunctorMaterial.h"
 #include "Function.h"
+#include "MathUtils.h"
 
 registerMooseObject("MooseApp", GenericFunctorMaterial);
 registerMooseObject("MooseApp", ADGenericFunctorMaterial);
@@ -34,7 +35,6 @@ InputParameters
 GenericFunctorMaterialTempl<is_ad>::validParams()
 {
   InputParameters params = FunctorMaterial::validParams();
-  params += SetupInterface::validParams();
   params.set<ExecFlagEnum>("execute_on") = {EXEC_ALWAYS};
   params.addClassDescription(
       "FunctorMaterial object for declaring properties that are populated by evaluation of a "
@@ -45,6 +45,10 @@ GenericFunctorMaterialTempl<is_ad>::validParams()
                                                  "The corresponding names of the "
                                                  "functors that are going to provide "
                                                  "the values for the variables");
+  params.addParam<bool>("define_dot_functors",
+                        true,
+                        "Whether to define additional functors for the time derivative and the "
+                        "time derivative of the gradient");
   return params;
 }
 
@@ -77,12 +81,26 @@ GenericFunctorMaterialTempl<is_ad>::GenericFunctorMaterialTempl(const InputParam
 
   const std::set<ExecFlagType> clearance_schedule(_execute_enum.begin(), _execute_enum.end());
   for (const auto i : make_range(_num_props))
+  {
     addFunctorProperty<GenericReal<is_ad>>(
         _prop_names[i],
-        [this, i](const auto & r, const auto & t) -> GenericReal<is_ad> {
-          return (*_functors[i])(r, t);
-        },
+        [this, i](const auto & r, const auto & t) -> GenericReal<is_ad>
+        { return (*_functors[i])(r, t); },
         clearance_schedule);
+    if (getParam<bool>("define_dot_functors"))
+    {
+      addFunctorProperty<GenericReal<is_ad>>(
+          MathUtils::timeDerivName(_prop_names[i]),
+          [this, i](const auto & r, const auto & t) -> GenericReal<is_ad>
+          { return _functors[i]->dot(r, t); },
+          clearance_schedule);
+      addFunctorProperty<GenericRealVectorValue<is_ad>>(
+          MathUtils::gradName(MathUtils::timeDerivName(_prop_names[i])),
+          [this, i](const auto & r, const auto & t) -> GenericRealVectorValue<is_ad>
+          { return _functors[i]->gradDot(r, t); },
+          clearance_schedule);
+    }
+  }
 }
 
 template class GenericFunctorMaterialTempl<false>;

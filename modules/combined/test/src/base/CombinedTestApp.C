@@ -23,7 +23,7 @@
 #include "FsiTestApp.h"
 #include "FunctionalExpansionToolsTestApp.h"
 #include "GeochemistryTestApp.h"
-#include "HeatConductionTestApp.h"
+#include "HeatTransferTestApp.h"
 #include "LevelSetTestApp.h"
 #include "MiscTestApp.h"
 #include "NavierStokesTestApp.h"
@@ -36,8 +36,12 @@
 #include "RdgTestApp.h"
 #include "ReactorTestApp.h"
 #include "RichardsTestApp.h"
+#include "ScalarTransportTestApp.h"
+#include "SolidPropertiesTestApp.h"
 #include "StochasticToolsTestApp.h"
-#include "TensorMechanicsTestApp.h"
+#include "ScalarTransportTestApp.h"
+#include "SolidPropertiesTestApp.h"
+#include "SolidMechanicsTestApp.h"
 #include "ThermalHydraulicsTestApp.h"
 #include "XFEMTestApp.h"
 
@@ -45,6 +49,8 @@ InputParameters
 CombinedTestApp::validParams()
 {
   InputParameters params = CombinedApp::validParams();
+  // Below parameter is set to enable data driven mesh generation in test suite
+  params.set<bool>(MeshGeneratorSystem::allow_data_driven_param) = true;
   return params;
 }
 
@@ -75,7 +81,7 @@ CombinedTestApp::registerAll(Factory & f, ActionFactory & af, Syntax & s, bool u
     FsiTestApp::registerAll(f, af, s, use_test_objs);
     FunctionalExpansionToolsTestApp::registerAll(f, af, s, use_test_objs);
     GeochemistryTestApp::registerAll(f, af, s, use_test_objs);
-    HeatConductionTestApp::registerAll(f, af, s, use_test_objs);
+    HeatTransferTestApp::registerAll(f, af, s, use_test_objs);
     LevelSetTestApp::registerAll(f, af, s, use_test_objs);
     MiscTestApp::registerAll(f, af, s, use_test_objs);
     NavierStokesTestApp::registerAll(f, af, s, use_test_objs);
@@ -87,8 +93,10 @@ CombinedTestApp::registerAll(Factory & f, ActionFactory & af, Syntax & s, bool u
     RdgTestApp::registerAll(f, af, s, use_test_objs);
     ReactorTestApp::registerAll(f, af, s, use_test_objs);
     RichardsTestApp::registerAll(f, af, s, use_test_objs);
+    ScalarTransportTestApp::registerAll(f, af, s, use_test_objs);
+    SolidPropertiesTestApp::registerAll(f, af, s, use_test_objs);
     StochasticToolsTestApp::registerAll(f, af, s, use_test_objs);
-    TensorMechanicsTestApp::registerAll(f, af, s, use_test_objs);
+    SolidMechanicsTestApp::registerAll(f, af, s, use_test_objs);
     ThermalHydraulicsTestApp::registerAll(f, af, s, use_test_objs);
     XFEMTestApp::registerAll(f, af, s, use_test_objs);
   }
@@ -97,17 +105,35 @@ CombinedTestApp::registerAll(Factory & f, ActionFactory & af, Syntax & s, bool u
 void
 CombinedTestApp::registerApps()
 {
-  registerApp(CombinedApp);
   registerApp(CombinedTestApp);
+  registerApp(CombinedApp);
 
-  // Terrible Hack:
-  // Right now we aren't automatically registering dependent apps to build. We
-  // need a way to do this so that Multiapp types work automatically. We have a
-  // few regression tests in THM that create ThermalHydraulicsApp that fail to work with the
-  // combined module. For now, I'm going to manually register ThermalHydraulicsApp. We'll
-  // need to design the API so that all registered apps and modules also get
-  // immediate access to the buildable apps for use in Multiapps.
-  registerApp(ThermalHydraulicsApp);
+  ChemicalReactionsTestApp::registerApps();
+  ContactTestApp::registerApps();
+  ElectromagneticsTestApp::registerApps();
+  ExternalPetscSolverTestApp::registerApps();
+  FluidPropertiesTestApp::registerApps();
+  FsiTestApp::registerApps();
+  FunctionalExpansionToolsTestApp::registerApps();
+  GeochemistryTestApp::registerApps();
+  HeatTransferTestApp::registerApps();
+  LevelSetTestApp::registerApps();
+  MiscTestApp::registerApps();
+  NavierStokesTestApp::registerApps();
+  OptimizationTestApp::registerApps();
+  PeridynamicsTestApp::registerApps();
+  PhaseFieldTestApp::registerApps();
+  PorousFlowTestApp::registerApps();
+  RayTracingTestApp::registerApps();
+  RdgTestApp::registerApps();
+  ReactorTestApp::registerApps();
+  RichardsTestApp::registerApps();
+  ScalarTransportTestApp::registerApps();
+  SolidPropertiesTestApp::registerApps();
+  StochasticToolsTestApp::registerApps();
+  SolidMechanicsTestApp::registerApps();
+  ThermalHydraulicsTestApp::registerApps();
+  XFEMTestApp::registerApps();
 }
 
 std::string

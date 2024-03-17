@@ -35,7 +35,7 @@
 #include <vector>
 #include <map>
 #include <list>
-#include <iterator>
+#include <filesystem>
 #include <deque>
 
 // Forward Declarations
@@ -57,15 +57,13 @@ class MultiMooseEnum;
 namespace MooseUtils
 {
 
-std::string pathjoin(const std::string & s);
+std::filesystem::path pathjoin(const std::filesystem::path & p);
 
 template <typename... Args>
-std::string
-pathjoin(const std::string & s, Args... args)
+std::filesystem::path
+pathjoin(const std::filesystem::path & p, Args... args)
 {
-  if (s[s.size() - 1] == '/')
-    return s + pathjoin(args...);
-  return s + "/" + pathjoin(args...);
+  return p / pathjoin(args...);
 }
 
 /// Check if the input string can be parsed into a Real
@@ -92,11 +90,9 @@ std::string docsDir(const std::string & app_name);
 std::string replaceAll(std::string str, const std::string & from, const std::string & to);
 
 /**
- * Replaces "LATEST" placeholders with the latest checkpoint file name.  If base_only is true, then
- * only return the base-name of the checkpoint directory - otherwise, a full mesh
- * checkpoint file path is returned.
+ * Replaces "LATEST" placeholders with the latest checkpoint file name.
  */
-std::string convertLatestCheckpoint(std::string orig, bool base_only = true);
+std::string convertLatestCheckpoint(std::string orig);
 
 /// Computes and returns the Levenshtein distance between strings s1 and s2.
 int levenshteinDist(const std::string & s1, const std::string & s2);
@@ -230,7 +226,18 @@ std::string stripExtension(const std::string & s);
  *
  * If the supplied filename does not contain a path, it returns "." as the path
  */
-std::pair<std::string, std::string> splitFileName(std::string full_file);
+template <typename T>
+std::pair<std::filesystem::path, std::filesystem::path>
+splitFileName(const T & full_file)
+{
+  const auto p = std::filesystem::path(std::string(full_file));
+  // Error if path ends with /
+  if (!p.has_filename())
+    mooseError("Invalid full file name: ", p);
+
+  const auto d = p.parent_path();
+  return {d.empty() ? "." : d, p.filename()};
+}
 
 /**
  * Returns the current working directory as a string. If there's a problem
@@ -287,6 +294,11 @@ std::string baseName(const std::string & name);
  * Get the hostname the current process is running on
  */
 std::string hostname();
+
+/**
+ * Returns the width of the terminal using sys/ioctl
+ */
+unsigned short getTermWidth(bool use_environment);
 
 /**
  * @returns A cleaner representation of the c++ type \p cpp_type.
@@ -706,17 +718,17 @@ bool pathIsDirectory(const std::string & path);
  * the routine. The names returned will be the paths to the files relative to the current
  * directory.
  * @param directory_list The list of directories to retrieve files from.
+ * @param file_only Whether or not to list only files
  */
-std::list<std::string> getFilesInDirs(const std::list<std::string> & directory_list);
+std::list<std::string> getFilesInDirs(const std::list<std::string> & directory_list,
+                                      const bool files_only = true);
 
 /**
- * Returns the most recent checkpoint or mesh file given a list of files.
+ * Returns the most recent checkpoint prefix (the four numbers at the begining)
  * If a suitable file isn't found the empty string is returned
  * @param checkpoint_files the list of files to analyze
  */
-std::string getLatestMeshCheckpointFile(const std::list<std::string> & checkpoint_files);
-
-std::string getLatestAppCheckpointFileBase(const std::list<std::string> & checkpoint_files);
+std::string getLatestCheckpointFilePrefix(const std::list<std::string> & checkpoint_files);
 
 /*
  * Checks to see if a string matches a search string
@@ -975,11 +987,6 @@ linearPartitionChunk(dof_id_type num_items, dof_id_type num_chunks, dof_id_type 
  * Wrapper around PetscGetRealPath, which is a cross-platform replacement for realpath
  */
 std::string realpath(const std::string & path);
-
-/**
- * Like python's os.path.relpath
- */
-std::string relativepath(const std::string & path, const std::string & start = ".");
 
 /**
  * Custom type trait that has a ::value of true for types that cam be use interchangably

@@ -43,12 +43,23 @@ public:
     }
   };
 
-  /**
-   * Constructor
-   *
-   * @param parameters The parameters object holding data for the class to use.
-   */
   static InputParameters validParams();
+
+  /**
+   * Sets that a mesh generator has a generateData() implementation.
+   *
+   * This must be called in the validParams() implementation for all
+   * mesh generators that implement generateData().
+   */
+  static void setHasGenerateData(InputParameters & params);
+  /**
+   * @return Whether or not the mesh generator noted by the given parameters
+   * has a generateData() implementation
+   */
+  static bool hasGenerateData(const InputParameters & params);
+
+  /// The name of the private parameter for setting data only
+  static const std::string data_only_param;
 
   MeshGenerator(const InputParameters & parameters);
 
@@ -130,12 +141,18 @@ public:
   /**
    * @returns Whether or not the MeshGenerator with the name \p name is a parent of this
    * MeshGenerator.
+   *
+   * If \p direct = true, check only immediate parents of this generator. Otherwise, check
+   * all parents.
    */
   bool isParentMeshGenerator(const MeshGeneratorName & name, const bool direct = true) const;
 
   /**
    * @returns Whether or not the MeshGenerator with the name \p name is a child of this
    * MeshGenerator.
+   *
+   * If \p direct = true, check only immediate children of this generator. Otherwise, check
+   * all children.
    */
   bool isChildMeshGenerator(const MeshGeneratorName & name, const bool direct = true) const;
 
@@ -162,7 +179,22 @@ public:
    */
   const std::string & getSavedMeshName() const;
 
+  /**
+   * @return Whether or not this generator has a generateData() implementation
+   */
+  bool hasGenerateData() const { return hasGenerateData(_pars); }
+
+  /**
+   * @return Whether or not this generator is to be generated in data-only mode
+   */
+  bool isDataOnly() const { return _data_only; }
+
 protected:
+  /**
+   * Generate the mesh data
+   */
+  virtual void generateData();
+
   /**
    * Methods for writing out attributes to the mesh meta-data store, which can be retrieved from
    * most other MOOSE systems and is recoverable.
@@ -352,8 +384,8 @@ protected:
    */
   void declareNullMeshName(const MeshGeneratorName & name);
 
-  /// References to the mesh and displaced mesh (currently in the ActionWarehouse)
-  const std::shared_ptr<MooseMesh> & _mesh;
+  /// Pointer to the owning mesh
+  MooseMesh * const _mesh;
 
 private:
   /**
@@ -413,6 +445,9 @@ private:
 
   /// A user-defined name to save the mesh
   const std::string & _save_with_name;
+
+  /// Whether or not this mesh generator will run in data only mode
+  const bool _data_only;
 };
 
 template <typename T, typename... Args>
@@ -435,8 +470,8 @@ MeshGenerator::declareMeshProperty(const std::string & data_name, Args &&... arg
   const auto full_name = meshPropertyName(data_name);
   auto new_T_value =
       std::make_unique<RestartableData<T>>(full_name, nullptr, std::forward<Args>(args)...);
-  auto value = &_app.registerRestartableData(
-      full_name, std::move(new_T_value), 0, false, MooseApp::MESH_META_DATA);
+  auto value =
+      &_app.registerRestartableData(std::move(new_T_value), 0, false, MooseApp::MESH_META_DATA);
   mooseAssert(value->declared(), "Should be declared");
 
   RestartableData<T> * T_value = dynamic_cast<RestartableData<T> *>(value);

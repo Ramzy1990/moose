@@ -12,7 +12,6 @@
 
 #include "libmesh/elem.h"
 #include "libmesh/boundary_info.h"
-#include "libmesh/replicated_mesh.h"
 #include "libmesh/mesh_base.h"
 #include "libmesh/parallel.h"
 #include "libmesh/parallel_algebra.h"
@@ -61,6 +60,9 @@ changeBoundaryId(MeshBase & mesh,
   // from showing up when printing information, etc.
   if (delete_prev)
     boundary_info.remove_id(old_id);
+
+  // global information may now be out of sync
+  mesh.set_isnt_prepared();
 }
 
 std::vector<boundary_id_type>
@@ -90,10 +92,11 @@ getBoundaryIDs(const MeshBase & mesh,
    */
   if (generate_unknown)
   {
-    const std::set<BoundaryID> & local_bids = mesh.get_boundary_info().get_boundary_ids();
-    max_boundary_local_id = local_bids.empty() ? 0 : *(local_bids.rbegin());
+    const auto & bids = mesh.is_prepared() ? mesh.get_boundary_info().get_global_boundary_ids()
+                                           : mesh.get_boundary_info().get_boundary_ids();
+    max_boundary_local_id = bids.empty() ? 0 : *(bids.rbegin());
     /* We should not hit this often */
-    if (!mesh.is_serial())
+    if (!mesh.is_prepared() && !mesh.is_serial())
       mesh.comm().max(max_boundary_local_id);
   }
 
@@ -164,31 +167,10 @@ getBoundaryIDSet(const MeshBase & mesh,
 std::vector<subdomain_id_type>
 getSubdomainIDs(const MeshBase & mesh, const std::vector<SubdomainName> & subdomain_name)
 {
-  std::set<subdomain_id_type> mesh_subdomains;
-  mesh.subdomain_ids(mesh_subdomains);
-  return getSubdomainIDs(mesh, subdomain_name, mesh_subdomains);
-}
-
-std::vector<subdomain_id_type>
-getSubdomainIDs(const MeshBase & mesh,
-                const std::vector<SubdomainName> & subdomain_name,
-                const std::set<SubdomainID> & mesh_subdomains)
-{
   std::vector<SubdomainID> ids(subdomain_name.size());
 
   for (unsigned int i = 0; i < subdomain_name.size(); i++)
-  {
-    if (subdomain_name[i] == "ANY_BLOCK_ID")
-    {
-      ids.assign(mesh_subdomains.begin(), mesh_subdomains.end());
-      if (i)
-        mooseWarning("You passed \"ANY_BLOCK_ID\" in addition to other block names.  This may be a "
-                     "logic error.");
-      break;
-    }
-
     ids[i] = MooseMeshUtils::getSubdomainID(subdomain_name[i], mesh);
-  }
 
   return ids;
 }
@@ -238,6 +220,9 @@ changeSubdomainId(MeshBase & mesh, const subdomain_id_type old_id, const subdoma
   for (const auto & elem : mesh.element_ptr_range())
     if (elem->subdomain_id() == old_id)
       elem->subdomain_id() = new_id;
+
+  // global cached information may now be out of sync
+  mesh.set_isnt_prepared();
 }
 
 Point
@@ -264,7 +249,7 @@ getExtraIDUniqueCombinationMap(const MeshBase & mesh,
                                std::vector<ExtraElementIDName> extra_ids)
 {
   // check block restriction
-  const bool block_restricted = block_ids.find(Moose::ANY_BLOCK_ID) == block_ids.end();
+  const bool block_restricted = !block_ids.empty();
   // get element id name of interest in recursive parsing algorithm
   ExtraElementIDName id_name = extra_ids.back();
   extra_ids.pop_back();
@@ -430,7 +415,7 @@ hasSubdomainName(MeshBase & input_mesh, const SubdomainName & name)
 }
 
 bool
-hasBoundaryID(MeshBase & input_mesh, const BoundaryID & id)
+hasBoundaryID(const MeshBase & input_mesh, const BoundaryID id)
 {
   const BoundaryInfo & boundary_info = input_mesh.get_boundary_info();
   std::set<boundary_id_type> boundary_ids = boundary_info.get_boundary_ids();
@@ -444,7 +429,7 @@ hasBoundaryID(MeshBase & input_mesh, const BoundaryID & id)
 }
 
 bool
-hasBoundaryName(MeshBase & input_mesh, const BoundaryName & name)
+hasBoundaryName(const MeshBase & input_mesh, const BoundaryName & name)
 {
   const auto id = getBoundaryID(name, input_mesh);
   return hasBoundaryID(input_mesh, id);
@@ -459,6 +444,7 @@ makeOrderedNodeList(std::vector<std::pair<dof_id_type, dof_id_type>> & node_assm
   // a flag to indicate if the ordered_node_list has been reversed
   bool isFlipped = false;
   // Start from the first element, try to find a chain of nodes
+  mooseAssert(node_assm.size(), "Node list must not be empty");
   ordered_node_list.push_back(node_assm.front().first);
   ordered_node_list.push_back(node_assm.front().second);
   ordered_elem_id_list.push_back(elem_id_list.front());

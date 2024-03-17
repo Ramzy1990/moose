@@ -46,7 +46,8 @@ BlockRestrictable::BlockRestrictable(const MooseObject * moose_object, bool init
                                                   : NULL),
     _boundary_ids(_empty_boundary_ids),
     _blk_tid(moose_object->isParamValid("_tid") ? moose_object->getParam<THREAD_ID>("_tid") : 0),
-    _blk_name(moose_object->getParam<std::string>("_object_name"))
+    _blk_name(moose_object->getParam<std::string>("_object_name")),
+    _blk_dim(libMesh::invalid_uint)
 {
   if (initialize)
     initializeBlockRestrictable(moose_object);
@@ -63,7 +64,8 @@ BlockRestrictable::BlockRestrictable(const MooseObject * moose_object,
                                                   : NULL),
     _boundary_ids(boundary_ids),
     _blk_tid(moose_object->isParamValid("_tid") ? moose_object->getParam<THREAD_ID>("_tid") : 0),
-    _blk_name(moose_object->getParam<std::string>("_object_name"))
+    _blk_name(moose_object->getParam<std::string>("_object_name")),
+    _blk_dim(libMesh::invalid_uint)
 {
   initializeBlockRestrictable(moose_object);
 }
@@ -90,14 +92,15 @@ BlockRestrictable::initializeBlockRestrictable(const MooseObject * moose_object)
     // Extract the blocks from the input
     _blocks = moose_object->getParam<std::vector<SubdomainName>>("block");
 
-    // Get the IDs from the supplied names
-    _vec_ids = _blk_mesh->getSubdomainIDs(_blocks);
-
     // Store the IDs in a set, handling ANY_BLOCK_ID if supplied
     if (std::find(_blocks.begin(), _blocks.end(), "ANY_BLOCK_ID") != _blocks.end())
       _blk_ids.insert(Moose::ANY_BLOCK_ID);
     else
+    {
+      // Get the IDs from the supplied names
+      _vec_ids = _blk_mesh->getSubdomainIDs(_blocks);
       _blk_ids.insert(_vec_ids.begin(), _vec_ids.end());
+    }
   }
 
   // When 'blocks' is not set and there is a "variable", use the blocks from the variable
@@ -186,7 +189,10 @@ BlockRestrictable::blocks() const
 const std::set<SubdomainID> &
 BlockRestrictable::blockIDs() const
 {
-  return _blk_ids;
+  if (_blk_ids.find(Moose::ANY_BLOCK_ID) != _blk_ids.end())
+    return _blk_mesh->meshSubdomains();
+  else
+    return _blk_ids;
 }
 
 unsigned int
@@ -348,4 +354,11 @@ BlockRestrictable::checkVariable(const MooseVariableFieldBase & variable) const
                "': ",
                var_ids);
   }
+}
+
+unsigned int
+BlockRestrictable::blocksMaxDimension() const
+{
+  mooseAssert(_blk_dim != libMesh::invalid_uint, "Block restriction not initialized");
+  return _blk_dim;
 }

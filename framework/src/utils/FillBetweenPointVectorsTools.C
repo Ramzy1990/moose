@@ -71,7 +71,11 @@ fillBetweenPointVectorsGenerator(MeshBase & mesh, // an empty mesh is expected
                " ",
                name,
                ", QUAD4 elements option can only be selected when the two input vectors of Points "
-               "have the same length.");
+               "have the same length. In the current instance, the first vector has ",
+               boundary_points_vec_1.size(),
+               " points and the second ",
+               boundary_points_vec_2.size(),
+               " points");
 
   std::vector<Point> possibly_reoriented_boundary_points_vec_2;
   const std::vector<Point> * oriented_boundary_points_vec_2 = &boundary_points_vec_2;
@@ -504,13 +508,11 @@ isBoundarySimpleClosedLoop(MeshBase & mesh,
   max_node_radius = 0.0;
   BoundaryInfo & boundary_info = mesh.get_boundary_info();
   auto side_list_tmp = boundary_info.build_side_list();
-  unsigned int elem_counter = 0;
   std::vector<std::pair<dof_id_type, dof_id_type>> boundary_node_assm;
   for (unsigned int i = 0; i < side_list_tmp.size(); i++)
   {
     if (std::get<2>(side_list_tmp[i]) == bid)
     {
-      elem_counter++;
       // store two nodes of each side
       boundary_node_assm.push_back(std::make_pair(mesh.elem_ptr(std::get<0>(side_list_tmp[i]))
                                                       ->side_ptr(std::get<1>(side_list_tmp[i]))

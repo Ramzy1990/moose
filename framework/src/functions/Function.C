@@ -91,10 +91,17 @@ Function::vectorValue(Real /*t*/, const Point & /*p*/) const
 }
 
 RealVectorValue
-Function::vectorCurl(Real /*t*/, const Point & /*p*/) const
+Function::curl(Real /*t*/, const Point & /*p*/) const
 {
-  mooseError("vectorCurl method not implemented");
+  mooseError("curl method not implemented");
   return RealVectorValue(0, 0, 0);
+}
+
+Real
+Function::div(Real /*t*/, const Point & /*p*/) const
+{
+  mooseError("div method not implemented");
+  return 0;
 }
 
 Real
@@ -166,6 +173,12 @@ Function::evaluate(const ElemPointArg & elem_point_arg, const Moose::StateArg & 
   return evaluateHelper(elem_point_arg, state);
 }
 
+typename Function::ValueType
+Function::evaluate(const NodeArg & node_arg, const Moose::StateArg & state) const
+{
+  return evaluateHelper(node_arg, state);
+}
+
 template <typename R>
 typename Function::GradientType
 Function::evaluateGradientHelper(const R & r, const Moose::StateArg & state) const
@@ -203,6 +216,12 @@ Function::evaluateGradient(const ElemPointArg & elem_point_arg, const Moose::Sta
   return evaluateGradientHelper(elem_point_arg, state);
 }
 
+typename Function::GradientType
+Function::evaluateGradient(const NodeArg & node_arg, const Moose::StateArg & state) const
+{
+  return evaluateGradientHelper(node_arg, state);
+}
+
 template <typename R>
 typename Function::DotType
 Function::evaluateDotHelper(const R & r, const Moose::StateArg & state) const
@@ -238,6 +257,12 @@ typename Function::DotType
 Function::evaluateDot(const ElemPointArg & elem_point_arg, const Moose::StateArg & state) const
 {
   return evaluateDotHelper(elem_point_arg, state);
+}
+
+typename Function::DotType
+Function::evaluateDot(const NodeArg & node_arg, const Moose::StateArg & state) const
+{
+  return evaluateDotHelper(node_arg, state);
 }
 
 void

@@ -29,14 +29,13 @@
     input = 'multi_update_var_test.i'
     exodiff = 'out_multi_var.e'
     issues = '#2099'
-    requirement = "The AuxKernel objects shall be capable of wriyting to to multiple coupled "
-                  "variables."
+    requirement = "Auxiliary kernel objects shall be capable of writing to multiple coupled variables."
   []
   [multi_update_error]
     type = RunException
     input = multi_update_var_error.i
-    expect_err = "writableVariable\(\) can only be called from AuxKernels, ElementUserObjects, or "
-                 "NodalUserObjects\. 'all' is neither of those\."
+    expect_err = "writableVariable\(\) can only be called from AuxKernels, ElementUserObjects, "
+                 "NodalUserObjects, or NodeFaceConstraints\. 'all' is none of those\."
     issues = '#22563'
     allow_deprecated = true
     requirement = "Writing to auxiliary variables shall be limited to use from AuxKernels, "
@@ -90,6 +89,14 @@
     issues = '#22563'
     allow_deprecated = true
     requirement = "The writing to auxiliary variables shall error out if a constant value is passed in as variable name."
+  []
+
+  [multi_update_fv_test]
+    type = 'Exodiff'
+    input = 'multi_update_fv_test.i'
+    exodiff = 'out_multi_var_fv.e'
+    issues = '#25661'
+    requirement = "Auxiliary kernel objects shall be capable of writing to finite volume coupled variables."
   []
 
   [multi_update_elem_test]

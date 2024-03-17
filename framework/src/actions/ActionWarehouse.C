@@ -111,7 +111,7 @@ ActionWarehouse::addActionBlock(std::shared_ptr<Action> action)
    *    means that this Action was not built by the Parser.  It was most likely created through a
    *    Meta-Action (See Case 3 for exception). In this case, the ActionFactory itself would have
    *    already set the task it found from the build info used to construct the Action so we'd
-   *    arbitrarily satisify a single task in this case.
+   *    arbitrarily satisfy a single task in this case.
    *
    * 3. The current Action is registered with only a single syntax block. In this case we can simply
    *    re-use the current instance to act and satisfy _all_ registered tasks. This is the normal
@@ -121,7 +121,7 @@ ActionWarehouse::addActionBlock(std::shared_ptr<Action> action)
   if (action->specificTaskName() != "") // Case 1
     tasks.insert(action->specificTaskName());
   else if (registered_identifier == "" &&
-           _syntax.getSyntaxByAction(action->type()).size() > 1) // Case 2
+           _syntax.getNonDeprecatedSyntaxByAction(action->type()).size() > 1) // Case 2
   {
     std::set<std::string> local_tasks = action->getAllTasks();
     mooseAssert(local_tasks.size() == 1, "More than one task inside of the " << action->name());

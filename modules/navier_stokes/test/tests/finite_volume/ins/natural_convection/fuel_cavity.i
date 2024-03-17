@@ -189,7 +189,7 @@ input_heat_flux = 40000.0
     type = INSFVEnergyTimeDerivative
     variable = T
     rho = '${rho}'
-    cp = '${cp}'
+    dh_dt = dh_dt
   []
   [temp_conduction]
     type = FVDiffusion
@@ -205,7 +205,7 @@ input_heat_flux = 40000.0
     type = INSFVEnergyTimeDerivative
     variable = Ts
     rho = '${rho}'
-    cp = '${cp}'
+    dh_dt = dh_solid_dt
   []
   [solid_temp_conduction]
     type = FVDiffusion
@@ -320,17 +320,26 @@ input_heat_flux = 40000.0
   []
 []
 
-[Materials]
+[FunctorMaterials]
   [functor_constants]
     type = ADGenericFunctorMaterial
     prop_names = 'cp k k_solid'
     prop_values = '${cp} ${k} ${k_solid}'
   []
   [ins_fv]
-    type = INSFVEnthalpyMaterial
+    type = INSFVEnthalpyFunctorMaterial
     temperature = 'T'
     rho = ${rho}
     block = 0
+  []
+  [ins_fv_solid]
+    type = INSFVEnthalpyFunctorMaterial
+    temperature = 'Ts'
+    rho = ${rho}
+    cp = ${cp}
+    h = h_solid
+    rho_h = rho_h_solid
+    block = 1
   []
   [const_functor]
     type = ADGenericFunctorMaterial

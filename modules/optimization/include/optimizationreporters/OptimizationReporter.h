@@ -30,24 +30,8 @@ public:
   virtual void updateParameters(const std::vector<int> & ix, const std::vector<Real> & rx) override;
 
 protected:
-  virtual void updateParameters(const libMesh::PetscVector<Number> & x) override;
+  virtual void setICsandBounds() override;
 
-  /// Parameter names
-  const std::vector<ReporterValueName> & _parameter_names;
-  /// Number of parameter vectors
-  const unsigned int _nparam;
-  /// Number of values for each parameter
-  const std::vector<dof_id_type> & _nvalues;
-  /// Total number of parameters
-  const dof_id_type _ndof;
-
-  /// Parameter values declared as reporter data
-  std::vector<std::vector<Real> *> _parameters;
-
-  /// Bounds of the parameters
-  const std::vector<Real> & _lower_bounds;
-  const std::vector<Real> & _upper_bounds;
-
-  /// vector of adjoint data
-  const std::vector<Real> & _adjoint_data;
+private:
+  virtual void setSimulationValuesForTesting(std::vector<Real> & data) override;
 };

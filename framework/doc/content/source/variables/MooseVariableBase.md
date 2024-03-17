@@ -10,7 +10,7 @@ The current class hierarchy for Moose variables is shown below:
 
 `MooseVariableBase` is the primitive base class from which all variables
 inherit. It includes methods for accessing the variable finite element type and
-order, degress of freedom, scaling factor, name, and associated
+order, degrees of freedom, scaling factor, name, and associated
 [SystemBase](syntax/Systems/index.md). Two classes inherit directly from
 `MooseVariableBase`: [MooseVariableFEBase](MooseVariable.md)
 and [MooseVariableScalar](MooseVariableScalar.md). `MooseVariableScalar` represents a
@@ -55,9 +55,10 @@ single-component are instantiated with the template argument `Real`; these hold
 variables of finite element families `LAGRANGE`, `MONOMIAL`, `HERMITE`,
 etc. Multi-component vector finite element variables are instantiated with the
 template argument `RealVectorValue` and currently encompass the finite element
-families `NEDELEC_ONE` and `LAGRANGE_VEC`. The former is useful for
-electromagnetic applications or for general PDEs that involve a curl
-operation. The latter is potentially useful for tensor mechanic or Navier-Stokes
+families `LAGRANGE_VEC`, `MONOMIAL_VEC`, `NEDELEC_ONE` and `RAVIART_THOMAS`.
+`NEDELEC_ONE` and `RAVIART_THOMAS` are useful for electromagnetic applications
+or for general PDEs that involve a curl or a divergence operation, respectively.
+`LAGRANGE_VEC` is potentially useful for solid mechanics or Navier-Stokes
 simulations where historically displacement or velocity variables have been
 broken up component-wise. To hide the templating of the Moose variable system
 from other framework code, `MooseVariableFE<Real>` and
@@ -180,7 +181,7 @@ template `MooseVariableField<T>` inherit from the
 implemented in `MooseVariableField<T>`. The `ElemQpArg` and `ElemSideQpArg` `evaluate` overloads do
 true on-the-fly computation of the solution based on the information contained
 within the argument, e.g. they perform calls to libMesh `FE::reinit` methods
-after attaching the quadrature rule provided withing the calling argument. The
+after attaching the quadrature rule provided within the calling argument. The
 `ElementType` overload, however, simply queries methods like `adSln()`,
 `slnOld()`, `slnOlder()`, `adSlnNeighbor()`, and `slnOldNeighbor()`. The success
 of this latter overload depends on the fact that the variable has already been

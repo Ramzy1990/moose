@@ -81,17 +81,17 @@ ExplicitRK2::solve()
   // first solve therefore happens in the second stage.  Note that the
   // non-time Kernels (which should be marked implicit=false) are
   // evaluated at the old solution during this stage.
-  _fe_problem.initPetscOutput();
+  _fe_problem.initPetscOutputAndSomeSolverSettings();
   _console << "1st solve" << std::endl;
   _stage = 2;
   _fe_problem.timeOld() = time_old;
   _fe_problem.time() = time_stage2;
-  _fe_problem.getNonlinearSystemBase().system().solve();
+  _nl.system().solve();
   _n_nonlinear_iterations += getNumNonlinearIterationsLastSolve();
   _n_linear_iterations += getNumLinearIterationsLastSolve();
 
   // Abort time step immediately on stage failure - see TimeIntegrator doc page
-  if (!_fe_problem.converged())
+  if (!_fe_problem.converged(_nl.number()))
     return;
 
   // Advance solutions old->older, current->old.  Also moves Material
@@ -100,12 +100,12 @@ ExplicitRK2::solve()
 
   // The "update" stage (which we call stage 3) requires an additional
   // solve with the mass matrix.
-  _fe_problem.initPetscOutput();
+  _fe_problem.initPetscOutputAndSomeSolverSettings();
   _console << "2nd solve" << std::endl;
   _stage = 3;
   _fe_problem.timeOld() = time_stage2;
   _fe_problem.time() = time_new;
-  _fe_problem.getNonlinearSystemBase().system().solve();
+  _nl.system().solve();
   _n_nonlinear_iterations += getNumNonlinearIterationsLastSolve();
   _n_linear_iterations += getNumLinearIterationsLastSolve();
 

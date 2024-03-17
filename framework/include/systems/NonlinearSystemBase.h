@@ -44,6 +44,7 @@ class Split;
 class KernelBase;
 class BoundaryCondition;
 class ResidualObject;
+class PenetrationInfo;
 
 // libMesh forward declarations
 namespace libMesh
@@ -82,7 +83,7 @@ public:
   /**
    * Quit the current solve as soon as possible.
    */
-  virtual void stopSolve() = 0;
+  virtual void stopSolve(const ExecFlagType & exec_flag) = 0;
 
   virtual NonlinearSolver<Number> * nonlinearSolver() = 0;
 
@@ -301,10 +302,6 @@ public:
    */
   void constraintJacobians(bool displaced);
 
-  /// set all the global dof indices for a nonlinear variable
-  void setVariableGlobalDoFs(const std::string & var_name);
-  const std::vector<dof_id_type> & getVariableGlobalDoFs() { return _var_all_dof_indices; }
-
   /**
    * Computes multiple (tag associated) Jacobian matricese
    */
@@ -312,8 +309,9 @@ public:
 
   /**
    * Method used to obtain scaling factors for variables
+   * @returns whether this method ran without exceptions
    */
-  void computeScaling();
+  bool computeScaling();
 
   /**
    * Associate jacobian to systemMatrixTag, and then form a matrix for all the tags
@@ -364,6 +362,12 @@ public:
   virtual void subdomainSetup(SubdomainID subdomain, THREAD_ID tid);
 
   virtual void setSolution(const NumericVector<Number> & soln);
+
+  /**
+   * Called from explicit time stepping to overwrite boundary positions (explicit dynamics). This
+   * will close/assemble the passed-in \p soln after overwrite
+   */
+  void overwriteNodeFace(NumericVector<Number> & soln);
 
   /**
    * Update active objects of Warehouses owned by NonlinearSystemBase
@@ -688,6 +692,13 @@ public:
   unsigned int _current_nl_its;
   bool _compute_initial_residual_before_preset_bcs;
 
+  /**
+   * Setup the PETSc DM object (when appropriate)
+   */
+  void setupDM();
+
+  using SystemBase::reinitNodeFace;
+
 protected:
   /**
    * Compute the residual for a given tag
@@ -761,6 +772,26 @@ protected:
   virtual void postAddResidualObject(ResidualObject &) {}
 
   NumericVector<Number> & solutionInternal() const override { return *_sys.solution; }
+
+  /**
+   * Reinitialize quantities such as variables, residuals, Jacobians, materials for node-face
+   * constraints
+   */
+  void reinitNodeFace(const Node & secondary_node,
+                      const BoundaryID secondary_boundary,
+                      const PenetrationInfo & info,
+                      const bool displaced);
+
+  /**
+   * Perform some steps to get ready for the solver. These include
+   * - zeroing iteration counters
+   * - setting initial solutions
+   * - possibly performing automatic scaling
+   * - forming a scaling vector which, at least at some point, was required when AD objects were
+   *   used with non-unity scaling factors for nonlinear variables
+   * @returns Whether any exceptions were raised while running this method
+   */
+  bool preSolve();
 
   /// solution vector from nonlinear solver
   const NumericVector<Number> * _current_solution;
@@ -919,8 +950,6 @@ protected:
   bool _has_nodalbc_diag_save_in;
 
   void getNodeDofs(dof_id_type node_id, std::vector<dof_id_type> & dofs);
-
-  std::vector<dof_id_type> _var_all_dof_indices;
 
   /// Flag used to indicate whether we have already computed the scaling Jacobian
   bool _computed_scaling;

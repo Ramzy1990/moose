@@ -1,5 +1,11 @@
 # Dipole Antenna Benchmark
 
+!! TODO: We only want 'tag' to run on the full MOOSE website build, so skip if a moose submodule
+!! exists (implying an app). Remove this if statement when the tagging extension is not "experimental".
+
+!if function=!hasSubmodule('moose')
+!tag name=dipole pairs=example_type:benchmark simulation_type:vector fiscal_year:2022
+
 This document summarizes and describes the half-wave dipole antenna benchmark.
 In this scenario, a vertically-oriented antenna structure is excited by a 1 GHz
 signal in an infinite vacuum. Then, the subsequent transmitted radiation is
@@ -65,7 +71,7 @@ where
 - $\varepsilon$ is the electric permittivity of the medium in F/m, and
 - $\omega$ is the operating frequency in rad/s.
 
-In the EM module, these terms are represented by the [CurlCurlField.md] and
+These terms are represented by the [CurlCurlField.md] and
 [VectorFunctionReaction.md] objects, respectively. At the edge of the simulation domain,
 this model uses the [VectorEMRobinBC.md] object. This is given by
 
