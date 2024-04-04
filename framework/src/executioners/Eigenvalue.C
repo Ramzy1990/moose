@@ -98,6 +98,7 @@ Eigenvalue::Eigenvalue(const InputParameters & parameters)
     _system_time(getParam<Real>("time")),
     _time_step(_eigen_problem.timeStep()),
     _time(_eigen_problem.time()),
+    _output_iteration_number(0),
     _final_timer(registerTimedSection("final", 1))
 {
 // Extract and store SLEPc options

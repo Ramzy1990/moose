@@ -11,6 +11,7 @@
 #include "OptimizationAppTypes.h"
 #include "OptimizationReporterBase.h"
 #include "Steady.h"
+#include "Eigenvalue.h"
 
 InputParameters
 OptimizeSolve::validParams()
@@ -288,7 +289,14 @@ OptimizeSolve::setTaoSolutionStatus(double f, int its, double gnorm, double cnor
   for (auto & sub_app : _app.getExecutioner()->feProblem().getMultiAppWarehouse().getObjects())
   {
     if (auto steady = dynamic_cast<Steady *>(sub_app->getExecutioner(0)))
+    {
       steady->setIterationNumberOutput((unsigned int)its);
+    }
+    else if (auto eigenvalue = dynamic_cast<Eigenvalue *>(sub_app->getExecutioner(0)))
+    {
+      // If the dynamic cast succeeds
+      eigenvalue->setIterationNumberOutput((unsigned int)its);
+    }
   }
 
   // print verbose per iteration output
