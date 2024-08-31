@@ -82,6 +82,9 @@ ParameterStudyAction::validParams()
       1,
       "Minimum number of processors to give to each sample. Useful for larger, distributed mesh "
       "solves where there are memory constraints.");
+  params.addParam<bool>("ignore_solve_not_converge",
+                        false,
+                        "True to continue main app even if a sub app's solve does not converge.");
 
   // Samplers ///////////////////////////
   // Parameters for Monte Carlo and LHS
@@ -416,6 +419,9 @@ ParameterStudyAction::act()
   {
     auto params = _factory.getValidParams("SamplerFullSolveMultiApp");
 
+    // Dealing with failed solves
+    params.set<bool>("ignore_solve_not_converge") = getParam<bool>("ignore_solve_not_converge");
+
     // Set input file
     params.set<std::vector<FileName>>("input_files") = {getParam<FileName>("input")};
 
@@ -445,7 +451,7 @@ ParameterStudyAction::act()
         params.set<bool>("keep_solution_during_restore") = true;
       // batch-no-restore
       else if (_multiapp_mode == 4)
-        params.set<bool>("no_backup_and_restore") = true;
+        params.set<bool>("no_restore") = true;
     }
 
     // Set the minimum number of procs
@@ -493,7 +499,7 @@ ParameterStudyAction::act()
     const auto & output = getParam<MultiMooseEnum>("output_type");
 
     // Add csv output
-    if (output.contains("csv"))
+    if (output.isValueSet("csv"))
     {
       auto params = _factory.getValidParams("CSV");
       params.set<ExecFlagEnum>("execute_on") = {EXEC_TIMESTEP_END};
@@ -503,7 +509,7 @@ ParameterStudyAction::act()
     }
 
     // Add json output
-    if (output.contains("json") || _compute_stats)
+    if (output.isValueSet("json") || _compute_stats)
     {
       auto params = _factory.getValidParams("JSON");
       params.set<ExecFlagEnum>("execute_on") = {EXEC_TIMESTEP_END};
@@ -550,11 +556,11 @@ ParameterStudyAction::act()
     // Specify output objects
     const auto & output_type = getParam<MultiMooseEnum>("output_type");
     auto & outputs = params.set<std::vector<OutputName>>("outputs");
-    if (output_type.contains("csv"))
+    if (output_type.isValueSet("csv"))
       outputs.push_back(outputName("csv"));
-    if (output_type.contains("json"))
+    if (output_type.isValueSet("json"))
       outputs.push_back(outputName("json"));
-    if (output_type.contains("none"))
+    if (output_type.isValueSet("none"))
       outputs = {"none"};
 
     params.set<ExecFlagEnum>("execute_on") = {EXEC_TIMESTEP_END};

@@ -24,7 +24,7 @@
  *
  * It is a part of FEProblemBase ;-)
  */
-class NonlinearSystem : public NonlinearSystemBase
+class NonlinearSystem : public NonlinearSystemBase, public NonlinearImplicitSystem::ComputePreCheck
 {
 public:
   NonlinearSystem(FEProblemBase & problem, const std::string & name);
@@ -32,7 +32,7 @@ public:
 
   virtual void solve() override;
 
-  void init() override;
+  virtual void preInit() override;
 
   /**
    * Quit the current solve as soon as possible.
@@ -69,7 +69,14 @@ public:
 
   virtual void attachPreconditioner(Preconditioner<Number> * preconditioner) override;
 
-  void residualAndJacobianTogether() override;
+  virtual void residualAndJacobianTogether() override;
+
+  virtual void precheck(const NumericVector<Number> & precheck_soln,
+                        NumericVector<Number> & search_direction,
+                        bool & changed,
+                        NonlinearImplicitSystem & S) override;
+
+  virtual void potentiallySetupFiniteDifferencing() override;
 
 protected:
   void computeScalingJacobian() override;
@@ -99,6 +106,8 @@ private:
    * method.
    */
   void setupColoringFiniteDifferencedPreconditioner();
+
+  virtual bool matrixFromColoring() const override { return _use_coloring_finite_difference; }
 
   bool _use_coloring_finite_difference;
 };

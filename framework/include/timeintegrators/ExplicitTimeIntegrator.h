@@ -33,6 +33,7 @@ public:
   virtual void init() override;
   virtual void preSolve() override;
   virtual void meshChanged() override;
+  virtual bool isExplicit() const override { return true; }
 
 protected:
   enum SolveType
@@ -47,7 +48,7 @@ protected:
    *
    * @param[in] mass_matrix   Mass matrix
    */
-  bool performExplicitSolve(SparseMatrix<Number> & mass_matrix);
+  virtual bool performExplicitSolve(SparseMatrix<Number> & mass_matrix);
 
   /**
    * Solves a linear system

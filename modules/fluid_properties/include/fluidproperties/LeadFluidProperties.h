@@ -66,11 +66,11 @@ public:
   using SinglePhaseFluidProperties::rho_from_p_T;
   Real rho_from_p_T(Real p, Real T) const override;
   void rho_from_p_T(Real p, Real T, Real & rho, Real & drho_dp, Real & drho_dT) const override;
-  void rho_from_p_T(const DualReal & p,
-                    const DualReal & T,
-                    DualReal & rho,
-                    DualReal & drho_dp,
-                    DualReal & drho_dT) const override;
+  void rho_from_p_T(const ADReal & p,
+                    const ADReal & T,
+                    ADReal & rho,
+                    ADReal & drho_dp,
+                    ADReal & drho_dT) const override;
 
   Real v_from_p_T(Real p, Real T) const override;
 
@@ -79,8 +79,8 @@ public:
   Real h_from_p_T(Real p, Real T) const override;
   void h_from_p_T(Real p, Real T, Real & h, Real & dh_dp, Real & dh_dT) const override;
 
-  Real h_from_v_e(Real v, Real e) const;
-  void h_from_v_e(Real v, Real e, Real & h, Real & dh_dv, Real & dh_de) const;
+  Real h_from_v_e(Real v, Real e) const override;
+  void h_from_v_e(Real v, Real e, Real & h, Real & dh_dv, Real & dh_de) const override;
 
   Real e_from_p_T(Real p, Real T) const override;
 
@@ -107,7 +107,7 @@ public:
   Real bulk_modulus_from_p_T(Real p, Real T) const;
 
   Real c_from_v_e(Real v, Real e) const override;
-  DualReal c_from_v_e(const DualReal & v, const DualReal & e) const override;
+  ADReal c_from_v_e(const ADReal & v, const ADReal & e) const override;
 
 private:
   /// Melting temperature of Lead

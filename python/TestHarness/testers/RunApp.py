@@ -30,7 +30,8 @@ class RunApp(Tester):
 
         # RunApp can also run arbitrary commands. If the "command" parameter is supplied
         # it'll be used in lieu of building up the command automatically
-        params.addParam('command',            "The command line to execute for this test.")
+        params.addParam('command',       "The command line to execute for this test")
+        params.addParam('command_proxy', "A proxy command to run that will execute the underlying test via wrapper; the intended command is set in the env variable RUNAPP_COMMAND")
 
         # Parallel/Thread testing
         params.addParam('max_parallel', 1000, "Maximum number of MPI processes this test can be run with      (Default: 1000)")
@@ -49,6 +50,8 @@ class RunApp(Tester):
         # Valgrind
         params.addParam('valgrind', 'NORMAL', "Set to (NONE, NORMAL, HEAVY) to determine which configurations where valgrind will run.")
 
+        params.addParam('libtorch_devices', ['CPU'], "The devices to use for this libtorch test ('CPU', 'CUDA', 'MPS'); default ('CPU')")
+
         return params
 
     def __init__(self, name, params):
@@ -61,8 +64,18 @@ class RunApp(Tester):
             self.force_mpi = False
 
         # Make sure that either input or command is supplied
-        if not (params.isValid('input') or params.isValid('command') or params['no_additional_cli_args']):
-            raise Exception('One of "input", "command", or "no_additional_cli_args" must be supplied for a RunApp test')
+        if not (params.isValid('input') or params.isValid('command') or params.isValid("command_proxy") or params['no_additional_cli_args']):
+            raise Exception('One of "input", "command", "command_proxy", or "no_additional_cli_args" must be supplied for a RunApp test')
+
+        if params.isValid('command_proxy'):
+            params['use_shell'] = True
+            # Not compatible with each other due to the return break in runCommand()
+            if params['no_additional_cli_args']:
+                raise Exception('The parameters "command_proxy" and "no_additional_cli_args" cannot be supplied together')
+
+        for value in params['libtorch_devices']:
+            if value.lower() not in ['cpu', 'cuda', 'mps']:
+                raise Exception(f'Unknown libtorch_device "{value}')
 
     def getInputFile(self):
         if self.specs.isValid('input'):
@@ -96,6 +109,13 @@ class RunApp(Tester):
         if self.specs.isValid('min_threads') or self.specs.isValid('max_threads'):
             if 'NONE' in options._checks['threading'] and self.getThreads(options) > 1:
                 self.addCaveats('threading_model=None')
+                self.setStatus(self.skip)
+                return False
+
+        if self.specs['libtorch']:
+            devices_lower = [x.lower() for x in self.specs['libtorch_devices']]
+            if options.libtorch_device not in devices_lower:
+                self.addCaveats(f'{options.libtorch_device} not in libtorch_devices')
                 self.setStatus(self.skip)
                 return False
 
@@ -189,9 +209,8 @@ class RunApp(Tester):
         if options.scaling and specs['scale_refine'] > 0:
             cli_args.insert(0, ' -r ' + str(specs['scale_refine']))
 
-        # The test harness should never use GDB backtraces: they don't
-        # work well when dozens of expect_err jobs run at the same time.
-        cli_args.append('--no-gdb-backtrace')
+        if specs['libtorch']:
+            cli_args.append(f'--libtorch-device {options.libtorch_device}')
 
         # Get the number of processors and threads the Tester requires
         ncpus = self.getProcs(options)
@@ -208,6 +227,11 @@ class RunApp(Tester):
 
         if self.force_mpi or options.parallel or ncpus > 1:
             command = f'{self.mpi_command} -n {ncpus} {command}'
+
+        # Arbitrary proxy command, but keep track of the command so that someone could use it later
+        if specs.isValid('command_proxy'):
+            command = command.replace('"', r'\"')
+            return f'RUNAPP_COMMAND="{command}" {os.path.join(specs["test_dir"], specs["command_proxy"])}'
 
         return command
 

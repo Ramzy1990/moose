@@ -371,6 +371,13 @@ public:
   void addParamNamesToGroup(const std::string & space_delim_names, const std::string group_name);
 
   /**
+   * This method renames a parameter group
+   * @param old_name previous name of the parameter group
+   * @param new_name new name of the parameter group
+   */
+  void renameParameterGroup(const std::string & old_name, const std::string & new_name);
+
+  /**
    * This method retrieves the group name for the passed parameter name if one exists.  Otherwise an
    * empty string is returned.
    */
@@ -830,11 +837,13 @@ public:
    *   (1) A local parameter must exist with the same name as common parameter
    *   (2) Common parameter must valid
    *   (3) Local parameter must be invalid OR not have been set from its default
+   *   (except if override_default is set)
    *   (4) Both cannot be private
    */
   void applyParameter(const InputParameters & common,
                       const std::string & common_name,
-                      bool allow_private = false);
+                      bool allow_private = false,
+                      bool override_default = false);
   // END APPLY PARAMETER METHODS
 
   /**
@@ -1570,6 +1579,10 @@ InputParameters::addCommandLineParamHelper(const std::string & name, const std::
     cl_data->argument_type = CommandLineMetadata::ArgumentType::REQUIRED;
   else
     cl_data->argument_type = CommandLineMetadata::ArgumentType::OPTIONAL;
+
+  for (const auto & token : cl_data->syntax)
+    if (token[0] == '-')
+      libMesh::add_command_line_name(token);
 }
 
 template <typename T>
@@ -1783,6 +1796,9 @@ InputParameters::addDeprecatedParam(const std::string & name,
                                     const std::string & deprecation_message)
 {
   _show_deprecated_message = false;
+  mooseAssert(!_old_to_new_name_and_dep.count(name),
+              "Attempting to deprecate via addDeprecatedParam the parameter, '"
+                  << name << "', already deprecated via deprecateParam or renamed via renameParam");
   addParam<T>(name, value, doc_string);
 
   _params[name]._deprecation_message = deprecation_message;
@@ -1796,6 +1812,9 @@ InputParameters::addDeprecatedParam(const std::string & name,
                                     const std::string & deprecation_message)
 {
   _show_deprecated_message = false;
+  mooseAssert(!_old_to_new_name_and_dep.count(name),
+              "Attempting to deprecate via addDeprecatedParam the parameter, '"
+                  << name << "', already deprecated via deprecateParam or renamed via renameParam");
   addParam<T>(name, doc_string);
 
   _params[name]._deprecation_message = deprecation_message;

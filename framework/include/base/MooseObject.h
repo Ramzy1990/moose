@@ -10,17 +10,12 @@
 #pragma once
 
 // MOOSE includes
-#include "MooseBase.h"
-#include "MooseBaseParameterInterface.h"
-#include "MooseBaseErrorInterface.h"
+#include "MooseUtils.h"
+#include "ParallelParamObject.h"
 #include "InputParameters.h"
 #include "ConsoleStreamInterface.h"
 #include "Registry.h"
-#include "MooseUtils.h"
-#include "DataFileInterface.h"
 #include "MooseObjectParameterName.h"
-
-#include "libmesh/parallel_object.h"
 
 #define usingMooseObjectMembers                                                                    \
   usingMooseBaseMembers;                                                                           \
@@ -30,11 +25,7 @@
 /**
  * Every object that can be built by the factory should be derived from this class.
  */
-class MooseObject : public MooseBase,
-                    public MooseBaseParameterInterface,
-                    public MooseBaseErrorInterface,
-                    public libMesh::ParallelObject,
-                    public DataFileInterface<MooseObject>
+class MooseObject : public ParallelParamObject, public std::enable_shared_from_this<MooseObject>
 {
 public:
   static InputParameters validParams();
@@ -47,6 +38,13 @@ public:
    * Return the enabled status of the object.
    */
   virtual bool enabled() const { return _enabled; }
+
+  /**
+   * Get another shared pointer to this object that has the same ownership group. Wrapper around
+   * shared_from_this().
+   */
+  std::shared_ptr<MooseObject> getSharedPtr();
+  std::shared_ptr<const MooseObject> getSharedPtr() const;
 
 protected:
   /// Reference to the "enable" InputParameters, used by Controls for toggling on/off MooseObjects

@@ -153,6 +153,16 @@ public:
   FEProblemBase(const InputParameters & parameters);
   virtual ~FEProblemBase();
 
+  enum class CoverageCheckMode
+  {
+    FALSE,
+    TRUE,
+    OFF,
+    ON,
+    SKIP_LIST,
+    ONLY_LIST,
+  };
+
   virtual EquationSystems & es() override { return _req.set().es(); }
   virtual MooseMesh & mesh() override { return _mesh; }
   virtual const MooseMesh & mesh() const override { return _mesh; }
@@ -215,35 +225,31 @@ public:
 
   /**
    * Check for convergence of the nonlinear solution
-   * @param msg            Error message that gets sent back to the solver
-   * @param it             Iteration counter
-   * @param xnorm          Norm of the solution vector
-   * @param snorm          Norm of the change in the solution vector
-   * @param fnorm          Norm of the residual vector
-   * @param rtol           Relative residual convergence tolerance
-   * @param divtol         Relative residual divergence tolerance
-   * @param stol           Solution change convergence tolerance
-   * @param abstol         Absolute residual convergence tolerance
-   * @param nfuncs         Number of function evaluations
-   * @param max_funcs      Maximum Number of function evaluations
-   * @param initial_residual_before_preset_bcs      Residual norm prior to imposition of preset BCs
-   * values on solution vector
-   * @param div_threshold  Maximum value of residual before triggering divergence check
+   * @param msg Error message that gets sent back to the solver
+   * @param it Iteration counter
+   * @param xnorm Norm of the solution vector
+   * @param snorm Norm of the change in the solution vector
+   * @param fnorm Norm of the residual vector
+   * @param rtol Relative residual convergence tolerance
+   * @param divtol Relative residual divergence tolerance
+   * @param stol Solution change convergence tolerance
+   * @param abstol Absolute residual convergence tolerance
+   * @param nfuncs Number of function evaluations
+   * @param max_funcs Maximum Number of function evaluations
+   * @param div_threshold Maximum value of residual before triggering divergence check
    */
-  virtual MooseNonlinearConvergenceReason
-  checkNonlinearConvergence(std::string & msg,
-                            const PetscInt it,
-                            const Real xnorm,
-                            const Real snorm,
-                            const Real fnorm,
-                            const Real rtol,
-                            const Real divtol,
-                            const Real stol,
-                            const Real abstol,
-                            const PetscInt nfuncs,
-                            const PetscInt max_funcs,
-                            const Real initial_residual_before_preset_bcs,
-                            const Real div_threshold);
+  virtual MooseNonlinearConvergenceReason checkNonlinearConvergence(std::string & msg,
+                                                                    const PetscInt it,
+                                                                    const Real xnorm,
+                                                                    const Real snorm,
+                                                                    const Real fnorm,
+                                                                    const Real rtol,
+                                                                    const Real divtol,
+                                                                    const Real stol,
+                                                                    const Real abstol,
+                                                                    const PetscInt nfuncs,
+                                                                    const PetscInt max_funcs,
+                                                                    const Real div_threshold);
 
   /// Perform steps required before checking nonlinear convergence
   virtual void nonlinearConvergenceSetup() {}
@@ -404,10 +410,8 @@ public:
   virtual void reinitElemPhys(const Elem * elem,
                               const std::vector<Point> & phys_points_in_elem,
                               const THREAD_ID tid) override;
-  virtual void reinitElemFace(const Elem * elem,
-                              unsigned int side,
-                              BoundaryID bnd_id,
-                              const THREAD_ID tid) override;
+  void reinitElemFace(const Elem * elem, unsigned int side, BoundaryID, const THREAD_ID tid);
+  virtual void reinitElemFace(const Elem * elem, unsigned int side, const THREAD_ID tid) override;
   virtual void reinitLowerDElem(const Elem * lower_d_elem,
                                 const THREAD_ID tid,
                                 const std::vector<Point> * const pts = nullptr,
@@ -474,6 +478,46 @@ public:
   const ConstElemRange & getNonlinearEvaluableElementRange();
   ///@}
 
+  ///@{
+  /**
+   * These are the element and nodes that contribute to the jacobian and
+   * residual for this local processor.
+   *
+   * getCurrentAlgebraicElementRange() returns the element range that contributes to the
+   * system
+   * getCurrentAlgebraicNodeRange() returns the node range that contributes to the
+   * system
+   * getCurrentAlgebraicBndNodeRange returns the boundary node ranges that contributes
+   * to the system
+   */
+  const ConstElemRange & getCurrentAlgebraicElementRange();
+  const ConstNodeRange & getCurrentAlgebraicNodeRange();
+  const ConstBndNodeRange & getCurrentAlgebraicBndNodeRange();
+  ///@}
+
+  ///@{
+  /**
+   * These functions allow setting custom ranges for the algebraic elements, nodes,
+   * and boundary nodes that contribute to the jacobian and residual for this local
+   * processor.
+   *
+   * setCurrentAlgebraicElementRange() sets the element range that contributes to the
+   * system. A nullptr will reset the range to use the mesh's range.
+   *
+   * setCurrentAlgebraicNodeRange() sets the node range that contributes to the
+   * system. A nullptr will reset the range to use the mesh's range.
+   *
+   * setCurrentAlgebraicBndNodeRange() sets the boundary node range that contributes
+   * to the system. A nullptr will reset the range to use the mesh's range.
+   *
+   * @param range A pointer to the const range object representing the algebraic
+   *              elements, nodes, or boundary nodes.
+   */
+  void setCurrentAlgebraicElementRange(ConstElemRange * range);
+  void setCurrentAlgebraicNodeRange(ConstNodeRange * range);
+  void setCurrentAlgebraicBndNodeRange(ConstBndNodeRange * range);
+  ///@}
+
   /**
    * Set an exception, which is stored at this point by toggling a member variable in
    * this class, and which must be followed up with by a call to
@@ -511,7 +555,7 @@ public:
   virtual unsigned int nNonlinearIterations(const unsigned int nl_sys_num) const override;
   virtual unsigned int nLinearIterations(const unsigned int nl_sys_num) const override;
   virtual Real finalNonlinearResidual(const unsigned int nl_sys_num) const override;
-  virtual bool computingInitialResidual(const unsigned int nl_sys_num) const override;
+  virtual bool computingPreSMOResidual(const unsigned int nl_sys_num) const override;
 
   /**
    * Return solver type as a human readable string
@@ -614,7 +658,10 @@ public:
   /**
    * Output information about the object just added to the problem
    */
-  void logAdd(const std::string & system, const std::string & name, const std::string & type) const;
+  void logAdd(const std::string & system,
+              const std::string & name,
+              const std::string & type,
+              const InputParameters & params) const;
 
   // Function /////
   virtual void
@@ -734,6 +781,9 @@ public:
   virtual void addKernel(const std::string & kernel_name,
                          const std::string & name,
                          InputParameters & parameters);
+  virtual void addHDGKernel(const std::string & kernel_name,
+                            const std::string & name,
+                            InputParameters & parameters);
   virtual void addNodalKernel(const std::string & kernel_name,
                               const std::string & name,
                               InputParameters & parameters);
@@ -743,6 +793,9 @@ public:
   virtual void addBoundaryCondition(const std::string & bc_name,
                                     const std::string & name,
                                     InputParameters & parameters);
+  virtual void addHDGIntegratedBC(const std::string & kernel_name,
+                                  const std::string & name,
+                                  InputParameters & parameters);
   virtual void
   addConstraint(const std::string & c_name, const std::string & name, InputParameters & parameters);
 
@@ -1394,10 +1447,13 @@ public:
    * @param sys The linear system which should be assembled
    * @param system_matrix The sparse matrix which should hold the system matrix
    * @param rhs The vector which should hold the right hand side
+   * @param compute_gradients A flag to disable the computation of new gradients during the
+   * assembly, can be used to lag gradients
    */
   void computeLinearSystemSys(LinearImplicitSystem & sys,
                               SparseMatrix<Number> & system_matrix,
-                              NumericVector<Number> & rhs);
+                              NumericVector<Number> & rhs,
+                              const bool compute_gradients = true);
 
   /**
    * Assemble the current linear system given a set of vector and matrix tags.
@@ -1407,12 +1463,15 @@ public:
    * @param rhs The vector which should hold the right hand side
    * @param vector_tags The vector tags for the right hand side
    * @param matrix_tags The matrix tags for the matrix
+   * @param compute_gradients A flag to disable the computation of new gradients during the
+   * assembly, can be used to lag gradients
    */
   void computeLinearSystemTags(const NumericVector<Number> & soln,
                                SparseMatrix<Number> & system_matrix,
                                NumericVector<Number> & rhs,
                                const std::set<TagID> & vector_tags,
-                               const std::set<TagID> & matrix_tags);
+                               const std::set<TagID> & matrix_tags,
+                               const bool compute_gradients = true);
 
   virtual Real computeDamping(const NumericVector<Number> & soln,
                               const NumericVector<Number> & update);
@@ -1686,7 +1745,16 @@ public:
    * Set flag to indicate whether kernel coverage checks should be performed. This check makes
    * sure that at least one kernel is active on all subdomains in the domain (default: true).
    */
-  void setKernelCoverageCheck(bool flag) { _kernel_coverage_check = flag; }
+  void setKernelCoverageCheck(CoverageCheckMode mode) { _kernel_coverage_check = mode; }
+
+  /**
+   * Set flag to indicate whether kernel coverage checks should be performed. This check makes
+   * sure that at least one kernel is active on all subdomains in the domain (default: true).
+   */
+  void setKernelCoverageCheck(bool flag)
+  {
+    _kernel_coverage_check = flag ? CoverageCheckMode::TRUE : CoverageCheckMode::FALSE;
+  }
 
   /**
    * Set flag to indicate whether material coverage checks should be performed. This check makes
@@ -1694,7 +1762,18 @@ public:
    * supplied. If no materials are supplied anywhere, a simulation is still considered OK as long as
    * no properties are being requested anywhere.
    */
-  void setMaterialCoverageCheck(bool flag) { _material_coverage_check = flag; }
+  void setMaterialCoverageCheck(CoverageCheckMode mode) { _material_coverage_check = mode; }
+
+  /**
+   * Set flag to indicate whether material coverage checks should be performed. This check makes
+   * sure that at least one material is active on all subdomains in the domain if any material is
+   * supplied. If no materials are supplied anywhere, a simulation is still considered OK as long as
+   * no properties are being requested anywhere.
+   */
+  void setMaterialCoverageCheck(bool flag)
+  {
+    _material_coverage_check = flag ? CoverageCheckMode::TRUE : CoverageCheckMode::FALSE;
+  }
 
   /**
    * Toggle parallel barrier messaging (defaults to on).
@@ -1793,9 +1872,36 @@ public:
   }
 
   /**
-   * Whether or not the invalid solutions are allowed
+   * Whether or not an solution warning has been flagged
+   */
+  bool hasSolutionWarning() { return _has_solution_warning; }
+
+  bool hasSolutionWarning(bool state) { return _has_solution_warning = state; }
+
+  /**
+   * Whether or not an invalid solution has been flagged
+   */
+  bool hasInvalidSolution() { return _has_invalid_solution; }
+
+  bool hasInvalidSolution(bool state) { return _has_invalid_solution = state; }
+
+  /**
+   * Whether or not to accept the solution
+   */
+  bool acceptInvalidSolution()
+  {
+    return (hasSolutionWarning() && !hasInvalidSolution()) || allowInvalidSolution();
+  }
+
+  /**
+   * Whether to accept / allow an invalid solution
    */
   bool allowInvalidSolution() const { return _allow_invalid_solution; }
+
+  /**
+   * Whether or not to print out the invalid solutions summary table in console
+   */
+  bool showInvalidSolutionConsole() const { return _show_invalid_solution_console; }
 
   /**
    * Whether or not the solution invalid warnings are printed out immediately
@@ -1839,11 +1945,6 @@ public:
   virtual void computeUserObjectByName(const ExecFlagType & type,
                                        const Moose::AuxGroup & group,
                                        const std::string & name);
-
-  /**
-   * Call compute methods on AuxKernels
-   */
-  virtual void computeAuxiliaryKernels(const ExecFlagType & type);
 
   /**
    * Set a flag that indicated that user required values for the previous Newton iterate
@@ -2066,7 +2167,6 @@ public:
    */
   virtual void reinitElemFaceRef(const Elem * elem,
                                  unsigned int side,
-                                 BoundaryID bnd_id,
                                  Real tolerance,
                                  const std::vector<Point> * const pts,
                                  const std::vector<Real> * const weights = nullptr,
@@ -2080,7 +2180,6 @@ public:
    */
   virtual void reinitNeighborFaceRef(const Elem * neighbor_elem,
                                      unsigned int neighbor_side,
-                                     BoundaryID bnd_id,
                                      Real tolerance,
                                      const std::vector<Point> * const pts,
                                      const std::vector<Real> * const weights = nullptr,
@@ -2276,6 +2375,11 @@ public:
   virtual void setCurrentLowerDElem(const Elem * const lower_d_elem, const THREAD_ID tid) override;
   virtual void setCurrentBoundaryID(BoundaryID bid, const THREAD_ID tid) override;
 
+  /**
+   * @returns the nolinear system names in the problem
+   */
+  const std::vector<NonlinearSystemName> & getNonlinearSystemNames() const { return _nl_sys_names; }
+
 protected:
   /// Create extra tagged vectors and matrices
   void createTagVectors();
@@ -2283,11 +2387,34 @@ protected:
   /// Create extra tagged solution vectors
   void createTagSolutions();
 
+  /**
+   * Do generic system computations
+   */
+  void computeSystems(const ExecFlagType & type);
+
   MooseMesh & _mesh;
 
 private:
   /// The EquationSystems object, wrapped for restart
   Restartable::ManagedValue<RestartableEquationSystems> _req;
+
+  /**
+   * Set the subproblem and system parameters for residual objects and log their addition
+   * @param ro_name The type of the residual object
+   * @param name The name of the residual object
+   * @param parameters The residual object parameters
+   * @param nl_sys_num The nonlinear system that the residual object belongs to
+   * @param base_name The base type of the residual object, e.g. Kernel, BoundaryCondition, etc.
+   * @param reinit_displaced A data member indicating whether a geometric concept should be reinit'd
+   * for the displaced problem. Examples of valid data members to pass in are \p
+   * _reinit_displaced_elem and \p _reinit_displaced_face
+   */
+  void setResidualObjectParamsAndLog(const std::string & ro_name,
+                                     const std::string & name,
+                                     InputParameters & params,
+                                     const unsigned int nl_sys_num,
+                                     const std::string & base_name,
+                                     bool & reinit_displaced);
 
 protected:
   bool _initialized;
@@ -2354,6 +2481,9 @@ protected:
 
   /// The current nonlinear system that we are solving
   NonlinearSystemBase * _current_nl_sys;
+
+  /// The current solver system
+  SolverSystem * _current_solver_sys;
 
   /// Combined container to base pointer of every solver system
   std::vector<std::shared_ptr<SolverSystem>> _solver_systems;
@@ -2572,8 +2702,9 @@ protected:
 
   SolverParams _solver_params;
 
-  /// Determines whether a check to verify an active kernel on every subdomain
-  bool _kernel_coverage_check;
+  /// Determines whether and which subdomains are to be checked to ensure that they have an active kernel
+  CoverageCheckMode _kernel_coverage_check;
+  std::vector<SubdomainName> _kernel_coverage_blocks;
 
   /// whether to perform checking of boundary restricted nodal object variable dependencies,
   /// e.g. whether the variable dependencies are defined on the selected boundaries
@@ -2583,8 +2714,9 @@ protected:
   /// e.g. whether the variable dependencies are defined on the selected boundaries
   const bool _boundary_restricted_elem_integrity_check;
 
-  /// Determines whether a check to verify an active material on every subdomain
-  bool _material_coverage_check;
+  /// Determines whether and which subdomains are to be checked to ensure that they have an active material
+  CoverageCheckMode _material_coverage_check;
+  std::vector<SubdomainName> _material_coverage_blocks;
 
   /// Whether to check overlapping Dirichlet and Flux BCs and/or multiple DirichletBCs per sideset
   bool _fv_bcs_integrity_check;
@@ -2611,7 +2743,7 @@ protected:
   bool _parallel_barrier_messaging;
 
   /// Whether or not to be verbose during setup
-  bool _verbose_setup;
+  MooseEnum _verbose_setup;
 
   /// Whether or not to be verbose with multiapps
   bool _verbose_multiapps;
@@ -2639,6 +2771,10 @@ protected:
   std::unique_ptr<ConstElemRange> _evaluable_local_elem_range;
   std::unique_ptr<ConstElemRange> _nl_evaluable_local_elem_range;
   std::unique_ptr<ConstElemRange> _aux_evaluable_local_elem_range;
+
+  std::unique_ptr<ConstElemRange> _current_algebraic_elem_range;
+  std::unique_ptr<ConstNodeRange> _current_algebraic_node_range;
+  std::unique_ptr<ConstBndNodeRange> _current_algebraic_bnd_node_range;
 
   /// Automatic differentiaion (AD) flag which indicates whether any consumer has
   /// requested an AD material property or whether any suppier has declared an AD material property
@@ -2713,8 +2849,11 @@ private:
   const bool _allow_ics_during_restart;
   const bool _skip_nl_system_check;
   bool _fail_next_nonlinear_convergence_check;
-  const bool & _allow_invalid_solution;
+  bool _allow_invalid_solution;
+  bool _show_invalid_solution_console;
   const bool & _immediately_print_invalid_solution;
+  bool _has_solution_warning;
+  bool _has_invalid_solution;
 
   /// At or beyond initialSteup stage
   bool _started_initial_setup;
@@ -2840,7 +2979,7 @@ FEProblemBase::addObject(const std::string & type,
 {
   parallel_object_only();
 
-  logAdd(MooseUtils::prettyCppType<T>(), name, type);
+  logAdd(MooseUtils::prettyCppType<T>(), name, type, parameters);
   // Add the _subproblem and _sys parameters depending on use_displaced_mesh
   addObjectParamsHelper(parameters, name, var_param_name);
 
@@ -2952,22 +3091,6 @@ inline const CouplingMatrix *
 FEProblemBase::couplingMatrix(const unsigned int i) const
 {
   return _cm[i].get();
-}
-
-inline void
-FEProblemBase::setCurrentNonlinearSystem(const unsigned int nl_sys_num)
-{
-  mooseAssert(nl_sys_num < _nl.size(),
-              "System number greater than the number of nonlinear systems");
-  _current_nl_sys = _nl[nl_sys_num].get();
-}
-
-inline void
-FEProblemBase::setCurrentLinearSystem(const unsigned int sys_num)
-{
-  mooseAssert(sys_num < _linear_systems.size(),
-              "System number greater than the number of linear systems");
-  _current_linear_sys = _linear_systems[sys_num].get();
 }
 
 inline void

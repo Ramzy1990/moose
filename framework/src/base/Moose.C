@@ -149,6 +149,8 @@ addActionTypes(Syntax & syntax)
   registerMooseObjectTask("add_interface_kernel",         InterfaceKernel,           false);
   appendMooseObjectTask  ("add_interface_kernel",         VectorInterfaceKernel);
   registerMooseObjectTask("add_constraint",               Constraint,                false);
+  registerMooseObjectTask("add_hybridized_kernel",        HDGKernel,                 false);
+  registerMooseObjectTask("add_hybridized_integrated_bc", HDGIntegratedBC,           false);
 
   registerMooseObjectTask("add_ic",                       InitialCondition,          false);
   appendMooseObjectTask  ("add_ic",                       ScalarInitialCondition);
@@ -168,6 +170,10 @@ addActionTypes(Syntax & syntax)
   registerMooseObjectTask("add_mesh_division",            MeshDivision,              false);
   registerMooseObjectTask("add_user_object",              UserObject,                false);
   appendMooseObjectTask  ("add_user_object",              Postprocessor);
+  appendDeprecatedMooseObjectTask("add_user_object",      Corrector);
+  registerMooseObjectTask("add_corrector",                Corrector,                 false);
+  appendDeprecatedMooseObjectTask("add_user_object",      MeshModifier);
+  registerMooseObjectTask("add_mesh_modifier",            MeshModifier,              false);
 
   registerMooseObjectTask("add_postprocessor",            Postprocessor,             false);
   registerMooseObjectTask("add_vector_postprocessor",     VectorPostprocessor,       false);
@@ -220,6 +226,7 @@ addActionTypes(Syntax & syntax)
   registerTask("check_copy_nodal_vars", true);
   registerTask("copy_nodal_vars", true);
   registerTask("copy_nodal_aux_vars", true);
+  registerTask("copy_vars_physics", false);
   registerTask("setup_postprocessor_data", false);
   registerTask("setup_time_steppers", true);
 
@@ -227,7 +234,10 @@ addActionTypes(Syntax & syntax)
   registerTask("check_integrity", true);
   registerTask("resolve_optional_materials", true);
   registerTask("check_integrity_early", true);
+  registerTask("check_integrity_early_physics", false);
   registerTask("setup_quadrature", true);
+
+  registerTask("mesh_modifiers", false);
 
   /// Additional Actions
   registerTask("no_action", false); // Used for Empty Action placeholders
@@ -302,7 +312,10 @@ addActionTypes(Syntax & syntax)
                            "(create_problem_custom)"
                            "(create_problem_default)"
                            "(create_problem_complete)"
-                           "(init_physics)"
+                           "(init_displaced_problem)" // Problem must be init-ed before we start adding functors
+                           "(add_function)"  // Functions can depend on scalar variables & PPs, but this dependence can be
+                                             // added on initialSetup() rather than construction
+                           "(init_physics)"  // Components add their blocks to Physics, and components need functions at initialization
                            "(setup_postprocessor_data)"
                            "(setup_time_integrator)"
                            "(setup_executioner)"
@@ -310,16 +323,15 @@ addActionTypes(Syntax & syntax)
                            "(read_executor)"
                            "(add_executor)"
                            "(check_integrity_early)"
+                           "(check_integrity_early_physics)"
                            "(setup_predictor)"
-                           "(init_displaced_problem)"
                            "(add_aux_variable, add_variable, add_elemental_field_variable,"
                            " add_external_aux_variables)"
                            "(add_mortar_variable)"
                            "(setup_variable_complete)"
                            "(setup_quadrature)"
-                           "(add_function)"
                            "(add_periodic_bc)"
-                           "(add_user_object)"
+                           "(add_user_object, add_corrector, add_mesh_modifier)"
                            "(add_distribution)"
                            "(add_sampler)"
                            "(setup_function_complete)"
@@ -340,7 +352,7 @@ addActionTypes(Syntax & syntax)
                            "(add_mesh_division)"  // NearestPositionsDivision uses a Positions
                            "(add_multi_app)"
                            "(add_transfer)"
-                           "(copy_nodal_vars, copy_nodal_aux_vars)"
+                           "(copy_nodal_vars, copy_nodal_aux_vars, copy_vars_physics)"
                            "(add_material)"
                            "(add_master_action_material)"
                            "(add_functor_material)"
@@ -357,7 +369,7 @@ addActionTypes(Syntax & syntax)
                            " add_nodal_kernel, add_dg_kernel, add_fv_kernel, add_linear_fv_kernel,"
                            " add_fv_bc, add_linear_fv_bc, add_fv_ik, add_interface_kernel,"
                            " add_scalar_kernel, add_aux_scalar_kernel, add_indicator, add_marker,"
-                           " add_bound)"
+                           " add_bound, add_hybridized_kernel, add_hybridized_integrated_bc)"
                            "(resolve_optional_materials)"
                            "(add_algebraic_rm)"
                            "(add_coupling_rm)"
@@ -439,6 +451,9 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
   registerSyntaxTask("AddKernelAction", "Kernels/*", "add_kernel");
   registerSyntaxTask("AddNodalKernelAction", "NodalKernels/*", "add_nodal_kernel");
   registerSyntaxTask("AddKernelAction", "AuxKernels/*", "add_aux_kernel");
+
+  registerSyntaxTask("AddHDGKernelAction", "HDGKernels/*", "add_hybridized_kernel");
+  registerSyntaxTask("AddHDGBCAction", "HDGBCs/*", "add_hybridized_integrated_bc");
 
   registerSyntax("AddAuxKernelAction", "AuxVariables/*/AuxKernel");
 
@@ -522,6 +537,7 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 
   registerSyntax("AddOutputAction", "Outputs/*");
   registerSyntax("CommonOutputAction", "Outputs");
+  registerSyntax("AutoCheckpointAction", "Outputs");
   syntax.registerSyntaxType("Outputs/*", "OutputName");
 
   // Note: Preconditioner Actions will be built by this setup action
@@ -561,11 +577,17 @@ associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 
   registerSyntax("AddConstraintAction", "Constraints/*");
 
-  registerSyntax("AddUserObjectAction", "UserObjects/*");
-  syntax.registerSyntaxType("UserObjects/*", "UserObjectName");
   registerSyntax("AddControlAction", "Controls/*");
   registerSyntax("AddBoundAction", "Bounds/*");
   registerSyntax("AddBoundsVectorsAction", "Bounds");
+
+  // UserObject and some derived classes
+  registerSyntax("AddUserObjectAction", "UserObjects/*");
+  syntax.registerSyntaxType("UserObjects/*", "UserObjectName");
+  registerSyntax("AddCorrectorAction", "Correctors/*");
+  syntax.registerSyntaxType("Correctors/*", "UserObjectName");
+  registerSyntax("AddMeshModifiersAction", "MeshModifiers/*");
+  syntax.registerSyntaxType("MeshModifiers/*", "UserObjectName");
 
   registerSyntax("AddNodalNormalsAction", "NodalNormals");
 

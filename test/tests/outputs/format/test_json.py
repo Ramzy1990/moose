@@ -95,7 +95,7 @@ class TestJSONBase(unittest.TestCase):
 
         f = data["Functions"]["star"]
         self.assertIn("associated_types", f)
-        self.assertEquals(["FunctionName"], f["associated_types"])
+        self.assertEqual(["FunctionName"], f["associated_types"])
         self.assertEqual(f["subblock_types"]["ParsedFunction"]["class"], "MooseParsedFunction")
         self.assertEqual(f["subblock_types"]["ParsedFunction"]["label"], "MooseApp")
 
@@ -169,15 +169,6 @@ class TestSearch(TestJSONBase):
         params = data["Adaptivity"]["actions"]["SetAdaptivityOptionsAction"]["parameters"]
         self.assertIn("initial_marker", params)
         self.assertEqual(len(params.keys()), 1)
-
-        # test to make sure it matches blocks as well
-        all_data = self.getJsonData(["diffusion"])
-        data = all_data["blocks"]
-        self.assertEqual(len(data.keys()), 2)
-        self.assertIn("BadKernels", data)
-        self.assertIn("Kernels", data)
-        diff = data["Kernels"]["star"]["subblock_types"]["Diffusion"]
-        self.assertIn("use_displaced_mesh", diff["parameters"])
 
 
 class TestLineInfo(TestJSONBase):

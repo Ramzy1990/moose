@@ -46,17 +46,46 @@ MooseObject::validParams()
 }
 
 MooseObject::MooseObject(const InputParameters & parameters)
-  : MooseBase(parameters.get<std::string>("_type"),
-              parameters.get<std::string>("_object_name"),
-              *parameters.getCheckedPointerParam<MooseApp *>("_moose_app"),
-              parameters),
-    MooseBaseParameterInterface(*this, parameters),
-    MooseBaseErrorInterface(static_cast<MooseBase &>(*this)),
-    ParallelObject(*parameters.getCheckedPointerParam<MooseApp *>("_moose_app")),
-    DataFileInterface<MooseObject>(*this),
+  : ParallelParamObject(parameters.get<std::string>("_type"),
+                        parameters.get<std::string>("_object_name"),
+                        *parameters.getCheckedPointerParam<MooseApp *>("_moose_app"),
+                        parameters),
     _enabled(getParam<bool>("enable"))
 {
   if (Registry::isRegisteredObj(type()) && _app.getFactory().currentlyConstructing() != &parameters)
     mooseError(
         "This registered object was not constructed using the Factory, which is not supported.");
+}
+
+namespace
+{
+const std::string not_shared_error =
+    "MooseObject::getSharedPtr() must only be called for objects that are managed by a "
+    "shared pointer. Make sure this object is build using Factory::create(...).";
+}
+
+std::shared_ptr<MooseObject>
+MooseObject::getSharedPtr()
+{
+  try
+  {
+    return shared_from_this();
+  }
+  catch (std::bad_weak_ptr &)
+  {
+    mooseError(not_shared_error);
+  }
+}
+
+std::shared_ptr<const MooseObject>
+MooseObject::getSharedPtr() const
+{
+  try
+  {
+    return shared_from_this();
+  }
+  catch (std::bad_weak_ptr &)
+  {
+    mooseError(not_shared_error);
+  }
 }

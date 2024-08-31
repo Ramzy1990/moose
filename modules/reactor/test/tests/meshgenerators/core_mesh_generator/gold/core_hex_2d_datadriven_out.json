@@ -211,6 +211,10 @@
                         "type": "bool",
                         "value": true
                     },
+                    "MeshMetaData/rmp/flexible_assembly_stitching": {
+                        "type": "bool",
+                        "value": false
+                    },
                     "MeshMetaData/rmp/mesh_dimensions": {
                         "type": "int",
                         "value": 2
@@ -222,6 +226,10 @@
                     "MeshMetaData/rmp/radial_boundary_id": {
                         "type": "short",
                         "value": 200
+                    },
+                    "MeshMetaData/rmp/region_id_as_block_name": {
+                        "type": "bool",
+                        "value": false
                     }
                 }
             },

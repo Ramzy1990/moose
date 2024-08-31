@@ -31,6 +31,7 @@
     type = 'Exodiff'
     input = 'GrandPotentialStrictMassConservation.i'
     exodiff = 'GrandPotentialStrictMassConservation_out.e'
+    custom_cmp = GrandPotentialStrictMassConservation.cmp
     issues = '#23329'
     design = '/GrandPotentialKernelAction.md'
     requirement = 'The system shall provide classes to implement a Grand Potential phase field '
@@ -45,6 +46,7 @@
     design = '/GrandPotentialInterface.md'
     requirement = 'The system shall provide a material to automatically compute grand potential '
                   'model interface parameters based on provided interfacial free energies and widths'
+    valgrind = 'heavy'
   []
   [GrandPotentialAnisotropyAntitrap]
     type = 'Exodiff'
@@ -99,7 +101,6 @@
     issues = '#15573'
     design = '/ACSwitching.md /CoupledSwitchingTimeDerivative.md'
     requirement = 'MOOSE shall provide a Grand Potential based multiphase model with AD option'
-    installation_type = 'in_tree' # refs #26129
   []
 
   [ADGrandPotentialMultiphase_jac]
@@ -112,6 +113,5 @@
     issues = '#15573'
     design = '/ACSwitching.md /CoupledSwitchingTimeDerivative.md'
     requirement = 'The jacobian for the AD Allen-Cahn problem with a variable dependent coeffecients shall be perfect'
-    installation_type = 'in_tree' # refs #26129
   []
 []

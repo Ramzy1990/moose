@@ -36,17 +36,17 @@ Action::validParams()
   params.addParam<std::vector<std::string>>(
       "control_tags",
       "Adds user-defined labels for accessing object parameters via control logic.");
+  params.addParamNamesToGroup("control_tags", "Advanced");
   params.registerBase("Action");
   return params;
 }
 
 Action::Action(const InputParameters & parameters)
-  : MooseBase(parameters.get<std::string>("action_type"),
-              parameters.get<std::string>("_action_name"),
-              *parameters.getCheckedPointerParam<MooseApp *>("_moose_app", "In Action constructor"),
-              parameters),
-    MooseBaseParameterInterface(*this, parameters),
-    MooseBaseErrorInterface(static_cast<MooseBase &>(*this)),
+  : ParallelParamObject(
+        parameters.get<std::string>("action_type"),
+        parameters.get<std::string>("_action_name"),
+        *parameters.getCheckedPointerParam<MooseApp *>("_moose_app", "In Action constructor"),
+        parameters),
     MeshMetaDataInterface(
         *parameters.getCheckedPointerParam<MooseApp *>("_moose_app", "In Action constructor")),
     PerfGraphInterface(
@@ -62,8 +62,6 @@ Action::Action(const InputParameters & parameters)
             (parameters.isParamValid("task") && parameters.get<std::string>("task") != ""
                  ? std::string("::") + parameters.get<std::string>("task")
                  : "")),
-    ParallelObject(*parameters.getCheckedPointerParam<MooseApp *>("_moose_app")),
-    DataFileInterface<Action>(*this),
     _registered_identifier(isParamValid("registered_identifier")
                                ? getParam<std::string>("registered_identifier")
                                : ""),

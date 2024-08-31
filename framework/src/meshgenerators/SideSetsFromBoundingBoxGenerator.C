@@ -40,10 +40,9 @@ SideSetsFromBoundingBoxGenerator::validParams()
       "Subdomain id to set for inside/outside the bounding box",
       "The parameter 'block_id' is not used.");
   params.makeParamRequired<std::vector<BoundaryName>>("included_boundaries");
-  params.addDeprecatedParam<std::vector<BoundaryName>>(
+  params.addParam<std::vector<BoundaryName>>(
       "boundaries_old",
-      "The list of boundaries on the specified block within the bounding box to be modified",
-      "Deprecated, use 'included_boundaries' instead");
+      "The list of boundaries on the specified block within the bounding box to be modified");
   params.deprecateParam("boundaries_old", "included_boundaries", "4/01/2025");
   params.addRequiredParam<BoundaryName>(
       "boundary_new", "Boundary on specified block within the bounding box to assign");
@@ -116,6 +115,9 @@ SideSetsFromBoundingBoxGenerator::generate()
 
   if (!_boundary_id_overlap)
   {
+    // Request to compute normal vectors
+    const std::vector<Point> & face_normals = _fe_face->get_normals();
+
     // Loop over the elements
     for (const auto & elem : mesh->active_element_ptr_range())
     {
@@ -131,7 +133,7 @@ SideSetsFromBoundingBoxGenerator::generate()
         {
           _fe_face->reinit(elem, side);
           // We'll just use the normal of the first qp
-          const Point face_normal = _fe_face->get_normals()[0];
+          const Point face_normal = face_normals[0];
 
           if (elemSideSatisfiesRequirements(elem, side, *mesh, _normal, face_normal))
           {

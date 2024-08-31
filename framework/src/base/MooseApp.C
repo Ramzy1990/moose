@@ -63,6 +63,7 @@
 #include "libmesh/string_to_enum.h"
 #include "libmesh/checkpoint_io.h"
 #include "libmesh/mesh_base.h"
+#include "libmesh/petsc_solver_exception.h"
 
 // System include for dynamic library methods
 #ifdef LIBMESH_HAVE_DLOPEN
@@ -320,6 +321,12 @@ MooseApp::validParams()
   params.addParam<bool>(
       "automatic_automatic_scaling", false, "Whether to turn on automatic scaling by default.");
 
+  MooseEnum libtorch_device_type("cpu cuda mps", "cpu");
+  params.addCommandLineParam<MooseEnum>("libtorch_device",
+                                        "--libtorch-device",
+                                        libtorch_device_type,
+                                        "The device type we want to run libtorch on.");
+
 #ifdef HAVE_GPERFTOOLS
   params.addCommandLineParam<std::string>(
       "gperf_profiler_on",
@@ -344,6 +351,13 @@ MooseApp::validParams()
       "use_legacy_material_output",
       true,
       "Set false to allow material properties to be output on INITIAL, not just TIMESTEP_END.");
+  params.addParam<bool>(
+      "use_legacy_initial_residual_evaluation_behavior",
+      true,
+      "The legacy behavior performs an often times redundant residual evaluation before the "
+      "solution modifying objects are executed prior to the initial (0th nonlinear iteration) "
+      "residual evaluation. The new behavior skips that redundant residual evaluation unless the "
+      "parameter Executioner/use_pre_SMO_residual is set to true.");
 
   params.addParam<bool>(
       MeshGeneratorSystem::allow_data_driven_param,
@@ -417,6 +431,10 @@ MooseApp::MooseApp(InputParameters parameters)
     _output_buffer_cache(nullptr),
     _automatic_automatic_scaling(getParam<bool>("automatic_automatic_scaling")),
     _initial_backup(getParam<std::unique_ptr<Backup> *>("_initial_backup"))
+#ifdef LIBTORCH_ENABLED
+    ,
+    _libtorch_device(determineLibtorchDeviceType(getParam<MooseEnum>("libtorch_device")))
+#endif
 {
   // Set the TIMPI sync type via --timpi-sync
   const auto & timpi_sync = parameters.get<std::string>("timpi_sync");
@@ -532,6 +550,8 @@ MooseApp::MooseApp(InputParameters parameters)
   _the_warehouse->registerAttribute<AttribSorted>("sorted");
   _the_warehouse->registerAttribute<AttribDisplaced>("displaced", -1);
 
+  _perf_graph.enableLivePrint();
+
   if (isParamValid("_argc") && isParamValid("_argv"))
   {
     int argc = getParam<int>("_argc");
@@ -547,7 +567,7 @@ MooseApp::MooseApp(InputParameters parameters)
   if (_check_input && isParamValid("recover"))
     mooseError("Cannot run --check-input with --recover. Recover files might not exist");
 
-  if (isParamValid("start_in_debugger") && _multiapp_level == 0)
+  if (isParamValid("start_in_debugger") && isUltimateMaster())
   {
     auto command = getParam<std::string>("start_in_debugger");
 
@@ -584,7 +604,7 @@ MooseApp::MooseApp(InputParameters parameters)
     std::this_thread::sleep_for(std::chrono::seconds(10));
   }
 
-  if (!parameters.isParamSetByAddParam("stop_for_debugger"))
+  if (!parameters.isParamSetByAddParam("stop_for_debugger") && isUltimateMaster())
   {
     Moose::out << "\nStopping for " << getParam<unsigned int>("stop_for_debugger")
                << " seconds to allow attachment from a debugger.\n";
@@ -712,11 +732,7 @@ MooseApp::setupOptions()
 
   // The no_timing flag takes precedence over the timing flag.
   if (getParam<bool>("no_timing"))
-  {
     _pars.set<bool>("timing") = false;
-
-    _perf_graph.setActive(false);
-  }
 
   if (isParamValid("trap_fpe") && isParamValid("no_trap_fpe"))
     mooseError("Cannot use both \"--trap-fpe\" and \"--no-trap-fpe\" flags.");
@@ -1138,7 +1154,8 @@ MooseApp::executeExecutioner()
   // run the simulation
   if (_use_executor && _executor)
   {
-    Moose::PetscSupport::petscSetupOutput(_command_line.get());
+    auto ierr = Moose::PetscSupport::petscSetupOutput(_command_line.get());
+    LIBMESH_CHKERR(ierr);
 
     _executor->init();
     errorCheck();
@@ -1148,7 +1165,8 @@ MooseApp::executeExecutioner()
   }
   else if (_executioner)
   {
-    Moose::PetscSupport::petscSetupOutput(_command_line.get());
+    auto ierr = Moose::PetscSupport::petscSetupOutput(_command_line.get());
+    LIBMESH_CHKERR(ierr);
     _executioner->init();
     errorCheck();
     _executioner->execute();
@@ -1649,6 +1667,9 @@ MooseApp::runInputs() const
 {
   if (isParamValid("run"))
   {
+    // These options will show as unused by petsc; ignore them all
+    Moose::PetscSupport::setSinglePetscOption("-options_left", "0");
+
     // Here we are going to pass everything after --run on the cli to the TestHarness. That means
     // cannot validate these CLIs.
     auto it = _command_line->find("run");
@@ -1691,6 +1712,7 @@ MooseApp::runInputs() const
       return_value = system(cmd.c_str());
     _communicator.broadcast(return_value);
 
+    // TODO: return the actual return value here
     if (WIFEXITED(return_value) && WEXITSTATUS(return_value) != 0)
       mooseError("Run failed");
     return true;
@@ -1764,6 +1786,12 @@ MooseApp::getFileName(bool stripLeadingPath) const
 
 OutputWarehouse &
 MooseApp::getOutputWarehouse()
+{
+  return _output_warehouse;
+}
+
+const OutputWarehouse &
+MooseApp::getOutputWarehouse() const
 {
   return _output_warehouse;
 }
@@ -2389,7 +2417,7 @@ MooseApp::addRelationshipManager(std::shared_ptr<RelationshipManager> new_rm)
 const std::string &
 MooseApp::checkpointSuffix()
 {
-  static const std::string suffix = "-mesh.cpr";
+  static const std::string suffix = "-mesh.cpa.gz";
   return suffix;
 }
 
@@ -2844,3 +2872,33 @@ MooseApp::constructingMeshGenerators() const
   return _action_warehouse.getCurrentTaskName() == "create_added_mesh_generators" ||
          _mesh_generator_system.appendingMeshGenerators();
 }
+
+#ifdef LIBTORCH_ENABLED
+torch::DeviceType
+MooseApp::determineLibtorchDeviceType(const MooseEnum & device_enum) const
+{
+  if (device_enum == "cuda")
+  {
+#ifdef __linux__
+    if (!torch::cuda::is_available())
+      mooseError("--libtorch-device=cuda: CUDA is not available");
+    return torch::kCUDA;
+#else
+    mooseError("--libtorch-device=cuda: CUDA is not supported on your platform");
+#endif
+  }
+  else if (device_enum == "mps")
+  {
+#ifdef __APPLE__
+    if (!torch::mps::is_available())
+      mooseError("--libtorch-device=mps: MPS is not available");
+    return torch::kMPS;
+#else
+    mooseError("--libtorch-device=mps: MPS is not supported on your platform");
+#endif
+  }
+
+  mooseAssert(device_enum == "cpu", "Should be cpu");
+  return torch::kCPU;
+}
+#endif

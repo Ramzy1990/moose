@@ -15,6 +15,7 @@
 #include "InputParameterWarehouse.h"
 #include "LoggingInterface.h"
 #include "NamingInterface.h"
+#include "ADFunctorInterface.h"
 
 class THMProblem;
 class THMMesh;
@@ -23,7 +24,10 @@ class ThermalHydraulicsApp;
 /**
  * Base class for THM components
  */
-class Component : public THMObject, public LoggingInterface, public NamingInterface
+class Component : public THMObject,
+                  public LoggingInterface,
+                  public NamingInterface,
+                  public ADFunctorInterface
 {
 public:
   Component(const InputParameters & parameters);
@@ -31,12 +35,15 @@ public:
   /// Component setup status type
   enum EComponentSetupStatus
   {
-    CREATED,                  ///< only created
-    MESH_PREPARED,            ///< mesh set up
-    INITIALIZED_PRIMARY,      ///< mesh set up, called primary init
-    INITIALIZED_SECONDARY,    ///< mesh set up, called both inits
-    CHECKED                   ///< mesh set up, called both inits, checked
+    CREATED,               ///< only created
+    MESH_PREPARED,         ///< mesh set up
+    INITIALIZED_PRIMARY,   ///< mesh set up, called primary init
+    INITIALIZED_SECONDARY, ///< mesh set up, called both inits
+    CHECKED                ///< mesh set up, called both inits, checked
   };
+
+  /// Return a string for the setup status
+  std::string stringify(EComponentSetupStatus status) const;
 
   /**
    * Get the component name

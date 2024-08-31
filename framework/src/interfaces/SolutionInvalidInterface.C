@@ -23,12 +23,21 @@ SolutionInvalidInterface::SolutionInvalidInterface(MooseObject * const moose_obj
 
 /// Set solution invalid mark for the given solution ID
 void
-SolutionInvalidInterface::flagInvalidSolutionInternal(InvalidSolutionID _invalid_solution_id) const
+SolutionInvalidInterface::flagInvalidSolutionInternal(InvalidSolutionID invalid_solution_id) const
 {
   auto & solution_invalidity = _si_moose_object.getMooseApp().solutionInvalidity();
   if (_si_problem.immediatelyPrintInvalidSolution())
-    solution_invalidity.printDebug(_invalid_solution_id);
-  return solution_invalidity.flagInvalidSolutionInternal(_invalid_solution_id);
+    solution_invalidity.printDebug(invalid_solution_id);
+  _si_problem.hasInvalidSolution(true);
+  return solution_invalidity.flagInvalidSolutionInternal(invalid_solution_id);
+}
+
+void
+SolutionInvalidInterface::flagSolutionWarningInternal(InvalidSolutionID invalid_solution_id) const
+{
+  auto & solution_invalidity = _si_moose_object.getMooseApp().solutionInvalidity();
+  _si_problem.hasSolutionWarning(true);
+  return solution_invalidity.flagInvalidSolutionInternal(invalid_solution_id);
 }
 
 InvalidSolutionID

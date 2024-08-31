@@ -5,7 +5,7 @@
 With the pressure equation handled, the heat conduction equation is next.
 
 !equation
-C\left( \frac{\partial T}{\partial t} + \epsilon \vec{u}\cdot\nabla T \right) - \nabla\cdot k \nabla T = 0
+\rho c_p \left( \frac{\partial T}{\partial t} + \epsilon \vec{u}\cdot\nabla T \right) - \nabla\cdot k \nabla T = 0
 
 !---
 
@@ -56,10 +56,10 @@ prop_values = '0.01         200'
 
 !---
 
-## Step 5b: Running Input File
+## Step 5a: Running Input File
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step5_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step5_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5a_steady.i
@@ -74,7 +74,7 @@ cd problems
 To create a time-dependent problem add in the time derivative:
 
 !equation
-C \frac{\partial T}{\partial t} - \nabla \cdot k \nabla T = 0
+\rho c_p \frac{\partial T}{\partial t} - \nabla \cdot k \nabla T = 0
 
 The time term exists in the heat transfer module as `ADHeatConductionTimeDerivative`, thus
 only an update to the input file is required to run the transient case.
@@ -104,7 +104,7 @@ only an update to the input file is required to run the transient case.
 ## Step 5b: Running Input File
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step5_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step5_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5b_transient.i
@@ -148,7 +148,7 @@ rather than being replaced with a known flux, as is done in a `NeumannBC`.
 ## Step 5c: Run
 
 ```bash
-cd ~/projects/moose/tutorials/darcy-thermo_mech/step05_heat_conduction
+cd ~/projects/moose/tutorials/darcy_thermo_mech/step05_heat_conduction
 make -j 12 # use number of processors for your system
 cd problems
 ../darcy_thermo_mech-opt -i step5b_transient.i

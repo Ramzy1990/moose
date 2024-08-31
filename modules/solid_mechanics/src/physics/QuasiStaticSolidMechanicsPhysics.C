@@ -116,6 +116,12 @@ QuasiStaticSolidMechanicsPhysics::validParams()
                                              "Functions giving the target "
                                              "values of each constraint.");
 
+  params.addParamNamesToGroup("scaling", "Variables");
+  params.addParamNamesToGroup("strain_base_name automatic_eigenstrain_names", "Strain");
+  params.addParamNamesToGroup(
+      "cylindrical_axis_point1 cylindrical_axis_point2 spherical_center_point direction",
+      "Coordinate system");
+
   return params;
 }
 
@@ -207,6 +213,13 @@ QuasiStaticSolidMechanicsPhysics::QuasiStaticSolidMechanicsPhysics(const InputPa
   // plane strain consistency check
   if (_planar_formulation != PlanarFormulation::None)
   {
+    if (_lagrangian_kernels)
+      mooseDocumentedError(
+          "moose",
+          27340,
+          "Planar formulations are not yet available through the Physics syntax with new_system = "
+          "true. They can be enabled by manually setting up the appropriate objects. Please refer "
+          "to the documentation and regression tests for examples.");
     if (params.isParamSetByUser("out_of_plane_strain") &&
         _planar_formulation != PlanarFormulation::WeakPlaneStress)
       mooseError(
@@ -328,9 +341,6 @@ QuasiStaticSolidMechanicsPhysics::act()
   {
     if (_planar_formulation == PlanarFormulation::GeneralizedPlaneStrain)
     {
-      if (_lagrangian_kernels)
-        paramError("Plane formulation not available with Lagrangian kernels");
-
       if (_use_ad)
         paramError("use_automatic_differentiation", "AD not setup for use with PlaneStrain");
       // Set the action parameters
@@ -502,7 +512,13 @@ QuasiStaticSolidMechanicsPhysics::actSubdomainChecks()
   {
     // get subdomain IDs
     for (auto & name : _subdomain_names)
-      _subdomain_ids.insert(_mesh->getSubdomainID(name));
+    {
+      auto id = _mesh->getSubdomainID(name);
+      if (id == Moose::INVALID_BLOCK_ID)
+        paramError("block", "Subdomain \"" + name + "\" not found in mesh.");
+      else
+        _subdomain_ids.insert(id);
+    }
   }
 
   if (_current_task == "validate_coordinate_systems")
@@ -756,7 +772,7 @@ QuasiStaticSolidMechanicsPhysics::verifyOrderAndFamilyOutputs()
 
   // if no value was provided, chose the default CONSTANT
   if (_material_output_order.size() == 0)
-    _material_output_order.push_back("CONSTANT");
+    _material_output_order.setAdditionalValue("CONSTANT");
 
   // For only one order, make all orders the same magnitude
   if (_material_output_order.size() == 1)
@@ -771,7 +787,7 @@ QuasiStaticSolidMechanicsPhysics::verifyOrderAndFamilyOutputs()
 
   // if no value was provided, chose the default MONOMIAL
   if (_material_output_family.size() == 0)
-    _material_output_family.push_back("MONOMIAL");
+    _material_output_family.setAdditionalValue("MONOMIAL");
 
   // For only one family, make all families that value
   if (_material_output_family.size() == 1)
@@ -983,7 +999,7 @@ QuasiStaticSolidMechanicsPhysics::actStressDivergenceTensorsStrain()
   {
     std::map<std::pair<Moose::CoordinateSystemType, StrainAndIncrement>, std::string> type_map = {
         {{Moose::COORD_XYZ, StrainAndIncrement::SmallTotal}, "ComputeSmallStrain"},
-        {{Moose::COORD_XYZ, StrainAndIncrement::SmallIncremental}, "ComputeIncrementalSmallStrain"},
+        {{Moose::COORD_XYZ, StrainAndIncrement::SmallIncremental}, "ComputeIncrementalStrain"},
         {{Moose::COORD_XYZ, StrainAndIncrement::FiniteIncremental}, "ComputeFiniteStrain"},
         {{Moose::COORD_RZ, StrainAndIncrement::SmallTotal}, "ComputeAxisymmetricRZSmallStrain"},
         {{Moose::COORD_RZ, StrainAndIncrement::SmallIncremental},

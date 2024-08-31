@@ -23,6 +23,7 @@ NavierStokesApp::validParams()
   params.set<bool>("automatic_automatic_scaling") = false;
 
   params.set<bool>("use_legacy_material_output") = false;
+  params.set<bool>("use_legacy_initial_residual_evaluation_behavior") = false;
 
   return params;
 }
@@ -48,10 +49,30 @@ NavierStokesApp::registerApps()
 static void
 associateSyntaxInner(Syntax & syntax, ActionFactory & /*action_factory*/)
 {
-  // Create the syntax
+  // Physics syntax
+  registerSyntax("WCNSFVFlowPhysics", "Physics/NavierStokes/Flow/*");
+  registerSyntax("WCNSFVFluidHeatTransferPhysics", "Physics/NavierStokes/FluidHeatTransfer/*");
+  registerSyntax("WCNSFVScalarTransportPhysics", "Physics/NavierStokes/ScalarTransport/*");
+  registerSyntax("WCNSFVTurbulencePhysics", "Physics/NavierStokes/Turbulence/*");
+  registerSyntax("PNSFVSolidHeatTransferPhysics", "Physics/NavierStokes/SolidHeatTransfer/*");
+  registerSyntax("WCNSFVTwoPhaseMixturePhysics", "Physics/NavierStokes/TwoPhaseMixture/*");
+
+  // Create the Action syntax
   registerSyntax("CNSAction", "Modules/CompressibleNavierStokes");
   registerSyntax("INSAction", "Modules/IncompressibleNavierStokes");
-  registerSyntax("NSFVAction", "Modules/NavierStokesFV");
+
+  // Deprecated action syntax for NavierStokesFV
+  registerTask("nsfv_action_deprecation_task", /*is_required=*/false);
+  registerSyntax("NSFVActionDeprecation", "Modules/NavierStokesFV");
+  registerSyntax("WCNSFVFlowPhysics", "Modules/NavierStokesFV");
+  registerSyntax("WCNSFVFluidHeatTransferPhysics", "Modules/NavierStokesFV");
+  registerSyntax("WCNSFVScalarTransportPhysics", "Modules/NavierStokesFV");
+  registerSyntax("WCNSFVTurbulencePhysics", "Modules/NavierStokesFV");
+
+  // Additional tasks to make the Physics work out
+  registerTask("get_turbulence_physics", /*is_required=*/false);
+  addTaskDependency("get_turbulence_physics", "init_physics");
+  addTaskDependency("check_integrity_early_physics", "get_turbulence_physics");
 
   // add variables action
   registerTask("add_navier_stokes_variables", /*is_required=*/false);

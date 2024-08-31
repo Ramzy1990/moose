@@ -118,10 +118,15 @@ PatternedCartesianMeshGenerator::validParams()
       "interface_boundary_id_shift_pattern",
       "User-defined shift values for each pattern cell. A double-indexed array starting with the "
       "upper-left corner.");
+  MooseEnum quad_elem_type("QUAD4 QUAD8 QUAD9", "QUAD4");
+  params.addParam<MooseEnum>(
+      "boundary_region_element_type",
+      quad_elem_type,
+      "Type of the quadrilateral elements to be generated in the boundary region.");
   params.addParamNamesToGroup(
       "pattern_boundary background_block_id background_block_name duct_block_ids duct_block_names "
       "external_boundary_id external_boundary_name create_inward_interface_boundaries "
-      "create_outward_interface_boundaries",
+      "create_outward_interface_boundaries boundary_region_element_type",
       "Customized Subdomain/Boundary");
   params.addParamNamesToGroup(
       "generate_control_drum_positions_file assign_control_drum_id position_file", "Control Drum");
@@ -169,7 +174,9 @@ PatternedCartesianMeshGenerator::PatternedCartesianMeshGenerator(const InputPara
     _deform_non_circular_region(getParam<bool>("deform_non_circular_region")),
     _use_reporting_id(isParamValid("id_name")),
     _use_exclude_id(isParamValid("exclude_id")),
-    _use_interface_boundary_id_shift(isParamValid("interface_boundary_id_shift_pattern"))
+    _use_interface_boundary_id_shift(isParamValid("interface_boundary_id_shift_pattern")),
+    _boundary_quad_elem_type(
+        getParam<MooseEnum>("boundary_region_element_type").template getEnum<QUAD_ELEM_TYPE>())
 {
   declareMeshProperty("pattern_pitch_meta", 0.0);
   declareMeshProperty("input_pitch_meta", 0.0);
@@ -428,10 +435,17 @@ PatternedCartesianMeshGenerator::generate()
     if (!MooseUtils::absoluteFuzzyEqual(
             *std::max_element(pattern_pitch_array.begin(), pattern_pitch_array.end()),
             *std::min_element(pattern_pitch_array.begin(), pattern_pitch_array.end())))
-      mooseError("In PatternedCartesianMeshGenerator ",
-                 _name,
-                 ": pattern_pitch metadata values of all input mesh generators must be identical "
-                 "when pattern_boundary is 'none' and generate_core_metadata is true.");
+      mooseError(
+          "In PatternedCartesianMeshGenerator ",
+          _name,
+          ": pattern_pitch metadata values of all input mesh generators must be identical when "
+          "pattern_boundary is 'none' and generate_core_metadata is true. Please check the "
+          "parameters of the mesh generators that produce the input meshes. "
+          "Note that some of these mesh generator, such as "
+          "CartesianConcentricCircleAdaptiveBoundaryMeshGenerator and FlexiblePatternGenerator,"
+          "may have different definitions of square size in their input parameters. Please refer "
+          "to the documentation of these mesh generators.",
+          pitchMetaDataErrorGenerator(_input_names, pattern_pitch_array, "pattern_pitch_meta"));
     else
     {
       _pattern_pitch = pattern_pitch_array.front();
@@ -477,7 +491,9 @@ PatternedCartesianMeshGenerator::generate()
                                         *std::min_element(pitch_array.begin(), pitch_array.end())))
       mooseError("In PatternedCartesianMeshGenerator ",
                  _name,
-                 ": pitch metadata values of all input mesh generators must be identical.");
+                 ": pitch metadata values of all input mesh generators must be identical. Please "
+                 "check the parameters of the mesh generators that produce the input meshes.",
+                 pitchMetaDataErrorGenerator(_input_names, pitch_array, "pitch_meta"));
     setMeshProperty("input_pitch_meta", pitch_array.front());
     if (*std::max_element(num_sectors_per_side_array.begin(), num_sectors_per_side_array.end()) !=
         *std::min_element(num_sectors_per_side_array.begin(), num_sectors_per_side_array.end()))
@@ -822,6 +838,13 @@ PatternedCartesianMeshGenerator::generate()
         out_mesh->add_point(p_tmp, node_azi_list[i * side_intervals + j - 1].second);
       }
     }
+
+    // if quadratic elements are used, additional nodes need to be adjusted based on the new
+    // boundary node locations. adjust side mid-edge nodes to the midpoints of the corner
+    // points, and if QUAD9, adjust center point to new centroid.
+    if (_boundary_quad_elem_type != QUAD_ELEM_TYPE::QUAD4)
+      adjustPeripheralQuadraticElements(*out_mesh, _boundary_quad_elem_type);
+
     MeshTools::Modification::rotate(*out_mesh, 45.0, 0.0, 0.0);
   }
 
@@ -1023,9 +1046,11 @@ PatternedCartesianMeshGenerator::addPeripheralMesh(
                                           sub_positions_inner,
                                           sub_d_positions_outer,
                                           i,
+                                          _boundary_quad_elem_type,
                                           _create_inward_interface_boundaries,
                                           (i != extra_dist.size() - 1) &&
                                               _create_outward_interface_boundaries);
+
       if (mesh.is_prepared()) // Need to prepare if the other is prepared to stitch
         meshp0->prepare_for_use();
 

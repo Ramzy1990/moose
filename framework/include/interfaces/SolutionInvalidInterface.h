@@ -24,6 +24,13 @@ class MooseObject;
     this->flagInvalidSolutionInternal(__invalid_id);                                               \
   } while (0)
 
+#define flagSolutionWarning(message)                                                               \
+  do                                                                                               \
+  {                                                                                                \
+    static const auto __invalid_id = this->registerInvalidSolutionInternal(message);               \
+    this->flagSolutionWarningInternal(__invalid_id);                                               \
+  } while (0)
+
 /**
  * An interface that allows the marking of invalid solutions during a solve
  */
@@ -33,7 +40,9 @@ public:
   SolutionInvalidInterface(MooseObject * const moose_object);
 
 protected:
-  void flagInvalidSolutionInternal(InvalidSolutionID _invalid_solution_id) const;
+  void flagInvalidSolutionInternal(InvalidSolutionID invalid_solution_id) const;
+
+  void flagSolutionWarningInternal(InvalidSolutionID invalid_solution_id) const;
 
   // Register invalid solution with a message
   InvalidSolutionID registerInvalidSolutionInternal(const std::string & message) const;

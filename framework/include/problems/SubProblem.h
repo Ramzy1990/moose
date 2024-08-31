@@ -396,8 +396,7 @@ public:
   virtual void reinitElemPhys(const Elem * elem,
                               const std::vector<Point> & phys_points_in_elem,
                               const THREAD_ID tid) = 0;
-  virtual void
-  reinitElemFace(const Elem * elem, unsigned int side, BoundaryID bnd_id, const THREAD_ID tid) = 0;
+  virtual void reinitElemFace(const Elem * elem, unsigned int side, const THREAD_ID tid) = 0;
   virtual void reinitLowerDElem(const Elem * lower_d_elem,
                                 const THREAD_ID tid,
                                 const std::vector<Point> * const pts = nullptr,
@@ -437,7 +436,6 @@ public:
    */
   virtual void reinitElemFaceRef(const Elem * elem,
                                  unsigned int side,
-                                 BoundaryID bnd_id,
                                  Real tolerance,
                                  const std::vector<Point> * const pts,
                                  const std::vector<Real> * const weights = nullptr,
@@ -451,7 +449,6 @@ public:
    */
   virtual void reinitNeighborFaceRef(const Elem * neighbor_elem,
                                      unsigned int neighbor_side,
-                                     BoundaryID bnd_id,
                                      Real tolerance,
                                      const std::vector<Point> * const pts,
                                      const std::vector<Real> * const weights = nullptr,
@@ -633,7 +630,7 @@ public:
    * Returns true if the problem is in the process of computing it's initial residual.
    * @return Whether or not the problem is currently computing the initial residual.
    */
-  virtual bool computingInitialResidual(const unsigned int nl_sys_num) const = 0;
+  virtual bool computingPreSMOResidual(const unsigned int nl_sys_num) const = 0;
 
   /**
    * Return the list of elements that should have their DoFs ghosted to this processor.
@@ -1193,8 +1190,9 @@ SubProblem::getFunctor(const std::string & name,
     if (functors.count("wraps_" + name) > 1)
       mooseError("Attempted to get a functor with the name '",
                  name,
-                 "' but multiple functors match. Make sure that you do not have functor material "
-                 "properties, functions, postprocessors or variables with the same names");
+                 "' but multiple (" + std::to_string(functors.count("wraps_" + name)) +
+                     ") functors match. Make sure that you do not have functor material "
+                     "properties, functions, postprocessors or variables with the same names.");
 
     auto & [true_functor_is, non_ad_functor, ad_functor] = find_ret->second;
     auto & functor_wrapper = requested_functor_is_ad ? *ad_functor : *non_ad_functor;
@@ -1222,9 +1220,12 @@ SubProblem::getFunctor(const std::string & name,
       // Check for whether this is a valid request
       if (!requested_functor_is_ad && requestor_is_ad &&
           true_functor_is == SubProblem::TrueFunctorIs::AD)
-        mooseError("We are requesting a non-AD functor from an AD object, but the true functor is "
-                   "AD. This "
-                   "means we could be dropping important derivatives. We will not allow this");
+        mooseError("The AD object '",
+                   requestor_name,
+                   "' is requesting the functor '",
+                   name,
+                   "' as a non-AD functor even though it is truly an AD functor, which is not "
+                   "allowed, since this may unintentionally drop derivatives.");
     }
 
     return *functor;
@@ -1396,6 +1397,19 @@ SubProblem::addFunctor(const std::string & name,
         existing_ad_wrapper->assign(std::make_unique<Moose::ADWrapperFunctor<ADType>>(functor));
       }
       return;
+    }
+    else if (!existing_wrapper)
+    {
+      // Functor was emplaced but the cast failed. This could be a double definition with
+      // different types, or it could be a request with one type then a definition with another
+      // type. Either way it is going to error later, but it is cleaner to catch it now
+      mooseError("Functor '",
+                 name,
+                 "' is being added with return type '",
+                 MooseUtils::prettyCppType<T>(),
+                 "' but it has already been defined or requested with return type '",
+                 existing_wrapper_base->returnType(),
+                 "'.");
     }
   }
 

@@ -21,7 +21,7 @@
 #include "libmesh/simple_range.h"
 
 #include "pcrecpp.h"
-#include "parse.h"
+#include "hit/parse.h"
 
 #include <cmath>
 #include <filesystem>
@@ -661,6 +661,7 @@ InputParameters::finalize(const std::string & parsing_syntax)
     set_if_filename(FileName);
     set_if_filename(FileNameNoExtension);
     set_if_filename(MeshFileName);
+    set_if_filename(MatrixFileName);
 #undef set_if_filename
   }
 
@@ -889,6 +890,14 @@ InputParameters::addParamNamesToGroup(const std::string & space_delim_names,
                  '.');
 }
 
+void
+InputParameters::renameParameterGroup(const std::string & old_name, const std::string & new_name)
+{
+  for (auto & param : _params)
+    if (param.second._group == old_name)
+      param.second._group = new_name;
+}
+
 bool
 InputParameters::isCommandLineParameter(const std::string & name) const
 {
@@ -1019,7 +1028,8 @@ InputParameters::applyCoupledVar(const InputParameters & common, const std::stri
 void
 InputParameters::applyParameter(const InputParameters & common,
                                 const std::string & common_name,
-                                bool allow_private)
+                                bool allow_private,
+                                bool override_default)
 {
   // Disable the display of deprecated message when applying common parameters, this avoids a dump
   // of messages
@@ -1036,7 +1046,7 @@ InputParameters::applyParameter(const InputParameters & common,
   // Extract the properties from the common parameter
   const bool common_exist = common._values.find(common_name) != common._values.end();
   const bool common_priv = allow_private ? false : common.isPrivate(common_name);
-  const bool common_valid = common.isParamValid(common_name);
+  const bool common_valid = common.isParamValid(common_name) || override_default;
 
   /* In order to apply a common parameter 4 statements must be satisfied
    * (1) A local parameter must exist with the same name as the common parameter
@@ -1513,12 +1523,12 @@ InputParameters::renameParamInternal(const std::string & old_name,
     mooseError("Requested to rename parameter '",
                old_name,
                "' but that parameter name doesn't exist in the parameters object.");
+  mooseAssert(params_it->second._deprecation_message.empty(),
+              "Attempting to rename the parameter, '" << old_name << "', that is deprecated");
 
   auto new_metadata = std::move(params_it->second);
   if (!docstring.empty())
     new_metadata._doc_string = docstring;
-  else
-    new_metadata._doc_string = params_it->second._doc_string;
   _params.emplace(new_name, std::move(new_metadata));
   _params.erase(params_it);
 

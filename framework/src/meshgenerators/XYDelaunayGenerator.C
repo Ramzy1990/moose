@@ -30,6 +30,7 @@ XYDelaunayGenerator::validParams()
   InputParameters params = MeshGenerator::validParams();
 
   MooseEnum algorithm("BINARY EXHAUSTIVE", "BINARY");
+  MooseEnum tri_elem_type("TRI3 TRI6 TRI7 DEFAULT", "DEFAULT");
 
   params.addRequiredParam<MeshGeneratorName>(
       "boundary",
@@ -47,10 +48,14 @@ XYDelaunayGenerator::validParams()
   params.addParam<SubdomainName>("output_subdomain_name",
                                  "Subdomain name to set on new triangles.");
 
-  params.addParam<BoundaryName>("output_boundary",
-                                "Boundary name to set on new outer boundary.  Default ID 0.");
+  params.addParam<BoundaryName>(
+      "output_boundary",
+      "Boundary name to set on new outer boundary.  Default ID: 0 if no hole meshes are stitched; "
+      "or maximum boundary ID of all the stitched hole meshes + 1.");
   params.addParam<std::vector<BoundaryName>>(
-      "hole_boundaries", "Boundary names to set on holes.  Default IDs are numbered up from 1.");
+      "hole_boundaries",
+      "Boundary names to set on holes.  Default IDs are numbered up from 1 if no hole meshes are "
+      "stitched; or from maximum boundary ID of all the stitched hole meshes + 2.");
 
   params.addParam<bool>(
       "verify_holes",
@@ -76,14 +81,43 @@ XYDelaunayGenerator::validParams()
       "desired_area_func",
       std::string(),
       "Desired area as a function of x,y; omit to skip non-uniform refinement");
+
+  params.addParam<bool>("use_auto_area_func",
+                        false,
+                        "Use the automatic area function for the triangle meshing region.");
+  params.addParam<Real>(
+      "auto_area_func_default_size",
+      0,
+      "Background size for automatic area function, or 0 to use non background size");
+  params.addParam<Real>("auto_area_func_default_size_dist",
+                        -1.0,
+                        "Effective distance of background size for automatic area "
+                        "function, or negative to use non background size");
+  params.addParam<unsigned int>("auto_area_function_num_points",
+                                10,
+                                "Maximum number of nearest points used for the inverse distance "
+                                "interpolation algorithm for automatic area function calculation.");
+  params.addRangeCheckedParam<Real>(
+      "auto_area_function_power",
+      1.0,
+      "auto_area_function_power>0",
+      "Polynomial power of the inverse distance interpolation algorithm for automatic area "
+      "function calculation.");
+
   params.addParam<MooseEnum>(
       "algorithm",
       algorithm,
       "Control the use of binary search for the nodes of the stitched surfaces.");
+  params.addParam<MooseEnum>(
+      "tri_element_type", tri_elem_type, "Type of the triangular elements to be generated.");
   params.addParam<bool>(
       "verbose_stitching", false, "Whether mesh stitching should have verbose output.");
 
   params.addClassDescription("Triangulates meshes within boundaries defined by input meshes.");
+
+  params.addParamNamesToGroup(
+      "use_auto_area_func auto_area_func_default_size auto_area_func_default_size_dist",
+      "Automatic triangle meshing area control");
 
   return params;
 }
@@ -101,9 +135,32 @@ XYDelaunayGenerator::XYDelaunayGenerator(const InputParameters & parameters)
     _refine_holes(getParam<std::vector<bool>>("refine_holes")),
     _desired_area(getParam<Real>("desired_area")),
     _desired_area_func(getParam<std::string>("desired_area_func")),
+    _use_auto_area_func(getParam<bool>("use_auto_area_func")),
+    _auto_area_func_default_size(getParam<Real>("auto_area_func_default_size")),
+    _auto_area_func_default_size_dist(getParam<Real>("auto_area_func_default_size_dist")),
+    _auto_area_function_num_points(getParam<unsigned int>("auto_area_function_num_points")),
+    _auto_area_function_power(getParam<Real>("auto_area_function_power")),
     _algorithm(parameters.get<MooseEnum>("algorithm")),
+    _tri_elem_type(parameters.get<MooseEnum>("tri_element_type")),
     _verbose_stitching(parameters.get<bool>("verbose_stitching"))
 {
+  if ((_desired_area > 0.0 && !_desired_area_func.empty()) ||
+      (_desired_area > 0.0 && _use_auto_area_func) ||
+      (!_desired_area_func.empty() && _use_auto_area_func))
+    paramError("desired_area_func",
+               "Only one of the three methods ('desired_area', 'desired_area_func', and "
+               "'_use_auto_area_func') to set element area limit should be used.");
+
+  if (!_use_auto_area_func)
+    if (isParamSetByUser("auto_area_func_default_size") ||
+        isParamSetByUser("auto_area_func_default_size_dist") ||
+        isParamSetByUser("auto_area_function_num_points") ||
+        isParamSetByUser("auto_area_function_power"))
+      paramError("use_auto_area_func",
+                 "If this parameter is set to false, the following parameters should not be set: "
+                 "'auto_area_func_default_size', 'auto_area_func_default_size_dist', "
+                 "'auto_area_function_num_points', 'auto_area_function_power'.");
+
   if (!_stitch_holes.empty() && _stitch_holes.size() != _hole_ptrs.size())
     paramError("stitch_holes", "Need one stitch_holes entry per hole, if specified.");
 
@@ -176,16 +233,13 @@ XYDelaunayGenerator::generate()
   poly2tri.minimum_angle() = 0; // Not yet supported
   poly2tri.smooth_after_generating() = _smooth_tri;
 
-  if (_desired_area_func != "")
-  {
-    // poly2tri will clone this so it's fine going out of scope
-    ParsedFunction<Real> area_func{_desired_area_func};
-    poly2tri.set_desired_area_function(&area_func);
-  }
-
   std::vector<TriangulatorInterface::MeshedHole> meshed_holes;
   std::vector<TriangulatorInterface::Hole *> triangulator_hole_ptrs(_hole_ptrs.size());
   std::vector<std::unique_ptr<MeshBase>> hole_ptrs(_hole_ptrs.size());
+  // This tells us the element orders of the hole meshes
+  // For the boundary meshes, it can be access through poly2tri.segment_midpoints.
+  std::vector<bool> holes_with_midpoints(_hole_ptrs.size());
+  bool stitch_second_order_holes(false);
 
   // Make sure pointers here aren't invalidated by a resize
   meshed_holes.reserve(_hole_ptrs.size());
@@ -193,14 +247,43 @@ XYDelaunayGenerator::generate()
   {
     hole_ptrs[hole_i] = std::move(*_hole_ptrs[hole_i]);
     meshed_holes.emplace_back(*hole_ptrs[hole_i]);
+    holes_with_midpoints[hole_i] = meshed_holes.back().n_midpoints();
+    stitch_second_order_holes =
+        (holes_with_midpoints.back() && _stitch_holes[hole_i]) || stitch_second_order_holes;
     if (hole_i < _refine_holes.size())
       meshed_holes.back().set_refine_boundary_allowed(_refine_holes[hole_i]);
 
     triangulator_hole_ptrs[hole_i] = &meshed_holes.back();
   }
+  if (stitch_second_order_holes && (_tri_elem_type == "TRI3" || _tri_elem_type == "DEFAULT"))
+    paramError(
+        "tri_element_type",
+        "Cannot use first order elements with stitched quadratic element holes. Please try "
+        "to specify a higher-order tri_element_type or reduce the order of the hole inputs.");
 
   if (!triangulator_hole_ptrs.empty())
     poly2tri.attach_hole_list(&triangulator_hole_ptrs);
+
+  if (_desired_area_func != "")
+  {
+    // poly2tri will clone this so it's fine going out of scope
+    ParsedFunction<Real> area_func{_desired_area_func};
+    poly2tri.set_desired_area_function(&area_func);
+  }
+  else if (_use_auto_area_func)
+  {
+    poly2tri.set_auto_area_function(
+        this->comm(),
+        _auto_area_function_num_points,
+        _auto_area_function_power,
+        _auto_area_func_default_size > 0.0 ? _auto_area_func_default_size : 0.0,
+        _auto_area_func_default_size_dist > 0.0 ? _auto_area_func_default_size_dist : -1.0);
+  }
+
+  if (_tri_elem_type == "TRI6")
+    poly2tri.elem_type() = libMesh::ElemType::TRI6;
+  else if (_tri_elem_type == "TRI7")
+    poly2tri.elem_type() = libMesh::ElemType::TRI7;
 
   poly2tri.triangulate();
 
@@ -235,7 +318,10 @@ XYDelaunayGenerator::generate()
   if (_smooth_tri || _output_subdomain_id)
     for (auto elem : mesh->element_ptr_range())
     {
-      mooseAssert(elem->type() == TRI3, "Unexpected non-Tri3 found in triangulation");
+      mooseAssert(elem->type() ==
+                      (_tri_elem_type == "TRI6" ? TRI6 : (_tri_elem_type == "TRI7" ? TRI7 : TRI3)),
+                  "Unexpected element type " << Utility::enum_to_string(elem->type())
+                                             << " found in triangulation");
 
       elem->subdomain_id() = _output_subdomain_id;
 
@@ -272,14 +358,33 @@ XYDelaunayGenerator::generate()
   // be sure it isn't also already in use on the hole's mesh and so we
   // won't be able to safely clear it afterwards.
   const boundary_id_type end_bcid = hole_ptrs.size() + 1;
-  boundary_id_type new_hole_bcid = end_bcid;
+
+  // For the hole meshes that need to be stitched, we would like to make sure the hole boundary ids
+  // and output boundary id are not conflicting with the existing boundary ids of the hole meshes to
+  // be stitched.
+  BoundaryID free_boundary_id = 0;
+  if (_stitch_holes.size())
+  {
+    for (auto hole_i : index_range(hole_ptrs))
+    {
+      if (_stitch_holes[hole_i])
+      {
+        free_boundary_id =
+            std::max(free_boundary_id, MooseMeshUtils::getNextFreeBoundaryID(*hole_ptrs[hole_i]));
+        hole_ptrs[hole_i]->comm().max(free_boundary_id);
+      }
+    }
+    for (auto h : index_range(hole_ptrs))
+      libMesh::MeshTools::Modification::change_boundary_id(*mesh, h + 1, h + 1 + free_boundary_id);
+  }
+  boundary_id_type new_hole_bcid = end_bcid + free_boundary_id;
 
   // We might be overriding the default bcid numbers.  We have to be
   // careful about how we renumber, though.  We pick unused temporary
   // numbers because e.g. "0->2, 2->0" is impossible to do
   // sequentially, but "0->N, 2->N+2, N->2, N+2->0" works.
-  if (isParamValid("output_boundary"))
-    libMesh::MeshTools::Modification::change_boundary_id(*mesh, 0, end_bcid);
+  libMesh::MeshTools::Modification::change_boundary_id(
+      *mesh, 0, (isParamValid("output_boundary") ? end_bcid : 0) + free_boundary_id);
 
   if (isParamValid("hole_boundaries"))
   {
@@ -290,12 +395,13 @@ XYDelaunayGenerator::generate()
       paramError("hole_boundary_ids", "Need one hole_boundary_ids entry per hole, if specified.");
 
     for (auto h : index_range(hole_ptrs))
-      libMesh::MeshTools::Modification::change_boundary_id(*mesh, h + 1, h + 1 + end_bcid);
+      libMesh::MeshTools::Modification::change_boundary_id(
+          *mesh, h + 1 + free_boundary_id, h + 1 + free_boundary_id + end_bcid);
 
     for (auto h : index_range(hole_ptrs))
     {
       libMesh::MeshTools::Modification::change_boundary_id(
-          *mesh, h + 1 + end_bcid, hole_boundary_ids[h]);
+          *mesh, h + 1 + free_boundary_id + end_bcid, hole_boundary_ids[h]);
       mesh->get_boundary_info().sideset_name(hole_boundary_ids[h]) = hole_boundaries[h];
       new_hole_bcid = std::max(new_hole_bcid, boundary_id_type(hole_boundary_ids[h] + 1));
     }
@@ -307,7 +413,8 @@ XYDelaunayGenerator::generate()
     const std::vector<BoundaryID> output_boundary_id =
         MooseMeshUtils::getBoundaryIDs(*mesh, {output_boundary}, true);
 
-    libMesh::MeshTools::Modification::change_boundary_id(*mesh, end_bcid, output_boundary_id[0]);
+    libMesh::MeshTools::Modification::change_boundary_id(
+        *mesh, end_bcid + free_boundary_id, output_boundary_id[0]);
     mesh->get_boundary_info().sideset_name(output_boundary_id[0]) = output_boundary;
 
     new_hole_bcid = std::max(new_hole_bcid, boundary_id_type(output_boundary_id[0] + 1));
@@ -342,6 +449,14 @@ XYDelaunayGenerator::generate()
     if (hole_i < _stitch_holes.size() && _stitch_holes[hole_i])
     {
       UnstructuredMesh & hole_mesh = dynamic_cast<UnstructuredMesh &>(*hole_ptrs[hole_i]);
+      // increase hole mesh order if the triangulation mesh has higher order
+      if (!holes_with_midpoints[hole_i])
+      {
+        if (_tri_elem_type == "TRI6")
+          hole_mesh.all_second_order();
+        else if (_tri_elem_type == "TRI7")
+          hole_mesh.all_complete_order();
+      }
       auto & hole_boundary_info = hole_mesh.get_boundary_info();
 
       // Our algorithm here requires a serialized Mesh.  To avoid

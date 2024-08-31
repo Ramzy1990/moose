@@ -29,6 +29,7 @@
 
 #include "libmesh/dof_map.h"
 #include "libmesh/string_to_enum.h"
+#include "libmesh/fe_interface.h"
 
 /// Free function used for a libMesh callback
 void
@@ -353,10 +354,7 @@ SystemBase::reinitElem(const Elem * /*elem*/, THREAD_ID tid)
 }
 
 void
-SystemBase::reinitElemFace(const Elem * /*elem*/,
-                           unsigned int /*side*/,
-                           BoundaryID /*bnd_id*/,
-                           THREAD_ID tid)
+SystemBase::reinitElemFace(const Elem * /*elem*/, unsigned int /*side*/, THREAD_ID tid)
 {
   const std::vector<MooseVariableFieldBase *> & vars = _vars[tid].fieldVariables();
   for (const auto & var : vars)
@@ -364,10 +362,7 @@ SystemBase::reinitElemFace(const Elem * /*elem*/,
 }
 
 void
-SystemBase::reinitNeighborFace(const Elem * /*elem*/,
-                               unsigned int /*side*/,
-                               BoundaryID /*bnd_id*/,
-                               THREAD_ID tid)
+SystemBase::reinitNeighborFace(const Elem * /*elem*/, unsigned int /*side*/, THREAD_ID tid)
 {
   const std::vector<MooseVariableFieldBase *> & vars = _vars[tid].fieldVariables();
   for (const auto & var : vars)
@@ -730,15 +725,16 @@ SystemBase::addVariable(const std::string & var_type,
     blocks.insert(blk_id);
   }
 
-  auto fe_type = FEType(Utility::string_to_enum<Order>(parameters.get<MooseEnum>("order")),
-                        Utility::string_to_enum<FEFamily>(parameters.get<MooseEnum>("family")));
+  const auto fe_type =
+      FEType(Utility::string_to_enum<Order>(parameters.get<MooseEnum>("order")),
+             Utility::string_to_enum<FEFamily>(parameters.get<MooseEnum>("family")));
+  const auto fe_field_type = FEInterface::field_type(fe_type);
 
   unsigned int var_num;
 
   if (var_type == "ArrayMooseVariable")
   {
-    if (fe_type.family == NEDELEC_ONE || fe_type.family == LAGRANGE_VEC ||
-        fe_type.family == MONOMIAL_VEC || fe_type.family == RAVIART_THOMAS)
+    if (fe_field_type == TYPE_VECTOR)
       mooseError("Vector family type cannot be used in an array variable");
 
     // Build up the variable names
@@ -1215,10 +1211,9 @@ SystemBase::copyVars(ExodusII_IO & io)
 }
 
 void
-SystemBase::update(const bool update_libmesh_system)
+SystemBase::update()
 {
-  if (update_libmesh_system)
-    system().update();
+  system().update();
 }
 
 void
@@ -1235,6 +1230,15 @@ SystemBase::copySolutionsBackwards()
 {
   system().update();
 
+  copyOldSolutions();
+}
+
+/**
+ * Shifts the solutions backwards in time
+ */
+void
+SystemBase::copyOldSolutions()
+{
   // Copying the solutions backward so the current solution will become the old, and the old will
   // become older. The same applies to the nonlinear iterates.
   for (const auto iteration_index : index_range(_solution_states))
@@ -1245,26 +1249,6 @@ SystemBase::copySolutionsBackwards()
         solutionState(i, Moose::SolutionIterationType(iteration_index)) =
             solutionState(i - 1, Moose::SolutionIterationType(iteration_index));
   }
-
-  if (solutionUDotOld())
-    *solutionUDotOld() = *solutionUDot();
-  if (solutionUDotDotOld())
-    *solutionUDotDotOld() = *solutionUDotDot();
-  if (solutionPreviousNewton())
-    *solutionPreviousNewton() = *currentSolution();
-}
-
-/**
- * Shifts the solutions backwards in time
- */
-void
-SystemBase::copyOldSolutions()
-{
-  const auto states =
-      _solution_states[static_cast<unsigned short>(Moose::SolutionIterationType::Time)].size();
-  if (states > 1)
-    for (unsigned int i = states - 1; i > 0; --i)
-      solutionState(i) = solutionState(i - 1);
 
   if (solutionUDotOld())
     *solutionUDotOld() = *solutionUDot();

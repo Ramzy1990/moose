@@ -16,6 +16,8 @@
 #include "SlepcSupport.h"
 #include "UserObject.h"
 
+#include "libmesh/petsc_solver_exception.h"
+
 registerMooseObject("MooseApp", Eigenvalue);
 
 InputParameters
@@ -155,7 +157,7 @@ Eigenvalue::init()
   {
     const auto & normpp = getParam<PostprocessorName>("normalization");
     const auto & exec = _eigen_problem.getUserObject<UserObject>(normpp).getExecuteOnEnum();
-    if (!exec.contains(EXEC_LINEAR))
+    if (!exec.isValueSet(EXEC_LINEAR))
       mooseError("Normalization postprocessor ", normpp, " requires execute_on = 'linear'");
   }
 
@@ -170,7 +172,7 @@ Eigenvalue::init()
   // a random vector as the initial guess. The motivation to offer this option is
   // that we have to initialize ONLY eigen variables in multiphysics simulation.
   // auto_initialization can be overriden by initial conditions.
-  if (getParam<bool>("auto_initialization"))
+  if (getParam<bool>("auto_initialization") && !_app.isRestarting())
     _eigen_problem.initEigenvector(1.0);
 
   // Some setup
@@ -193,10 +195,16 @@ Eigenvalue::prepareSolverOptions()
   {
     // Master app has the default data base
     if (!_app.isUltimateMaster())
-      PetscOptionsPush(_eigen_problem.petscOptionsDatabase());
+    {
+      auto ierr = PetscOptionsPush(_eigen_problem.petscOptionsDatabase());
+      LIBMESH_CHKERR(ierr);
+    }
     Moose::SlepcSupport::slepcSetOptions(_eigen_problem, _pars);
     if (!_app.isUltimateMaster())
-      PetscOptionsPop();
+    {
+      auto ierr = PetscOptionsPop();
+      LIBMESH_CHKERR(ierr);
+    }
     _eigen_problem.petscOptionsInserted() = true;
   }
 #endif

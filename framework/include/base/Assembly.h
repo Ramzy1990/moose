@@ -23,8 +23,6 @@
 #include "libmesh/numeric_vector.h"
 #include "libmesh/elem_side_builder.h"
 
-#include "DualRealOps.h"
-
 #include <unordered_map>
 
 // libMesh forward declarations
@@ -358,7 +356,7 @@ public:
   }
 
   template <bool is_ad>
-  const MooseArray<MooseADWrapper<Point, is_ad>> & genericQPoints() const;
+  const MooseArray<Moose::GenericType<Point, is_ad>> & genericQPoints() const;
 
   /**
    * Return the current element
@@ -1587,7 +1585,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiSecond & feSecondPhi(FEType type) const
   {
-    _need_second_derivative[type] = true;
+    _need_second_derivative.insert(type);
     buildFE(type);
     return _fe_shape_data[type]->_second_phi;
   }
@@ -1628,7 +1626,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiSecond & feSecondPhiFace(FEType type) const
   {
-    _need_second_derivative[type] = true;
+    _need_second_derivative.insert(type);
     buildFaceFE(type);
     return _fe_shape_data_face[type]->_second_phi;
   }
@@ -1650,7 +1648,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiSecond & feSecondPhiNeighbor(FEType type) const
   {
-    _need_second_derivative_neighbor[type] = true;
+    _need_second_derivative_neighbor.insert(type);
     buildNeighborFE(type);
     return _fe_shape_data_neighbor[type]->_second_phi;
   }
@@ -1674,7 +1672,7 @@ public:
   const typename OutputTools<OutputType>::VariablePhiSecond &
   feSecondPhiFaceNeighbor(FEType type) const
   {
-    _need_second_derivative_neighbor[type] = true;
+    _need_second_derivative_neighbor.insert(type);
     buildFaceNeighborFE(type);
     return _fe_shape_data_face_neighbor[type]->_second_phi;
   }
@@ -1682,7 +1680,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiCurl & feCurlPhi(FEType type) const
   {
-    _need_curl[type] = true;
+    _need_curl.insert(type);
     buildFE(type);
     return _fe_shape_data[type]->_curl_phi;
   }
@@ -1690,7 +1688,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiCurl & feCurlPhiFace(FEType type) const
   {
-    _need_curl[type] = true;
+    _need_curl.insert(type);
     buildFaceFE(type);
     return _fe_shape_data_face[type]->_curl_phi;
   }
@@ -1698,7 +1696,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiCurl & feCurlPhiNeighbor(FEType type) const
   {
-    _need_curl[type] = true;
+    _need_curl.insert(type);
     buildNeighborFE(type);
     return _fe_shape_data_neighbor[type]->_curl_phi;
   }
@@ -1706,7 +1704,7 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiCurl & feCurlPhiFaceNeighbor(FEType type) const
   {
-    _need_curl[type] = true;
+    _need_curl.insert(type);
     buildFaceNeighborFE(type);
     return _fe_shape_data_face_neighbor[type]->_curl_phi;
   }
@@ -1714,7 +1712,6 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiDivergence & feDivPhi(FEType type) const
   {
-    _need_div[type] = true;
     buildFE(type);
     return _fe_shape_data[type]->_div_phi;
   }
@@ -1722,7 +1719,6 @@ public:
   template <typename OutputType>
   const typename OutputTools<OutputType>::VariablePhiDivergence & feDivPhiFace(FEType type) const
   {
-    _need_div[type] = true;
     buildFaceFE(type);
     return _fe_shape_data_face[type]->_div_phi;
   }
@@ -1731,7 +1727,6 @@ public:
   const typename OutputTools<OutputType>::VariablePhiDivergence &
   feDivPhiNeighbor(FEType type) const
   {
-    _need_div[type] = true;
     buildNeighborFE(type);
     return _fe_shape_data_neighbor[type]->_div_phi;
   }
@@ -1740,7 +1735,6 @@ public:
   const typename OutputTools<OutputType>::VariablePhiDivergence &
   feDivPhiFaceNeighbor(FEType type) const
   {
-    _need_div[type] = true;
     buildFaceNeighborFE(type);
     return _fe_shape_data_face_neighbor[type]->_div_phi;
   }
@@ -2376,7 +2370,7 @@ private:
   /// The current coordinate transformation coefficients
   MooseArray<Real> _coord;
   /// The AD version of the current coordinate transformation coefficients
-  MooseArray<DualReal> _ad_coord;
+  MooseArray<ADReal> _ad_coord;
 
   /// Data structure for tracking/grouping a set of quadrature rules for a
   /// particular dimensionality of mesh element.
@@ -2777,30 +2771,30 @@ protected:
   std::vector<Point> _temp_reference_points;
 
   /// AD quantities
-  std::vector<VectorValue<DualReal>> _ad_dxyzdxi_map;
-  std::vector<VectorValue<DualReal>> _ad_dxyzdeta_map;
-  std::vector<VectorValue<DualReal>> _ad_dxyzdzeta_map;
-  std::vector<VectorValue<DualReal>> _ad_d2xyzdxi2_map;
-  std::vector<VectorValue<DualReal>> _ad_d2xyzdxideta_map;
-  std::vector<VectorValue<DualReal>> _ad_d2xyzdeta2_map;
-  std::vector<DualReal> _ad_jac;
-  MooseArray<DualReal> _ad_JxW;
-  MooseArray<VectorValue<DualReal>> _ad_q_points;
-  std::vector<DualReal> _ad_dxidx_map;
-  std::vector<DualReal> _ad_dxidy_map;
-  std::vector<DualReal> _ad_dxidz_map;
-  std::vector<DualReal> _ad_detadx_map;
-  std::vector<DualReal> _ad_detady_map;
-  std::vector<DualReal> _ad_detadz_map;
-  std::vector<DualReal> _ad_dzetadx_map;
-  std::vector<DualReal> _ad_dzetady_map;
-  std::vector<DualReal> _ad_dzetadz_map;
+  std::vector<VectorValue<ADReal>> _ad_dxyzdxi_map;
+  std::vector<VectorValue<ADReal>> _ad_dxyzdeta_map;
+  std::vector<VectorValue<ADReal>> _ad_dxyzdzeta_map;
+  std::vector<VectorValue<ADReal>> _ad_d2xyzdxi2_map;
+  std::vector<VectorValue<ADReal>> _ad_d2xyzdxideta_map;
+  std::vector<VectorValue<ADReal>> _ad_d2xyzdeta2_map;
+  std::vector<ADReal> _ad_jac;
+  MooseArray<ADReal> _ad_JxW;
+  MooseArray<VectorValue<ADReal>> _ad_q_points;
+  std::vector<ADReal> _ad_dxidx_map;
+  std::vector<ADReal> _ad_dxidy_map;
+  std::vector<ADReal> _ad_dxidz_map;
+  std::vector<ADReal> _ad_detadx_map;
+  std::vector<ADReal> _ad_detady_map;
+  std::vector<ADReal> _ad_detadz_map;
+  std::vector<ADReal> _ad_dzetadx_map;
+  std::vector<ADReal> _ad_dzetady_map;
+  std::vector<ADReal> _ad_dzetadz_map;
 
-  MooseArray<DualReal> _ad_JxW_face;
-  MooseArray<VectorValue<DualReal>> _ad_normals;
-  MooseArray<VectorValue<DualReal>> _ad_q_points_face;
+  MooseArray<ADReal> _ad_JxW_face;
+  MooseArray<VectorValue<ADReal>> _ad_normals;
+  MooseArray<VectorValue<ADReal>> _ad_q_points_face;
   MooseArray<Real> _curvatures;
-  MooseArray<DualReal> _ad_curvatures;
+  MooseArray<ADReal> _ad_curvatures;
 
   /**
    * Container of displacement numbers and directions
@@ -2815,10 +2809,13 @@ protected:
   /// adCoordTransformation()
   mutable bool _calculate_ad_coord;
 
-  mutable std::map<FEType, bool> _need_second_derivative;
-  mutable std::map<FEType, bool> _need_second_derivative_neighbor;
-  mutable std::map<FEType, bool> _need_curl;
-  mutable std::map<FEType, bool> _need_div;
+  mutable std::set<FEType> _need_second_derivative;
+  mutable std::set<FEType> _need_second_derivative_neighbor;
+  mutable std::set<FEType> _need_curl;
+  mutable std::set<FEType> _need_div;
+  mutable std::set<FEType> _need_face_div;
+  mutable std::set<FEType> _need_neighbor_div;
+  mutable std::set<FEType> _need_face_neighbor_div;
 
   /// The map from global index to variable scaling factor
   const NumericVector<Real> * _scaling_vector = nullptr;

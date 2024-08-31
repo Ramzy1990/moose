@@ -105,6 +105,7 @@ failed-unittest
 compile_commands.json
 build
 framework/contrib/libtorch
+test.cache
 
 # Allow certain files in gold directories
 !**/gold/*.e
@@ -183,9 +184,9 @@ framework/contrib/asio/
 *.rd-*
 
 # Checkpoint Files
-*.cpa
+*.cpa.gz
 *.cpr
-*.cpa-*
+*.cpa.gz-*
 *.cpr-*
 
 # Ignore petsc arch

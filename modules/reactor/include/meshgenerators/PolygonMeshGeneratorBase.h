@@ -506,10 +506,28 @@ protected:
   /**
    * Makes radial correction to preserve ring area.
    * @param azimuthal_list azimuthal angles (in degrees) of all the nodes on the circle
+   * @param full_circle whether the circle is a full or partial circle
+   * @param order order of mesh elements
+   * @param is_first_value_vertex whether the first value of the azimuthal_list belongs to a vertex
+   * instead of a midpoint
    * @return a correction factor to preserve the area of the circle after polygonization during
    * meshing
    */
-  Real radiusCorrectionFactor(const std::vector<Real> & azimuthal_list) const;
+  Real radiusCorrectionFactor(const std::vector<Real> & azimuthal_list,
+                              const bool full_circle = true,
+                              const unsigned int order = 1,
+                              const bool is_first_value_vertex = true) const;
+
+  /**
+   * Based on a pair of azimuthal angles, calculates the volume of a TRI6 element with one vertex at
+   * the origin, the other two vertices on the unit circle. Here, the second vertex is on the
+   * x-axis, the third vertex has an azimuthal angle the summation of the two input angles, and the
+   * mid-edge node between the second and third vertices has an azimuthal angle of the first of the
+   * two input angles.
+   * @param azi_pair a pair of the input azimuthal angles
+   * @return the volume of the TRI6 element
+   */
+  Real dummyTRI6VolCalculator(const std::pair<Real, Real> & azi_pair) const;
 
   /**
    * Creates peripheral area mesh for the patterned hexagon mesh. Note that the function create the
@@ -527,6 +545,7 @@ protected:
    * created
    * @param create_outward_interface_boundaries whether outward interface boundary sidesets are
    * created
+   * @param quad_elem_type type of quad element to be created
    * @return a mesh with the peripheral region added to a hexagon input mesh
    */
   std::unique_ptr<ReplicatedMesh>
@@ -535,8 +554,18 @@ protected:
                         const std::vector<std::pair<Real, Real>> & position_inner,
                         const std::vector<std::pair<Real, Real>> & d_position_outer,
                         const subdomain_id_type id_shift,
+                        const QUAD_ELEM_TYPE quad_elem_type,
                         const bool create_inward_interface_boundaries = false,
                         const bool create_outward_interface_boundaries = true);
+
+  /**
+   * Adjusts the mid-edge node locations in boundary regions when using quadratic elements with
+   * uniform boundary node spacing enabled.
+   * @param out_mesh mesh to be adjusted.
+   * @param boundary_quad_elem_type boundary quad element type.
+   */
+  void adjustPeripheralQuadraticElements(MeshBase & out_mesh,
+                                         const QUAD_ELEM_TYPE boundary_quad_elem_type) const;
 
   /**
    * Calculates the point coordinates of within a parallelogram region using linear interpolation.
@@ -792,4 +821,16 @@ protected:
   singleBdryLayerParams modifiedSingleBdryLayerParamsCreator(
       const singleBdryLayerParams & original_single_bdry_layer_params,
       const unsigned int order) const;
+
+  /**
+   * Generate a string that contains the detailed metadata information for inconsistent input mesh
+   * metadata error messages
+   * @param input_names list of input mesh generator names
+   * @param metadata_vals list of input mesh metadata values
+   * @param metadata_name name of the input mesh metadata
+   * @return a string that contains the detailed metadata information
+   */
+  std::string pitchMetaDataErrorGenerator(const std::vector<MeshGeneratorName> & input_names,
+                                          const std::vector<Real> & metadata_vals,
+                                          const std::string & metadata_name) const;
 };

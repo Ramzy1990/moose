@@ -84,6 +84,9 @@ public:
   virtual unsigned int linearSysNum(const LinearSystemName & sys_name) const override;
   virtual unsigned int solverSysNum(const SolverSystemName & sys_name) const override;
 
+  /// Get the time integrators from the problem
+  void addTimeIntegrator();
+
   /**
    * Allocate vectors and save old solutions into them.
    */
@@ -211,10 +214,7 @@ public:
   virtual void reinitElemPhys(const Elem * elem,
                               const std::vector<Point> & phys_points_in_elem,
                               const THREAD_ID tid) override;
-  virtual void reinitElemFace(const Elem * elem,
-                              unsigned int side,
-                              BoundaryID bnd_id,
-                              const THREAD_ID tid) override;
+  virtual void reinitElemFace(const Elem * elem, unsigned int side, const THREAD_ID tid) override;
   virtual void reinitNode(const Node * node, const THREAD_ID tid) override;
   virtual void reinitNodeFace(const Node * node, BoundaryID bnd_id, const THREAD_ID tid) override;
   virtual void reinitNodes(const std::vector<dof_id_type> & nodes, const THREAD_ID tid) override;
@@ -305,7 +305,7 @@ public:
       GeometricSearchData::GeometricSearchType type = GeometricSearchData::ALL) override;
   virtual GeometricSearchData & geomSearchData() override { return _geometric_search_data; }
 
-  virtual bool computingInitialResidual(const unsigned int nl_sys_num) const override;
+  virtual bool computingPreSMOResidual(const unsigned int nl_sys_num) const override;
 
   virtual void onTimestepBegin() override;
   virtual void onTimestepEnd() override;

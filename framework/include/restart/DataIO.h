@@ -10,7 +10,7 @@
 #pragma once
 
 // MOOSE includes
-#include "DualReal.h"
+#include "ADReal.h"
 #include "MooseTypes.h"
 #include "HashMap.h"
 #include "MooseError.h"
@@ -381,6 +381,8 @@ void dataStore(std::ostream & stream, std::string & v, void * context);
 template <>
 void dataStore(std::ostream & stream, VariableName & v, void * context);
 template <>
+void dataStore(std::ostream & stream, UserObjectName & v, void * context);
+template <>
 void dataStore(std::ostream & stream, bool & v, void * context);
 // Vectors of bools are special
 // https://en.wikipedia.org/w/index.php?title=Sequence_container_(C%2B%2B)&oldid=767869909#Specialization_for_bool
@@ -397,7 +399,7 @@ void dataStore(std::ostream & stream, Node *& n, void * context);
 template <>
 void dataStore(std::ostream & stream, std::stringstream & s, void * context);
 template <>
-void dataStore(std::ostream & stream, DualReal & dn, void * context);
+void dataStore(std::ostream & stream, ADReal & dn, void * context);
 template <>
 void dataStore(std::ostream & stream, RealEigenVector & v, void * context);
 template <>
@@ -421,7 +423,7 @@ void dataStore(std::ostream & stream,
 
 template <std::size_t N>
 inline void
-dataStore(std::ostream & stream, std::array<DualReal, N> & dn, void * context)
+dataStore(std::ostream & stream, std::array<ADReal, N> & dn, void * context)
 {
   for (std::size_t i = 0; i < N; ++i)
     dataStore(stream, dn[i], context);
@@ -429,7 +431,7 @@ dataStore(std::ostream & stream, std::array<DualReal, N> & dn, void * context)
 
 template <std::size_t N>
 inline void
-dataStore(std::ostream & stream, DualReal (&dn)[N], void * context)
+dataStore(std::ostream & stream, ADReal (&dn)[N], void * context)
 {
   for (std::size_t i = 0; i < N; ++i)
     dataStore(stream, dn[i], context);
@@ -706,6 +708,8 @@ void dataLoad(std::istream & stream, std::string & v, void * /*context*/);
 template <>
 void dataLoad(std::istream & stream, VariableName & v, void * /*context*/);
 template <>
+void dataLoad(std::istream & stream, UserObjectName & v, void * /*context*/);
+template <>
 void dataLoad(std::istream & stream, bool & v, void * /*context*/);
 // Vectors of bools are special
 // https://en.wikipedia.org/w/index.php?title=Sequence_container_(C%2B%2B)&oldid=767869909#Specialization_for_bool
@@ -722,7 +726,7 @@ void dataLoad(std::istream & stream, Node *& e, void * context);
 template <>
 void dataLoad(std::istream & stream, std::stringstream & s, void * context);
 template <>
-void dataLoad(std::istream & stream, DualReal & dn, void * context);
+void dataLoad(std::istream & stream, ADReal & dn, void * context);
 template <>
 void dataLoad(std::istream & stream, RealEigenVector & v, void * context);
 template <>
@@ -753,7 +757,7 @@ void dataLoad(std::istream & stream,
 
 template <std::size_t N>
 inline void
-dataLoad(std::istream & stream, std::array<DualReal, N> & dn, void * context)
+dataLoad(std::istream & stream, std::array<ADReal, N> & dn, void * context)
 {
   for (std::size_t i = 0; i < N; ++i)
     dataLoad(stream, dn[i], context);
@@ -761,7 +765,7 @@ dataLoad(std::istream & stream, std::array<DualReal, N> & dn, void * context)
 
 template <std::size_t N>
 inline void
-dataLoad(std::istream & stream, DualReal (&dn)[N], void * context)
+dataLoad(std::istream & stream, ADReal (&dn)[N], void * context)
 {
   for (std::size_t i = 0; i < N; ++i)
     dataLoad(stream, dn[i], context);

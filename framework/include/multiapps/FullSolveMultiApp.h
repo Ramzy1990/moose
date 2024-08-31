@@ -36,7 +36,6 @@ public:
     // executioner postExecute has been called and we do not need to call it again
   }
 
-  virtual void backup() override;
   virtual void restore(bool force = true) override;
 
 protected:

@@ -15,12 +15,12 @@
 #include "TimeIntegrator.h"
 #include "MooseVariableFE.h"
 #include "MooseTypes.h"
-#include "DualRealOps.h"
 
 #include "libmesh/quadrature.h"
 #include "libmesh/fe_base.h"
 #include "libmesh/system.h"
 #include "libmesh/type_n_tensor.h"
+#include "libmesh/fe_interface.h"
 
 template <typename OutputType>
 MooseVariableData<OutputType>::MooseVariableData(const MooseVariableField<OutputType> & var,
@@ -73,13 +73,7 @@ MooseVariableData<OutputType>::MooseVariableData(const MooseVariableField<Output
     _displaced(dynamic_cast<const DisplacedSystem *>(&_sys) ? true : false),
     _current_side(_assembly.side())
 {
-  // FIXME: continuity of FE type seems equivalent with the definition of nodal variables.
-  //        Continuity does not depend on the FE dimension, so we just pass in a valid dimension.
-  if (_fe_type.family == NEDELEC_ONE || _fe_type.family == LAGRANGE_VEC ||
-      _fe_type.family == MONOMIAL_VEC || _fe_type.family == RAVIART_THOMAS)
-    _continuity = _assembly.getVectorFE(_fe_type, _sys.mesh().dimension())->get_continuity();
-  else
-    _continuity = _assembly.getFE(_fe_type, _sys.mesh().dimension())->get_continuity();
+  _continuity = FEInterface::get_continuity(_fe_type);
 
   _is_nodal = (_continuity == C_ZERO || _continuity == C_ONE);
 
@@ -1812,14 +1806,14 @@ MooseVariableData<RealEigenVector>::fetchADDoFValues()
 
 template <>
 void
-MooseVariableData<Real>::assignADNodalValue(const DualReal & value, const unsigned int &)
+MooseVariableData<Real>::assignADNodalValue(const ADReal & value, const unsigned int &)
 {
   _ad_nodal_value = value;
 }
 
 template <>
 void
-MooseVariableData<RealVectorValue>::assignADNodalValue(const DualReal & value,
+MooseVariableData<RealVectorValue>::assignADNodalValue(const ADReal & value,
                                                        const unsigned int & component)
 {
   _ad_nodal_value(component) = value;

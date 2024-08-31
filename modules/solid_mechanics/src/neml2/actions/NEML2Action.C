@@ -27,8 +27,8 @@ NEML2Action::validParams()
 {
   InputParameters params = Action::validParams();
   NEML2Utils::addClassDescription(params, "Parse and set up NEML2 objects");
-  params.addRequiredParam<FileName>("input",
-                                    "Path to the NEML2 input file containing the NEML2 model(s)");
+  params.addRequiredParam<DataFileName>(
+      "input", "Path to the NEML2 input file containing the NEML2 model(s)");
   params.addRequiredParam<std::string>(
       "model",
       "Name of the NEML2 model, i.e., the string inside the brackets [] in the NEML2 input file "
@@ -54,6 +54,11 @@ NEML2Action::validParams()
       "Device on which to evaluate the NEML2 model. The string supplied must follow the following "
       "schema: (cpu|cuda)[:<device-index>] where cpu or cuda specifies the device type, and "
       ":<device-index> optionally specifies a device index.");
+  params.addParam<bool>("enable_AD",
+                        false,
+                        "Set to true to enable PyTorch AD. When set to false (default), no "
+                        "function graph or gradient is computed, which speeds up model "
+                        "evaluation.");
   return params;
 }
 
@@ -73,11 +78,12 @@ NEML2Action::act()
 
 NEML2Action::NEML2Action(const InputParameters & parameters)
   : Action(parameters),
-    _fname(getParam<FileName>("input")),
+    _fname(getDataFileName("input")),
     _mname(getParam<std::string>("model")),
     _verbose(getParam<bool>("verbose")),
     _mode(getParam<MooseEnum>("mode")),
-    _device(getParam<std::string>("device"))
+    _device(getParam<std::string>("device")),
+    _enable_AD(getParam<bool>("enable_AD"))
 {
 }
 
@@ -87,13 +93,11 @@ NEML2Action::act()
   const auto mode_name = std::string(_mode);
   if (_current_task == "parse_neml2")
   {
-    neml2::HITParser parser;
-    const auto all_options = parser.parse(_fname);
-    neml2::Factory::load(all_options);
+    neml2::load_input(std::string(_fname));
 
     if (_verbose)
     {
-      auto & model = neml2::Factory::get_object<neml2::Model>("Models", _mname);
+      auto & model = neml2::get_model(_mname, _enable_AD);
 
       _console << COLOR_YELLOW << "*** BEGIN NEML2 INFO ***" << std::endl;
       _console << model << std::endl;

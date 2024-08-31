@@ -29,6 +29,7 @@
 #include "libmesh/numeric_vector.h"
 #include "libmesh/default_coupling.h"
 #include "libmesh/string_to_enum.h"
+#include "libmesh/fe_interface.h"
 
 // AuxiliarySystem ////////
 
@@ -212,8 +213,7 @@ AuxiliarySystem::addVariable(const std::string & var_type,
 
   for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
   {
-    if (fe_type.family == LAGRANGE_VEC || fe_type.family == NEDELEC_ONE ||
-        fe_type.family == MONOMIAL_VEC || fe_type.family == RAVIART_THOMAS)
+    if (FEInterface::field_type(fe_type) == TYPE_VECTOR)
     {
       auto * var = _vars[tid].getActualFieldVariable<RealVectorValue>(name);
       if (var)
@@ -347,10 +347,7 @@ AuxiliarySystem::reinitElem(const Elem * /*elem*/, THREAD_ID tid)
 }
 
 void
-AuxiliarySystem::reinitElemFace(const Elem * /*elem*/,
-                                unsigned int /*side*/,
-                                BoundaryID /*bnd_id*/,
-                                THREAD_ID tid)
+AuxiliarySystem::reinitElemFace(const Elem * /*elem*/, unsigned int /*side*/, THREAD_ID tid)
 {
   for (auto * var : _nodal_vars[tid])
     var->computeElemValuesFace();
@@ -894,6 +891,38 @@ AuxiliarySystem::computeNodalVarsHelper(const MooseObjectWarehouse<AuxKernelType
       _sys.update();
     }
     PARALLEL_CATCH;
+  }
+}
+
+void
+AuxiliarySystem::variableWiseRelativeSolutionDifferenceNorm(
+    std::vector<Number> & rel_diff_norms) const
+{
+  rel_diff_norms.resize(nVariables(), 0);
+  // Get dof map from system
+  const auto & dof_map = _sys.get_dof_map();
+
+  for (const auto n : make_range(nVariables()))
+  {
+    // Get local indices from dof map for each variable
+    std::vector<dof_id_type> local_indices_n;
+    dof_map.local_variable_indices(local_indices_n, _mesh, n);
+    Number diff_norm_n = 0;
+    Number norm_n = 0;
+    // Get values from system, update norm
+    for (const auto local_index : local_indices_n)
+    {
+      const Number & value = solution()(local_index);
+      const Number & value_old = solutionOld()(local_index);
+      diff_norm_n += Utility::pow<2, Number>(value - value_old);
+      norm_n += Utility::pow<2, Number>(value);
+    }
+    // Aggregate norm over proceccors
+    _communicator.sum(diff_norm_n);
+    _communicator.sum(norm_n);
+    diff_norm_n = sqrt(diff_norm_n);
+    norm_n = sqrt(norm_n);
+    rel_diff_norms[n] = diff_norm_n / norm_n;
   }
 }
 

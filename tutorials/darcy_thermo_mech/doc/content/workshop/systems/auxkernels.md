@@ -53,7 +53,7 @@ nodal auxiliary variables
 
 ### Nodal Auxiliary Variables
 
-Element auxiliary variables are computed at each node and are stored as linear Lagrange variables
+Nodal auxiliary variables are computed at each node and are stored as linear Lagrange variables
 
 AuxKernel objects computing nodal values can +only+ couple to nodal nonlinear variables and
 other nodal auxiliary variables
@@ -102,6 +102,7 @@ Pointer to the current node that is being operated on (nodal only)
 ## VectorAuxKernel Objects
 
 Directly compute a vector AuxVariable values by:
+
 - inheriting from the `VectorAuxKernel` class
 - overriding `computeValue()`, with the difference being the return value of a `RealVectorValue` instead of Real.
 

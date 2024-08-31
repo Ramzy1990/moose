@@ -172,7 +172,7 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem,
   if (userobjs.size() == 0 && _domain_objs.size() == 0)
     return;
 
-  _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
+  _fe_problem.reinitElemFace(elem, side, _tid);
 
   // Reinitialize lower-dimensional variables for use in boundary Materials
   if (lower_d_elem)
@@ -249,6 +249,16 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
       uo->preExecuteOnInternalSide();
       uo->executeOnInternalSide();
     }
+}
+
+void
+ComputeUserObjectsThread::onExternalSide(const Elem * elem, unsigned int side)
+{
+  // We are not initializing any materials here because objects that perform calculations should
+  // run onBoundary. onExternalSide should be used for mesh updates (e.g. adding/removing
+  // boundaries). Note that _current_elem / _current_side are not getting updated either.
+  for (auto & uo : _domain_objs)
+    uo->executeOnExternalSide(elem, side);
 }
 
 void

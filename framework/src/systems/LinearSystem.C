@@ -51,6 +51,7 @@
 #include "libmesh/petsc_matrix.h"
 #include "libmesh/default_coupling.h"
 #include "libmesh/diagonal_matrix.h"
+#include "libmesh/petsc_solver_exception.h"
 
 #include <ios>
 
@@ -114,7 +115,8 @@ LinearSystem::initialSetup()
 
 void
 LinearSystem::computeLinearSystemTags(const std::set<TagID> & vector_tags,
-                                      const std::set<TagID> & matrix_tags)
+                                      const std::set<TagID> & matrix_tags,
+                                      const bool compute_gradients)
 {
   parallel_object_only();
 
@@ -126,7 +128,7 @@ LinearSystem::computeLinearSystemTags(const std::set<TagID> & vector_tags,
 
   try
   {
-    computeLinearSystemInternal(vector_tags, matrix_tags);
+    computeLinearSystemInternal(vector_tags, matrix_tags, compute_gradients);
   }
   catch (MooseException & e)
   {
@@ -173,12 +175,16 @@ LinearSystem::computeGradients()
   PARALLEL_CATCH;
 
   for (const auto i : index_range(_raw_grad_container))
+  {
     _raw_grad_container[i] = std::move(_new_gradient[i]);
+    _raw_grad_container[i]->close();
+  }
 }
 
 void
 LinearSystem::computeLinearSystemInternal(const std::set<TagID> & vector_tags,
-                                          const std::set<TagID> & matrix_tags)
+                                          const std::set<TagID> & matrix_tags,
+                                          const bool compute_gradients)
 {
   TIME_SECTION("computeLinearSystemInternal", 3);
 
@@ -191,15 +197,20 @@ LinearSystem::computeLinearSystemInternal(const std::set<TagID> & vector_tags,
     // Necessary for speed
     if (auto petsc_matrix = dynamic_cast<PetscMatrix<Number> *>(&matrix))
     {
-      MatSetOption(petsc_matrix->mat(),
-                   MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                   PETSC_TRUE);
+      auto ierr = MatSetOption(petsc_matrix->mat(),
+                               MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                               PETSC_TRUE);
+      LIBMESH_CHKERR(ierr);
       if (!_fe_problem.errorOnJacobianNonzeroReallocation())
-        MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+      {
+        ierr = MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+        LIBMESH_CHKERR(ierr);
+      }
     }
   }
 
-  computeGradients();
+  if (compute_gradients)
+    computeGradients();
 
   // linear contributions from the domain
   PARALLEL_TRY

@@ -78,6 +78,8 @@
 #include "FVScalarLagrangeMultiplierInterface.h"
 #include "UserObject.h"
 #include "OffDiagonalScalingMatrix.h"
+#include "HDGKernel.h"
+#include "HDGIntegratedBC.h"
 
 // libMesh
 #include "libmesh/nonlinear_solver.h"
@@ -97,6 +99,7 @@
 #include "libmesh/default_coupling.h"
 #include "libmesh/diagonal_matrix.h"
 #include "libmesh/fe_interface.h"
+#include "libmesh/petsc_solver_exception.h"
 
 #include <ios>
 
@@ -113,10 +116,7 @@ NonlinearSystemBase::NonlinearSystemBase(FEProblemBase & fe_problem,
     PerfGraphInterface(fe_problem.getMooseApp().perfGraph(), "NonlinearSystemBase"),
     _sys(sys),
     _last_nl_rnorm(0.),
-    _initial_residual_before_preset_bcs(0.),
-    _initial_residual_after_preset_bcs(0.),
     _current_nl_its(0),
-    _compute_initial_residual_before_preset_bcs(true),
     _residual_ghosted(NULL),
     _Re_time_tag(-1),
     _Re_time(NULL),
@@ -129,6 +129,7 @@ NonlinearSystemBase::NonlinearSystemBase(FEProblemBase & fe_problem,
     _splits(/*threaded=*/false),
     _increment_vec(NULL),
     _use_finite_differenced_preconditioner(false),
+    _fdcoloring(nullptr),
     _have_decomposition(false),
     _use_field_split_preconditioner(false),
     _add_implicit_geometric_coupling_entries_to_jacobian(false),
@@ -140,7 +141,10 @@ NonlinearSystemBase::NonlinearSystemBase(FEProblemBase & fe_problem,
     _n_linear_iters(0),
     _n_residual_evaluations(0),
     _final_residual(0.),
-    _computing_initial_residual(false),
+    _computing_pre_smo_residual(false),
+    _pre_smo_residual(0),
+    _initial_residual(0),
+    _use_pre_smo_residual(false),
     _print_all_var_norms(false),
     _has_save_in(false),
     _has_diag_save_in(false),
@@ -175,9 +179,9 @@ NonlinearSystemBase::NonlinearSystemBase(FEProblemBase & fe_problem,
 NonlinearSystemBase::~NonlinearSystemBase() = default;
 
 void
-NonlinearSystemBase::init()
+NonlinearSystemBase::preInit()
 {
-  SolverSystem::init();
+  SolverSystem::preInit();
 
   if (_fe_problem.hasDampers())
     setupDampers();
@@ -467,6 +471,38 @@ NonlinearSystemBase::addKernel(const std::string & kernel_name,
 }
 
 void
+NonlinearSystemBase::addHDGKernel(const std::string & kernel_name,
+                                  const std::string & name,
+                                  InputParameters & parameters)
+{
+  // The hybridized objects require that the residual and Jacobian be computed together
+  residualAndJacobianTogether();
+
+  for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
+  {
+    parameters.set<MooseObjectWarehouse<HDGIntegratedBC> *>("hibc_warehouse") = &_hybridized_ibcs;
+    // Create the kernel object via the factory and add to warehouse
+    auto kernel = _factory.create<HDGKernel>(kernel_name, name, parameters, tid);
+    _kernels.addObject(kernel, tid);
+    _hybridized_kernels.addObject(kernel, tid);
+    postAddResidualObject(*kernel);
+  }
+}
+
+void
+NonlinearSystemBase::addHDGIntegratedBC(const std::string & bc_name,
+                                        const std::string & name,
+                                        InputParameters & parameters)
+{
+  for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
+  {
+    // Create the bc object via the factory and add to warehouse
+    auto bc = _factory.create<HDGIntegratedBC>(bc_name, name, parameters, tid);
+    _hybridized_ibcs.addObject(bc, tid);
+  }
+}
+
+void
 NonlinearSystemBase::addNodalKernel(const std::string & kernel_name,
                                     const std::string & name,
                                     InputParameters & parameters)
@@ -691,6 +727,51 @@ NonlinearSystemBase::getSplit(const std::string & name)
   return _splits.getActiveObject(name);
 }
 
+bool
+NonlinearSystemBase::shouldEvaluatePreSMOResidual() const
+{
+  if (_fe_problem.solverParams()._type == Moose::ST_LINEAR)
+    return false;
+
+  // The legacy behavior (#10464) _always_ performs the pre-SMO residual evaluation
+  // regardless of whether it is needed.
+  //
+  // This is not ideal and has been fixed by #23472. This legacy option ensures a smooth transition
+  // to the new behavior. Modules and Apps that want to migrate to the new behavior should set this
+  // parameter to false.
+  if (_app.parameters().get<bool>("use_legacy_initial_residual_evaluation_behavior"))
+    return true;
+
+  return _use_pre_smo_residual;
+}
+
+Real
+NonlinearSystemBase::referenceResidual() const
+{
+  return usePreSMOResidual() ? preSMOResidual() : initialResidual();
+}
+
+Real
+NonlinearSystemBase::preSMOResidual() const
+{
+  if (!shouldEvaluatePreSMOResidual())
+    mooseError("pre-SMO residual is requested but not evaluated.");
+
+  return _pre_smo_residual;
+}
+
+Real
+NonlinearSystemBase::initialResidual() const
+{
+  return _initial_residual;
+}
+
+void
+NonlinearSystemBase::setInitialResidual(Real r)
+{
+  _initial_residual = r;
+}
+
 void
 NonlinearSystemBase::zeroVectorForResidual(const std::string & vector_name)
 {
@@ -851,19 +932,24 @@ NonlinearSystemBase::setInitialSolution()
   deactiveAllMatrixTags();
 
   NumericVector<Number> & initial_solution(solution());
-  if (_predictor.get() && _predictor->shouldApply())
+  if (_predictor.get())
   {
-    TIME_SECTION("applyPredictor", 2, "Applying Predictor");
+    if (_predictor->shouldApply())
+    {
+      TIME_SECTION("applyPredictor", 2, "Applying Predictor");
 
-    _predictor->apply(initial_solution);
-    _fe_problem.predictorCleanup(initial_solution);
+      _predictor->apply(initial_solution);
+      _fe_problem.predictorCleanup(initial_solution);
+    }
+    else
+      _console << " Skipping predictor this step" << std::endl;
   }
 
   // do nodal BC
   {
     TIME_SECTION("initialBCs", 2, "Applying BCs To Initial Condition");
 
-    ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
+    const ConstBndNodeRange & bnd_nodes = _fe_problem.getCurrentAlgebraicBndNodeRange();
     for (const auto & bnode : bnd_nodes)
     {
       BoundaryID boundary_id = bnode->_bnd_id;
@@ -981,22 +1067,6 @@ NonlinearSystemBase::residualVector(TagID tag)
 }
 
 void
-NonlinearSystemBase::computeTimeDerivatives(bool jacobian_calculation)
-{
-  // If we're doing any Jacobian calculation other than the initial Jacobian calculation for
-  // automatic variable scaling, then we can just return because the residual function evaluation
-  // has already done this work for us
-  if (jacobian_calculation && !_fe_problem.computingScalingJacobian())
-    return;
-
-  if (_time_integrator)
-  {
-    _time_integrator->preStep();
-    _time_integrator->computeTimeDerivatives();
-  }
-}
-
-void
 NonlinearSystemBase::enforceNodalConstraintsResidual(NumericVector<Number> & residual)
 {
   THREAD_ID tid = 0; // constraints are going to be done single-threaded
@@ -1102,7 +1172,10 @@ NonlinearSystemBase::reinitNodeFace(const Node & secondary_node,
 
   _fe_problem.reinitNeighborPhys(
       undisplaced_primary_elem, primary_side, {undisplaced_primary_physical_point}, 0);
-  _fe_problem.reinitMaterialsNeighbor(primary_elem->subdomain_id(), 0);
+  // Stateful material properties are only initialized for neighbor material data for internal faces
+  // for discontinuous Galerkin methods or for conforming interfaces for interface kernels. We don't
+  // have either of those use cases here where we likely have disconnected meshes
+  _fe_problem.reinitMaterialsNeighbor(primary_elem->subdomain_id(), 0, /*swap_stateful=*/false);
 
   // Reinit points for constraint enforcement
   if (displaced)
@@ -1661,7 +1734,7 @@ NonlinearSystemBase::computeResidualInternal(const std::set<TagID> & tags)
   {
     TIME_SECTION("Kernels", 3 /*, "Computing Kernels"*/);
 
-    ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+    const ConstElemRange & elem_range = _fe_problem.getCurrentAlgebraicElementRange();
 
     ComputeResidualThread cr(_fe_problem, tags);
     Threads::parallel_reduce(elem_range, cr);
@@ -1750,7 +1823,7 @@ NonlinearSystemBase::computeResidualInternal(const std::set<TagID> & tags)
 
       ComputeNodalKernelsThread cnk(_fe_problem, _nodal_kernels, tags);
 
-      ConstNodeRange & range = *_mesh.getLocalNodeRange();
+      const ConstNodeRange & range = _fe_problem.getCurrentAlgebraicNodeRange();
 
       if (range.begin() != range.end())
       {
@@ -1782,7 +1855,7 @@ NonlinearSystemBase::computeResidualInternal(const std::set<TagID> & tags)
 
       ComputeNodalKernelBcsThread cnk(_fe_problem, _nodal_kernels, tags);
 
-      ConstBndNodeRange & bnd_node_range = *_mesh.getBoundaryNodeRange();
+      const ConstBndNodeRange & bnd_node_range = _fe_problem.getCurrentAlgebraicBndNodeRange();
 
       Threads::parallel_reduce(bnd_node_range, cnk);
 
@@ -1840,6 +1913,7 @@ NonlinearSystemBase::computeResidualInternal(const std::set<TagID> & tags)
 
   // Accumulate the occurrence of solution invalid warnings for the current iteration cumulative
   // counters
+  _app.solutionInvalidity().sync();
   _app.solutionInvalidity().solutionInvalidAccumulation();
 }
 
@@ -1861,11 +1935,15 @@ NonlinearSystemBase::computeResidualAndJacobianInternal(const std::set<TagID> & 
     // Necessary for speed
     if (auto petsc_matrix = dynamic_cast<PetscMatrix<Number> *>(&jacobian))
     {
-      MatSetOption(petsc_matrix->mat(),
-                   MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                   PETSC_TRUE);
+      auto ierr = MatSetOption(petsc_matrix->mat(),
+                               MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                               PETSC_TRUE);
+      LIBMESH_CHKERR(ierr);
       if (!_fe_problem.errorOnJacobianNonzeroReallocation())
-        MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+      {
+        ierr = MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+        LIBMESH_CHKERR(ierr);
+      }
     }
   }
 
@@ -1897,7 +1975,7 @@ NonlinearSystemBase::computeResidualAndJacobianInternal(const std::set<TagID> & 
   {
     TIME_SECTION("Kernels", 3 /*, "Computing Kernels"*/);
 
-    ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+    const ConstElemRange & elem_range = _fe_problem.getCurrentAlgebraicElementRange();
 
     ComputeResidualAndJacobianThread crj(_fe_problem, vector_tags, matrix_tags);
     Threads::parallel_reduce(elem_range, crj);
@@ -1965,40 +2043,43 @@ NonlinearSystemBase::computeNodalBCs(const std::set<TagID> & tags)
   if (_has_save_in)
     _fe_problem.getAuxiliarySystem().solution().close();
 
+  // Select nodal kernels
+  MooseObjectWarehouse<NodalBCBase> * nbc_warehouse;
+
+  if (tags.size() == _fe_problem.numVectorTags(Moose::VECTOR_TAG_RESIDUAL) || !tags.size())
+    nbc_warehouse = &_nodal_bcs;
+  else if (tags.size() == 1)
+    nbc_warehouse = &(_nodal_bcs.getVectorTagObjectWarehouse(*(tags.begin()), 0));
+  else
+    nbc_warehouse = &(_nodal_bcs.getVectorTagsObjectWarehouse(tags, 0));
+
+  // Return early if there is no nodal kernel
+  if (!nbc_warehouse->size())
+    return;
+
   PARALLEL_TRY
   {
-    ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
+    const ConstBndNodeRange & bnd_nodes = _fe_problem.getCurrentAlgebraicBndNodeRange();
 
     if (!bnd_nodes.empty())
     {
       TIME_SECTION("NodalBCs", 3 /*, "Computing NodalBCs"*/);
-
-      MooseObjectWarehouse<NodalBCBase> * nbc_warehouse;
-
-      // Select nodal kernels
-      if (tags.size() == _fe_problem.numVectorTags(Moose::VECTOR_TAG_RESIDUAL) || !tags.size())
-        nbc_warehouse = &_nodal_bcs;
-      else if (tags.size() == 1)
-        nbc_warehouse = &(_nodal_bcs.getVectorTagObjectWarehouse(*(tags.begin()), 0));
-      else
-        nbc_warehouse = &(_nodal_bcs.getVectorTagsObjectWarehouse(tags, 0));
 
       for (const auto & bnode : bnd_nodes)
       {
         BoundaryID boundary_id = bnode->_bnd_id;
         Node * node = bnode->_node;
 
-        if (node->processor_id() == processor_id())
+        if (node->processor_id() == processor_id() &&
+            nbc_warehouse->hasActiveBoundaryObjects(boundary_id))
         {
           // reinit variables in nodes
           _fe_problem.reinitNodeFace(node, boundary_id, 0);
-          if (nbc_warehouse->hasActiveBoundaryObjects(boundary_id))
-          {
-            const auto & bcs = nbc_warehouse->getActiveBoundaryObjects(boundary_id);
-            for (const auto & nbc : bcs)
-              if (nbc->shouldApply())
-                nbc->computeResidual();
-          }
+
+          const auto & bcs = nbc_warehouse->getActiveBoundaryObjects(boundary_id);
+          for (const auto & nbc : bcs)
+            if (nbc->shouldApply())
+              nbc->computeResidual();
         }
       }
     }
@@ -2015,7 +2096,7 @@ NonlinearSystemBase::computeNodalBCsResidualAndJacobian()
 {
   PARALLEL_TRY
   {
-    ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
+    const ConstBndNodeRange & bnd_nodes = _fe_problem.getCurrentAlgebraicBndNodeRange();
 
     if (!bnd_nodes.empty())
     {
@@ -2201,13 +2282,20 @@ NonlinearSystemBase::constraintJacobians(bool displaced)
 
   auto & jacobian = getMatrix(systemMatrixTag());
 
+  auto ierr = (PetscErrorCode)0;
   if (!_fe_problem.errorOnJacobianNonzeroReallocation())
-    MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                 MAT_NEW_NONZERO_ALLOCATION_ERR,
-                 PETSC_FALSE);
+  {
+    ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                        MAT_NEW_NONZERO_ALLOCATION_ERR,
+                        PETSC_FALSE);
+    LIBMESH_CHKERR(ierr);
+  }
   if (_fe_problem.ignoreZerosInJacobian())
-    MatSetOption(
+  {
+    ierr = MatSetOption(
         static_cast<PetscMatrix<Number> &>(jacobian).mat(), MAT_IGNORE_ZERO_ENTRIES, PETSC_TRUE);
+    LIBMESH_CHKERR(ierr);
+  }
 
   std::vector<numeric_index_type> zero_rows;
 
@@ -2388,9 +2476,10 @@ NonlinearSystemBase::constraintJacobians(bool displaced)
 
       if (constraints_applied)
       {
-        MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                     MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                     PETSC_TRUE);
+        auto ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                                 MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                                 PETSC_TRUE);
+        LIBMESH_CHKERR(ierr);
 
         jacobian.close();
         jacobian.zero_rows(zero_rows, 0.0);
@@ -2407,9 +2496,10 @@ NonlinearSystemBase::constraintJacobians(bool displaced)
 
     if (constraints_applied)
     {
-      MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                   MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                   PETSC_TRUE);
+      auto ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                               MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                               PETSC_TRUE);
+      LIBMESH_CHKERR(ierr);
 
       jacobian.close();
       jacobian.zero_rows(zero_rows, 0.0);
@@ -2591,9 +2681,10 @@ NonlinearSystemBase::constraintJacobians(bool displaced)
 
   if (constraints_applied)
   {
-    MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                 MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                 PETSC_TRUE);
+    auto ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                             MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                             PETSC_TRUE);
+    LIBMESH_CHKERR(ierr);
 
     jacobian.close();
     jacobian.zero_rows(zero_rows, 0.0);
@@ -2696,11 +2787,15 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
     // Necessary for speed
     if (auto petsc_matrix = dynamic_cast<PetscMatrix<Number> *>(&jacobian))
     {
-      MatSetOption(petsc_matrix->mat(),
-                   MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                   PETSC_TRUE);
+      auto ierr = MatSetOption(petsc_matrix->mat(),
+                               MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                               PETSC_TRUE);
+      LIBMESH_CHKERR(ierr);
       if (!_fe_problem.errorOnJacobianNonzeroReallocation())
-        MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+      {
+        ierr = MatSetOption(petsc_matrix->mat(), MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+        LIBMESH_CHKERR(ierr);
+      }
     }
   }
 
@@ -2738,7 +2833,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
     if (_nodal_kernels.hasActiveBlockObjects())
     {
       ComputeNodalKernelJacobiansThread cnkjt(_fe_problem, *this, _nodal_kernels, tags);
-      ConstNodeRange & range = *_mesh.getLocalNodeRange();
+      const ConstNodeRange & range = _fe_problem.getCurrentAlgebraicNodeRange();
       Threads::parallel_reduce(range, cnkjt);
 
       unsigned int n_threads = libMesh::n_threads();
@@ -2770,7 +2865,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
     mortarConstraints(Moose::ComputeType::Jacobian, {}, tags);
 
     // Get our element range for looping over
-    ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+    const ConstElemRange & elem_range = _fe_problem.getCurrentAlgebraicElementRange();
 
     if (_fe_problem.computingScalingJacobian())
     {
@@ -2813,7 +2908,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
         if (_nodal_kernels.hasActiveBoundaryObjects())
         {
           ComputeNodalKernelBCJacobiansThread cnkjt(_fe_problem, *this, _nodal_kernels, tags);
-          ConstBndNodeRange & bnd_range = *_mesh.getBoundaryNodeRange();
+          const ConstBndNodeRange & bnd_range = _fe_problem.getCurrentAlgebraicBndNodeRange();
 
           Threads::parallel_reduce(bnd_range, cnkjt);
           unsigned int n_threads = libMesh::n_threads();
@@ -2838,7 +2933,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
         if (_nodal_kernels.hasActiveBoundaryObjects())
         {
           ComputeNodalKernelBCJacobiansThread cnkjt(_fe_problem, *this, _nodal_kernels, tags);
-          ConstBndNodeRange & bnd_range = *_mesh.getBoundaryNodeRange();
+          const ConstBndNodeRange & bnd_range = _fe_problem.getCurrentAlgebraicBndNodeRange();
 
           Threads::parallel_reduce(bnd_range, cnkjt);
           unsigned int n_threads = libMesh::n_threads();
@@ -2957,7 +3052,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
       auto & coupling_entries = _fe_problem.couplingEntries(/*_tid=*/0, this->number());
 
       // Compute Jacobians for NodalBCBases
-      ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
+      const ConstBndNodeRange & bnd_nodes = _fe_problem.getCurrentAlgebraicBndNodeRange();
       for (const auto & bnode : bnd_nodes)
       {
         BoundaryID boundary_id = bnode->_bnd_id;
@@ -3016,6 +3111,7 @@ NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
 
   // Accumulate the occurrence of solution invalid warnings for the current iteration cumulative
   // counters
+  _app.solutionInvalidity().sync();
   _app.solutionInvalidity().solutionInvalidAccumulation();
 }
 
@@ -3084,13 +3180,17 @@ NonlinearSystemBase::computeJacobianBlocks(std::vector<JacobianBlock *> & blocks
   {
     SparseMatrix<Number> & jacobian = blocks[i]->_jacobian;
 
-    MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                 MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
-                 PETSC_TRUE);
+    auto ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                             MAT_KEEP_NONZERO_PATTERN, // This is changed in 3.1
+                             PETSC_TRUE);
+    LIBMESH_CHKERR(ierr);
     if (!_fe_problem.errorOnJacobianNonzeroReallocation())
-      MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
-                   MAT_NEW_NONZERO_ALLOCATION_ERR,
-                   PETSC_TRUE);
+    {
+      ierr = MatSetOption(static_cast<PetscMatrix<Number> &>(jacobian).mat(),
+                          MAT_NEW_NONZERO_ALLOCATION_ERR,
+                          PETSC_TRUE);
+      LIBMESH_CHKERR(ierr);
+    }
 
     jacobian.zero();
   }
@@ -3100,7 +3200,7 @@ NonlinearSystemBase::computeJacobianBlocks(std::vector<JacobianBlock *> & blocks
 
   PARALLEL_TRY
   {
-    ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+    const ConstElemRange & elem_range = _fe_problem.getCurrentAlgebraicElementRange();
     ComputeJacobianBlocksThread cjb(_fe_problem, blocks, tags);
     Threads::parallel_reduce(elem_range, cjb);
   }
@@ -3121,7 +3221,7 @@ NonlinearSystemBase::computeJacobianBlocks(std::vector<JacobianBlock *> & blocks
     std::vector<numeric_index_type> zero_rows;
     PARALLEL_TRY
     {
-      ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
+      const ConstBndNodeRange & bnd_nodes = _fe_problem.getCurrentAlgebraicBndNodeRange();
       for (const auto & bnode : bnd_nodes)
       {
         BoundaryID boundary_id = bnode->_bnd_id;
@@ -3200,7 +3300,7 @@ NonlinearSystemBase::computeDamping(const NumericVector<Number> & solution,
         has_active_dampers = true;
         *_increment_vec = update;
         ComputeElemDampingThread cid(_fe_problem, *this);
-        Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cid);
+        Threads::parallel_reduce(_fe_problem.getCurrentAlgebraicElementRange(), cid);
         damping = std::min(cid.damping(), damping);
       }
       PARALLEL_CATCH;
@@ -3215,7 +3315,7 @@ NonlinearSystemBase::computeDamping(const NumericVector<Number> & solution,
         has_active_dampers = true;
         *_increment_vec = update;
         ComputeNodalDampingThread cndt(_fe_problem, *this);
-        Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cndt);
+        Threads::parallel_reduce(_fe_problem.getCurrentAlgebraicNodeRange(), cndt);
         damping = std::min(cndt.damping(), damping);
       }
       PARALLEL_CATCH;
@@ -3832,7 +3932,7 @@ NonlinearSystemBase::computeScaling()
   };
 
   // Compute our scaling factors for the spatial field variables
-  for (const auto & elem : *mesh().getActiveLocalElementRange())
+  for (const auto & elem : _fe_problem.getCurrentAlgebraicElementRange())
     for (const auto i : make_range(system().n_vars()))
       if (_variable_autoscaled[i] && system().variable_type(i).family != SCALAR)
       {
@@ -3969,4 +4069,14 @@ NonlinearSystemBase::preSolve()
   assembleScalingVector();
 
   return true;
+}
+
+void
+NonlinearSystemBase::destroyColoring()
+{
+  if (matrixFromColoring())
+  {
+    auto ierr = MatFDColoringDestroy(&_fdcoloring);
+    LIBMESH_CHKERR(ierr);
+  }
 }

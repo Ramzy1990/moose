@@ -10,13 +10,12 @@
 #pragma once
 
 // MOOSE includes
+#include "MooseTypes.h"
 #include "HashMap.h"
 #include "InfixIterator.h"
 #include "MooseEnumItem.h"
 #include "MooseError.h"
-#include "MooseADWrapper.h"
 #include "Moose.h"
-#include "ADReal.h"
 #include "ExecutablePath.h"
 #include "ConsoleUtils.h"
 
@@ -86,7 +85,7 @@ std::string installedInputsDir(const std::string & app_name,
 /// Returns the directory of any installed docs/site.
 std::string docsDir(const std::string & app_name);
 
-/// Replaces all occurences of from in str with to and returns the result.
+/// Replaces all occurrences of from in str with to and returns the result.
 std::string replaceAll(std::string str, const std::string & from, const std::string & to);
 
 /**
@@ -214,10 +213,19 @@ void serialEnd(const libMesh::Parallel::Communicator & comm, bool warn = true);
 bool hasExtension(const std::string & filename, std::string ext, bool strip_exodus_ext = false);
 
 /**
+ * Gets the extension of the passed file name.
+ * @param filename The filename of which to get the extension
+ * @param rfind When true, searches for last "." in filename. Otherwise, searches for first "."
+ * @return file_ext The extension of filename (does not include the leading "."). If filename has no
+ * extension, returns "".
+ */
+std::string getExtension(const std::string & filename, const bool rfind = false);
+
+/**
  * Removes any file extension from the given string s (i.e. any ".[extension]" suffix of s) and
  * returns the result.
  */
-std::string stripExtension(const std::string & s);
+std::string stripExtension(const std::string & s, const bool rfind = false);
 
 /**
  * Function for splitting path and filename
@@ -724,7 +732,7 @@ std::list<std::string> getFilesInDirs(const std::list<std::string> & directory_l
                                       const bool files_only = true);
 
 /**
- * Returns the most recent checkpoint prefix (the four numbers at the begining)
+ * Returns the most recent checkpoint prefix (the four numbers at the beginning)
  * If a suitable file isn't found the empty string is returned
  * @param checkpoint_files the list of files to analyze
  */
@@ -989,7 +997,7 @@ linearPartitionChunk(dof_id_type num_items, dof_id_type num_chunks, dof_id_type 
 std::string realpath(const std::string & path);
 
 /**
- * Custom type trait that has a ::value of true for types that cam be use interchangably
+ * Custom type trait that has a ::value of true for types that cam be use interchangeably
  * with Real. Most notably it is false for complex numbers, which do not have a
  * strict ordering (and therefore no <,>,<=,>= operators).
  */
@@ -1004,7 +1012,7 @@ struct IsLikeReal<Real>
   static constexpr bool value = true;
 };
 template <>
-struct IsLikeReal<DualReal>
+struct IsLikeReal<ADReal>
 {
   static constexpr bool value = true;
 };
@@ -1202,6 +1210,18 @@ isDigits(const std::string & str)
   return std::all_of(str.begin(), str.end(), [](unsigned char c) { return std::isdigit(c); });
 }
 } // MooseUtils namespace
+
+namespace Moose
+{
+template <typename T>
+struct ADType;
+
+template <typename T, std::size_t N, bool value_init>
+struct ADType<MooseUtils::SemidynamicVector<T, N, value_init>>
+{
+  typedef MooseUtils::SemidynamicVector<typename ADType<T>::type, N, value_init> type;
+};
+}
 
 /**
  * find, erase, length algorithm for removing a substring from a string

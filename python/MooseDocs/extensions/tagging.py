@@ -41,7 +41,7 @@ LOG = logging.getLogger(__name__)
 def make_extension(**kwargs):
     return TaggingExtension(**kwargs)
 
-Tag = tokens.newToken('Tag', attr_name='', path='', key_vals=[])
+Tag = tokens.newToken('Tag', attr_name='', path='', description='', image='', key_vals=[])
 
 class TaggingExtension(command.CommandExtension):
 
@@ -53,6 +53,7 @@ class TaggingExtension(command.CommandExtension):
                                   "keys allowed.")
         config['js_file'] = (None,
                              "Javascript file used for filtering / search page.")
+        config['csv_file'] = (None, "CSV file used for examining the tag database")
         # Disable by default
         config['active'] = (False, config['active'][1])
         return config
@@ -90,14 +91,23 @@ class TaggingExtension(command.CommandExtension):
         At completion execution process, collect and process all current data attributes. Then,
         collect javascript template content, find/replace, and write to destination.
         """
+        # Helper for CSV data output
+        name_key_val_dict = {}
+        create_csv = (self['csv_file'] is not None)
+
+        # Data dictionary saved as a string
         replace_str = ""
         for iter in self.getAttributeItems():
+            print(iter)
             if bool(re.search('tag_', iter[0])):
                 tag_dict_str=str(iter[1])
-                key_list_regex=self._allowed_keys+['name', 'path', 'key_vals']
+                key_list_regex = ['name', 'path', 'image', 'description', 'key_vals'] + self._allowed_keys
                 for entry in key_list_regex:
-                    regex_replace=f"'{entry}':"
-                    tag_dict_str=re.sub(regex_replace,entry+':', tag_dict_str)
+
+                    # Remove single quotes around entry
+                    regex_replace = f"'{entry}':"
+                    tag_dict_str = re.sub(regex_replace, entry+':', tag_dict_str)
+
                     # add relative link built from the path at the end of the tagging entry
                     if (entry == 'path'):
                         path_value = tag_dict_str.split("path: ")[1].split(',')[0].replace("'", "")
@@ -140,6 +150,10 @@ class TaggingExtension(command.CommandExtension):
                 else:
                     replace_str += "," + tag_dict_str
 
+            # Save some data for the CSV output
+            if (create_csv):
+                name_key_val_dict[iter[1]['name']] = iter[1]['key_vals']
+
         # Replace the dummy tag dictionary in the JS file with the collected dictionary from parsing the pages
         replace_str = "{data:[" + replace_str + "]}"
 
@@ -161,6 +175,31 @@ class TaggingExtension(command.CommandExtension):
             f.writelines(content)
             f.close()
 
+        # Write the CSV file if requested
+        if (create_csv):
+            csv_path = self['csv_file']
+            entry_names = name_key_val_dict.keys()
+            # Get all the unique keys, sort them
+            all_keys = []
+            for each_dict in  name_key_val_dict.values():
+                all_keys += each_dict.keys()
+            all_keys = list(set(all_keys))
+            all_keys.sort()
+
+            # Fill in missing keys for tags that dont have them all
+            for entry in entry_names:
+                for key in all_keys:
+                    name_key_val_dict[entry].setdefault(key, ' - ')
+
+            with open(csv_path,'w') as f:
+                # Write out 'names' (the word) then keys as a header
+                f.write('names,' + ",".join(all_keys) + "\n")
+                for entry in entry_names:
+                    # Write the name (remove commas) and all all the values
+                    entry_dict = dict(sorted(name_key_val_dict[entry].items()))
+                    f.write(entry.replace(",", "") + ',' + ",".join(entry_dict.values()) + "\n")
+                f.close()
+
 
 class TaggingCommand(command.CommandComponent):
     COMMAND= 'tag'
@@ -171,6 +210,8 @@ class TaggingCommand(command.CommandComponent):
         settings = command.CommandComponent.defaultSettings()
         settings['name'] = (None, 'ID name for page and associated key:value category:label pairs.')
         settings['pairs'] = (None, 'Key:value pairs representing categories and page-specific labels for each category.')
+        settings['image'] = (None, 'Link to an image to display for this entry')
+        settings['description'] = (None, 'Description of the entry')
         return settings
 
     def createToken(self, parent, info, page, settings):
@@ -178,6 +219,7 @@ class TaggingCommand(command.CommandComponent):
         Process name and key:value pairs provided in the documentation file, check against
         previously-processed names and keys, and add new data to global attributes.
         """
+        # Process input data
         if settings['name'] is None:
             msg = "%s: No 'name' provided for page and associated tags; check markdown file. " \
                   "This page will not be added to the tag database!"
@@ -191,12 +233,22 @@ class TaggingCommand(command.CommandComponent):
             keylist=''
         else:
             keylist=settings['pairs'].split()
+        # Downstream javascript does not support empty fields
+        if settings['description'] is None:
+            description = settings['name']
+        else:
+            description = settings['description']
+        if settings['image'] is None:
+            image = 'No Image'
+        else:
+            image=settings['image']
         mpath=re.sub(r'^.*?moose/', 'moose/', page.source)
         entry_key_values=[]
         for keys in keylist:
             key_vals=keys.split(':')
             entry_key_values.append([key_vals[0],key_vals[1]])
 
+        # Check keys
         good_keys=[]
         for pair in entry_key_values:
             if pair[0] not in self.extension.allowed_keys and len(self.extension.allowed_keys) > 0:
@@ -209,8 +261,9 @@ class TaggingCommand(command.CommandComponent):
             else:
                 good_keys.append([pair[0], pair[1]])
 
+        # Form tag token
         if len(name) != 0: # Only add to tag database if 'name' is provided
-            page_data = {'name':name, "path":mpath, "key_vals":dict(good_keys)}
+            page_data = {'name':name, "path":mpath, "description":description, "image":image, "key_vals":dict(good_keys)}
 
             tag_id_name = ''
             if self.extension.get_tag_data("tag_" + name):
@@ -221,6 +274,6 @@ class TaggingCommand(command.CommandComponent):
                 tag_id_name = "tag_" + name
                 self.extension.set_tag_data(tag_id_name, page_data)
 
-            Tag(parent, attr_name=tag_id_name, path=mpath, key_vals=dict(good_keys))
+            Tag(parent, attr_name=tag_id_name, path=mpath, description=description, image=image, key_vals=dict(good_keys))
 
         return parent

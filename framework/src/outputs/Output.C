@@ -47,23 +47,22 @@ Output::validParams()
       "The interval (number of time steps) at which output occurs. "
       "Unless explicitly set, the default value of this parameter is set "
       "to infinity if the wall_time_interval is explicitly set.");
-  params.addDeprecatedParam<unsigned int>(
-      "interval",
-      "The interval (number of time steps) at which output occurs",
-      "Deprecated, use time_step_interval");
+  params.addParam<unsigned int>("interval",
+                                "The interval (number of time steps) at which output occurs");
   params.deprecateParam("interval", "time_step_interval", "02/01/2025");
   params.addParam<Real>(
       "min_simulation_time_interval", 0.0, "The minimum simulation time between output steps");
-  params.addDeprecatedParam<Real>("minimum_time_interval",
-                                  "The minimum simulation time between output steps",
-                                  "Deprecated, use min_simulation_time_interval");
+  params.addParam<Real>("minimum_time_interval",
+                        "The minimum simulation time between output steps");
   params.deprecateParam("minimum_time_interval", "min_simulation_time_interval", "02/01/2025");
   params.addParam<Real>("simulation_time_interval",
                         std::numeric_limits<Real>::max(),
                         "The target simulation time interval (in seconds) at which to output");
-  params.addParam<Real>("wall_time_interval",
-                        std::numeric_limits<Real>::max(),
-                        "The target wall time interval (in seconds) at which to output");
+  params.addRangeCheckedParam<Real>(
+      "wall_time_interval",
+      std::numeric_limits<Real>::max(),
+      "wall_time_interval > 0",
+      "The target wall time interval (in seconds) at which to output");
   params.addParam<std::vector<Real>>(
       "sync_times", {}, "Times at which the output and solution is forced to occur");
   params.addParam<TimesName>(
@@ -89,7 +88,7 @@ Output::validParams()
 
   // Add ability to append to the 'execute_on' list
   params.addParam<ExecFlagEnum>("additional_execute_on", exec_enum, exec_enum.getDocString());
-  params.set<ExecFlagEnum>("additional_execute_on").clear();
+  params.set<ExecFlagEnum>("additional_execute_on").clearSetValues();
   params.addParamNamesToGroup("execute_on additional_execute_on", "Execution scheduling");
 
   // 'Timing' group
@@ -202,7 +201,7 @@ Output::Output(const InputParameters & parameters)
   {
     const ExecFlagEnum & add = getParam<ExecFlagEnum>("additional_execute_on");
     for (auto & me : add)
-      _execute_on.push_back(me);
+      _execute_on.setAdditionalValue(me);
   }
 
   if (isParamValid("output_limiting_function"))
@@ -277,7 +276,7 @@ Output::outputStep(const ExecFlagType & type)
 bool
 Output::shouldOutput()
 {
-  if (_execute_on.contains(_current_execute_flag) || _current_execute_flag == EXEC_FORCED)
+  if (_execute_on.isValueSet(_current_execute_flag) || _current_execute_flag == EXEC_FORCED)
     return true;
   return false;
 }
